@@ -13,7 +13,8 @@ def set_forcing(
     physics_data: PhysicsData,
     parameters: Parameters,
     forcing: ForcingData=None,
-    terrain: TerrainData=None
+    terrain: TerrainData=None,
+    mcb_config=None,
 ) -> tuple[PhysicsTendency, PhysicsData]:
     # 2. daily-mean radiative forcing
     physics_data = get_zonal_average_fields(state, physics_data, forcing=forcing, terrain=terrain)
@@ -26,6 +27,20 @@ def set_forcing(
     snowc = jnp.minimum(1.0, forcing.snowc_am)
     alb_l = forcing.alb0 + snowc * (parameters.mod_radcon.albsn - forcing.alb0)
     alb_s = parameters.mod_radcon.albsea + forcing.sice_am * (parameters.mod_radcon.albice - parameters.mod_radcon.albsea)
+
+    # Apply MCB forcing if configured
+    if mcb_config is not None:
+        from jcm.mcb.mcb_forcing import compute_mcb_sea_albedo
+        day_of_year = physics_data.date.model_day()
+        mcb_albedo = compute_mcb_sea_albedo(
+            mcb_config, parameters.mod_radcon.albsea, day_of_year
+        )
+        # Only apply MCB over ocean (where fmask == 0)
+        ocean_mask = 1.0 - fmask
+        alb_s = alb_s + ocean_mask * mcb_config.active_mask * (
+            mcb_albedo - parameters.mod_radcon.albsea
+        )
+
     albsfc = alb_s + fmask * (alb_l - alb_s)
 
     iyear_ref = parameters.forcing.co2_year_ref

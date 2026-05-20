@@ -48,17 +48,22 @@ class SpeedyPhysics(Physics):
 
     def __init__(self,
                  parameters: Parameters=Parameters.default(),
-                 checkpoint_terms=True
+                 mcb_config=None,
+                 checkpoint_terms=True,
     ) -> None:
         """Initialize the SpeedyPhysics class with the specified parameters.
 
         Args:
             parameters (Parameters): Parameters for the physics model.
+            mcb_config: Optional MCBConfig for Marine Cloud Brightening forcing.
+                If provided, MCB albedo perturbations will be applied in set_forcing.
             checkpoint_terms (bool): Flag to indicate if terms should be checkpointed.
 
         """
         self.parameters = parameters
+        self.mcb_config = mcb_config
 
+        from functools import partial
         from jcm.physics.speedy.humidity import spec_hum_to_rel_hum
         from jcm.physics.speedy.convection import get_convection_tendencies
         from jcm.physics.speedy.large_scale_condensation import get_large_scale_condensation_tendencies
@@ -69,9 +74,15 @@ class SpeedyPhysics(Physics):
         from jcm.physics.speedy.forcing import set_forcing
         # from jcm.physics.speedy.orographic_correction import get_orographic_correction_tendencies
 
+        # Wrap set_forcing with mcb_config if provided
+        if mcb_config is not None:
+            set_forcing_term = partial(set_forcing, mcb_config=mcb_config)
+        else:
+            set_forcing_term = set_forcing
+
         physics_terms = [
             set_physics_flags,
-            set_forcing,
+            set_forcing_term,
             spec_hum_to_rel_hum,
             get_convection_tendencies,
             get_large_scale_condensation_tendencies,
@@ -85,7 +96,7 @@ class SpeedyPhysics(Physics):
         ]
 
         static_argnums = {
-            set_forcing: (2,),
+            set_forcing_term: (2,),
         }
 
         self.terms = physics_terms if not checkpoint_terms else [jax.checkpoint(term, static_argnums=static_argnums.get(term, ()) + (4,)) for term in physics_terms]
