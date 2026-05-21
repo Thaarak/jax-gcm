@@ -8,17 +8,32 @@ This plan outlines the implementation of a **neural network-based feedback contr
 
 ---
 
+## Implementation Status Summary
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1: Foundation | ✅ Complete | MCB forcing module and physics integration |
+| Phase 2: Policy Network | ✅ Complete | Flax-based neural network architectures |
+| Phase 3: Loss Function | ✅ Complete | Differentiable climate loss with teleconnection penalties |
+| Phase 4: Differentiable Unrolling | ✅ Complete | `jax.lax.scan`-based simulation unrolling |
+| Phase 5: BPTT Training Loop | ✅ Complete | Full training infrastructure with checkpointing |
+| Phase 6: Experimental Design | ⏳ Pending | Run experiments and evaluate results |
+
+**Test Coverage**: 54 unit tests passing | **Linting**: All checks pass
+
+---
+
 ## Phase 1: Foundation (Completed)
 
 ### 1.1 MCB Forcing Module ✅
 
 | File | Status | Description |
 |------|--------|-------------|
-| `jcm/mcb/__init__.py` | ✅ Complete | Public API exports |
+| `jcm/mcb/__init__.py` | ✅ Complete | Public API exports (updated for all new modules) |
 | `jcm/mcb/mcb_config.py` | ✅ Complete | `MCBConfig` struct with `albedo_perturbation`, `active_mask`, `temporal_weights` |
 | `jcm/mcb/mcb_regions.py` | ✅ Complete | Region masks for stratocumulus zones and teleconnection monitoring |
 | `jcm/mcb/mcb_forcing.py` | ✅ Complete | `compute_mcb_sea_albedo()` core forcing function |
-| `jcm/mcb/mcb_test.py` | ✅ Complete | 27 unit tests passing |
+| `jcm/mcb/mcb_test.py` | ✅ Complete | 54 unit tests passing (27 original + 27 new) |
 
 ### 1.2 Physics Integration ✅
 
@@ -29,396 +44,158 @@ This plan outlines the implementation of a **neural network-based feedback contr
 
 ---
 
-## Phase 2: Policy Network
+## Phase 2: Policy Network (Completed)
 
-### 2.1 Architecture Design
+### 2.1 Architecture Design ✅
 
 **Input**: Climate state features extracted from `PhysicsState` / `Predictions`
 - Global mean surface temperature anomaly
 - Regional temperature anomalies (tropics, mid-latitudes, poles)
-- Precipitation rate fields (or anomalies from baseline)
-- Optional: TOA radiation imbalance, cloud cover
+- Precipitation rate anomalies (global and tropical)
+- Teleconnection region features (Amazon, Sahel, South Asia)
 
 **Output**: Spatial MCB albedo perturbation field `(ix, il)`
-- Constrained to valid range `[0, max_perturbation]`
+- Constrained to valid range `[0, max_perturbation]` via sigmoid activation
 - Masked to ocean-only regions
 
-**Network**: Lightweight MLP or CNN
-- MLP: Flattened state → hidden layers → output grid
-- CNN: Spatial state → conv layers → output grid (preserves spatial structure)
+**Networks Implemented**:
+- `MCBPolicyMLP`: Flattened state → hidden layers → output grid
+- `MCBPolicyCNN`: Spatial state → conv layers → output grid (preserves spatial structure)
+- `MCBPolicyResNet`: ResNet-style with residual connections for better gradient flow
+- `MCBPolicyHybrid`: Combines global scalar features with spatial processing
 
-### 2.2 Implementation
+### 2.2 Implementation ✅
 
 **File**: `jcm/mcb/policy.py`
 
-```python
-import flax.linen as nn
-import jax.numpy as jnp
+Key features implemented:
+- All networks use `nn.sigmoid` to constrain output to `[0, max_perturbation]`
+- Support for both batched and unbatched inputs
+- LayerNorm and GELU activations for stable training
+- Optional dropout for regularization
+- `create_policy()` factory function for easy instantiation
+- `init_policy_params()` helper for parameter initialization
 
-class MCBPolicyMLP(nn.Module):
-    """MLP policy network for MCB control."""
-    hidden_dims: tuple = (256, 256)
-    output_shape: tuple = (64, 32)  # nodal_shape
-    max_perturbation: float = 0.15
-
-    @nn.compact
-    def __call__(self, state_features):
-        x = state_features
-        for dim in self.hidden_dims:
-            x = nn.Dense(dim)(x)
-            x = nn.relu(x)
-        x = nn.Dense(self.output_shape[0] * self.output_shape[1])(x)
-        x = x.reshape(self.output_shape)
-        # Constrain to valid range
-        x = self.max_perturbation * nn.sigmoid(x)
-        return x
-
-class MCBPolicyCNN(nn.Module):
-    """CNN policy network preserving spatial structure."""
-    features: tuple = (32, 64, 32)
-    max_perturbation: float = 0.15
-
-    @nn.compact
-    def __call__(self, state_grid):
-        x = state_grid
-        for feat in self.features:
-            x = nn.Conv(feat, kernel_size=(3, 3), padding='SAME')(x)
-            x = nn.relu(x)
-        x = nn.Conv(1, kernel_size=(1, 1))(x)  # Output single channel
-        x = x.squeeze(-1)
-        x = self.max_perturbation * nn.sigmoid(x)
-        return x
-```
-
-### 2.3 State Feature Extraction
+### 2.3 State Feature Extraction ✅
 
 **File**: `jcm/mcb/state_features.py`
 
-```python
-def extract_state_features(predictions, baseline, coords):
-    """Extract climate state features for policy input."""
-    # Temperature anomaly
-    temp = predictions.dynamics.temperature
-    temp_anomaly = temp - baseline.temperature
-
-    # Global mean
-    global_temp_anomaly = jnp.mean(temp_anomaly)
-
-    # Regional means (tropics, etc.)
-    tropical_mask = create_tropical_mask(coords)
-    tropical_temp = jnp.mean(temp_anomaly * tropical_mask)
-
-    # Precipitation
-    precip = predictions.physics.convection.precnv + predictions.physics.condensation.precls
-    precip_anomaly = precip - baseline.precip
-
-    # Flatten for MLP or stack for CNN
-    return jnp.concatenate([...])
-```
+Key features implemented:
+- `StateFeatureConfig`: Configurable feature extraction
+- `ClimateBaseline`: Baseline climate state for anomaly computation
+- `extract_scalar_features()`: 12 scalar features for MLP policies
+  - Global/tropical/midlat/polar temperature anomalies
+  - Global/tropical precipitation anomalies
+  - Teleconnection region features (Amazon, Sahel, South Asia Monsoon)
+- `extract_spatial_features()`: Gridded features for CNN policies
+- Area-weighted regional averaging with `compute_area_weights()`
+- Latitude band masking with `create_latitude_band_mask()`
 
 ---
 
-## Phase 3: Loss Function
+## Phase 3: Loss Function (Completed)
 
-### 3.1 Components
+### 3.1 Components ✅
 
-| Term | Weight | Description |
-|------|--------|-------------|
-| `L_temperature` | `λ_T` | Penalize deviation from target global temperature |
-| `L_amazon` | `λ_A` | Penalize precipitation reduction in Amazon basin |
-| `L_tropics` | `λ_tr` | Penalize precipitation changes in global tropics |
-| `L_regularization` | `λ_reg` | Penalize excessive/non-smooth MCB forcing |
+| Term | Weight | Description | Implementation |
+|------|--------|-------------|----------------|
+| `L_temperature` | `λ_T = 1.0` | Penalize deviation from target global temperature | `temperature_loss()` |
+| `L_amazon` | `λ_A = 1.0` | Penalize precipitation reduction in Amazon basin | `amazon_precipitation_loss()` - asymmetric (softplus) |
+| `L_sahel` | `λ_S = 0.5` | Penalize precipitation reduction in Sahel | `sahel_precipitation_loss()` - asymmetric |
+| `L_tropics` | `λ_tr = 0.3` | Penalize precipitation changes in global tropics | `tropical_precipitation_loss()` - symmetric |
+| `L_regularization` | `λ_reg = 0.01` | Penalize excessive MCB forcing (L2 norm) | `regularization_loss()` |
+| `L_smoothness` | `λ_sm = 0.01` | Penalize non-smooth MCB patterns (total variation) | `smoothness_loss()` |
 
-### 3.2 Implementation
+### 3.2 Implementation ✅
 
 **File**: `jcm/mcb/loss.py`
 
-```python
-def compute_climate_loss(
-    predictions,
-    baseline,
-    target_cooling,
-    mcb_forcing,
-    coords,
-    weights,
-):
-    """Differentiable climate loss function.
-
-    Args:
-        predictions: Model output (Predictions object)
-        baseline: Baseline climate state (no MCB)
-        target_cooling: Target temperature reduction (K)
-        mcb_forcing: Applied MCB perturbation field
-        coords: Model coordinates
-        weights: Dict of loss term weights
-
-    Returns:
-        Scalar loss value
-    """
-    # Temperature loss
-    temp = predictions.dynamics.temperature
-    global_temp = jnp.mean(temp)
-    baseline_temp = jnp.mean(baseline.temperature)
-    temp_anomaly = global_temp - baseline_temp
-    L_temp = (temp_anomaly - target_cooling) ** 2
-
-    # Amazon precipitation loss
-    precip = predictions.physics.convection.precnv + predictions.physics.condensation.precls
-    amazon_mask = create_teleconnection_mask(coords.horizontal, 'amazon')
-    amazon_precip = jnp.sum(precip * amazon_mask) / jnp.sum(amazon_mask)
-    baseline_amazon = jnp.sum(baseline.precip * amazon_mask) / jnp.sum(amazon_mask)
-    L_amazon = jnp.maximum(0, baseline_amazon - amazon_precip) ** 2  # Penalize decreases
-
-    # Tropical precipitation loss
-    tropical_mask = create_tropical_mask(coords)
-    tropical_precip = jnp.sum(precip * tropical_mask) / jnp.sum(tropical_mask)
-    baseline_tropical = jnp.sum(baseline.precip * tropical_mask) / jnp.sum(tropical_mask)
-    L_tropics = (tropical_precip - baseline_tropical) ** 2
-
-    # Regularization
-    L_reg = jnp.mean(mcb_forcing ** 2) + jnp.mean(jnp.abs(jnp.diff(mcb_forcing)))
-
-    # Weighted sum
-    loss = (
-        weights['temperature'] * L_temp +
-        weights['amazon'] * L_amazon +
-        weights['tropics'] * L_tropics +
-        weights['regularization'] * L_reg
-    )
-
-    return loss
-```
+Key features implemented:
+- `LossWeights` NamedTuple for configurable loss term weights
+- `LossComponents` struct for detailed loss breakdown/logging
+- `compute_climate_loss()`: Main loss function combining all terms
+- `compute_climate_loss_from_baseline()`: Convenience wrapper for ClimateBaseline
+- `create_loss_fn()`: Curried loss function for training loops
+- All loss functions fully differentiable (no `jnp.maximum`, using `softplus` instead)
 
 ---
 
-## Phase 4: Differentiable Unrolling
+## Phase 4: Differentiable Unrolling (Completed)
 
-### 4.1 Control Loop Architecture
+### 4.1 Control Loop Architecture ✅
 
 ```
 For each control interval (e.g., 30 days):
-    1. Extract current climate state from simulation
-    2. Pass state through policy network → get MCB forcing
-    3. Apply MCB forcing to model physics
-    4. Step model forward by control interval
-    5. Accumulate loss
+    1. Run model forward to get current climate state
+    2. Extract state features from predictions
+    3. Pass features through policy network → get MCB forcing
+    4. Apply ocean mask to MCB forcing
+    5. Compute interval loss
+    6. Accumulate loss and continue to next interval
 
 After full rollout:
-    6. Compute total loss
-    7. Backpropagate through entire trajectory
-    8. Update policy network weights
+    7. Return total loss for gradient computation
+    8. Backpropagate through entire trajectory (BPTT)
 ```
 
-### 4.2 Implementation
+### 4.2 Implementation ✅
 
 **File**: `jcm/mcb/controller.py`
 
-```python
-def unroll_with_policy(
-    model,
-    policy_fn,
-    policy_params,
-    initial_state,
-    forcing,
-    terrain,
-    baseline,
-    coords,
-    control_interval_days=30,
-    total_days=365,
-    loss_weights=None,
-):
-    """Unroll climate simulation with neural network control.
-
-    Args:
-        model: JCM Model instance
-        policy_fn: Policy network apply function
-        policy_params: Policy network parameters
-        initial_state: Starting modal state
-        forcing: Base ForcingData
-        terrain: TerrainData
-        baseline: Baseline climate (for anomalies)
-        coords: Model coordinates
-        control_interval_days: Days between policy applications
-        total_days: Total simulation length
-        loss_weights: Dict of loss term weights
-
-    Returns:
-        (total_loss, final_state, trajectory)
-    """
-    state = initial_state
-    total_loss = 0.0
-    trajectory = []
-
-    num_intervals = total_days // control_interval_days
-
-    def step_interval(carry, _):
-        state, cumulative_loss = carry
-
-        # Run model for one interval to get current climate
-        predictions = model.run_from_state(
-            state, forcing,
-            save_interval=control_interval_days,
-            total_time=control_interval_days
-        )
-
-        # Extract state features
-        state_features = extract_state_features(predictions, baseline, coords)
-
-        # Get MCB forcing from policy
-        mcb_perturbation = policy_fn(policy_params, state_features)
-
-        # Apply ocean mask
-        ocean_mask = 1.0 - terrain.fmask
-        mcb_perturbation = mcb_perturbation * ocean_mask
-
-        # Create MCB config
-        mcb_config = MCBConfig.from_spatial_field(
-            mcb_perturbation,
-            active_mask=ocean_mask,
-        )
-
-        # Update physics with MCB
-        physics_with_mcb = SpeedyPhysics(mcb_config=mcb_config)
-        model_with_mcb = model.copy(physics=physics_with_mcb)
-
-        # Step forward with MCB applied
-        final_state, predictions = model_with_mcb.run_from_state(
-            state, forcing,
-            save_interval=control_interval_days,
-            total_time=control_interval_days
-        )
-
-        # Compute loss for this interval
-        interval_loss = compute_climate_loss(
-            predictions, baseline, target_cooling=-0.5,
-            mcb_forcing=mcb_perturbation, coords=coords,
-            weights=loss_weights
-        )
-
-        return (final_state, cumulative_loss + interval_loss), predictions
-
-    # Use lax.scan for efficient unrolling
-    (final_state, total_loss), trajectory = jax.lax.scan(
-        step_interval,
-        (initial_state, 0.0),
-        None,
-        length=num_intervals
-    )
-
-    return total_loss, final_state, trajectory
-```
+Key features implemented:
+- `ControllerConfig` NamedTuple with all control parameters
+- `ControlStep` NamedTuple for step outputs (state, predictions, forcing, loss)
+- `create_controlled_step()`: Factory for single control step function
+- `unroll_with_policy()`: Full unrolling with `jax.lax.scan`
+- `unroll_with_policy_simple()`: Returns only scalar loss (memory efficient)
+- `create_loss_fn()`: Curried loss function depending only on policy params
+- `evaluate_policy()`: Run policy and compute detailed metrics
+- `compute_policy_gradient()`: Compute gradients via BPTT
+- `verify_gradients()`: Check for NaN/zero gradients
+- Gradient checkpointing via `jax.checkpoint` for memory efficiency
 
 ---
 
-## Phase 5: BPTT Training Loop
+## Phase 5: BPTT Training Loop (Completed)
 
-### 5.1 Training Function
+### 5.1 Training Function ✅
 
 **File**: `jcm/mcb/train.py`
 
-```python
-import jax
-import optax
+Key features implemented:
+- `TrainingConfig` NamedTuple with all training hyperparameters
+- `TrainingState` NamedTuple tracking training progress
+- `create_optimizer()`: Optimizer factory with learning rate schedules
+  - Constant, cosine decay, warmup + cosine decay
+  - Adam, AdamW, SGD with momentum
+  - Optional gradient clipping
+- `create_train_step()`: JIT-compiled training step
+- `train_policy()`: Main training loop with:
+  - Progress logging
+  - Best parameter tracking
+  - Early stopping support
+  - Callback hooks for custom logging
+- `validate_training_setup()`: Pre-training validation
+- `save_checkpoint()` / `load_checkpoint()`: Model persistence
 
-def create_train_step(model, policy, coords, terrain, baseline, loss_weights):
-    """Create JIT-compiled training step."""
+### 5.2 Memory Optimization ✅
 
-    @jax.jit
-    def train_step(policy_params, opt_state, initial_state, forcing):
-        def loss_fn(params):
-            total_loss, _, _ = unroll_with_policy(
-                model=model,
-                policy_fn=policy.apply,
-                policy_params=params,
-                initial_state=initial_state,
-                forcing=forcing,
-                terrain=terrain,
-                baseline=baseline,
-                coords=coords,
-                control_interval_days=30,
-                total_days=365,
-                loss_weights=loss_weights,
-            )
-            return total_loss
-
-        loss, grads = jax.value_and_grad(loss_fn)(policy_params)
-        updates, new_opt_state = optimizer.update(grads, opt_state, policy_params)
-        new_params = optax.apply_updates(policy_params, updates)
-
-        return new_params, new_opt_state, loss
-
-    return train_step
-
-
-def train_policy(
-    model,
-    policy,
-    coords,
-    terrain,
-    forcing,
-    baseline,
-    num_epochs=100,
-    learning_rate=1e-3,
-    loss_weights=None,
-):
-    """Train MCB policy network via BPTT."""
-
-    # Initialize policy
-    dummy_input = jnp.zeros(state_feature_dim)
-    policy_params = policy.init(jax.random.PRNGKey(0), dummy_input)
-
-    # Optimizer
-    optimizer = optax.adam(learning_rate)
-    opt_state = optimizer.init(policy_params)
-
-    # Training step
-    train_step = create_train_step(
-        model, policy, coords, terrain, baseline, loss_weights
-    )
-
-    # Initial state
-    initial_state = model._prepare_initial_modal_state()
-
-    # Training loop
-    losses = []
-    for epoch in range(num_epochs):
-        policy_params, opt_state, loss = train_step(
-            policy_params, opt_state, initial_state, forcing
-        )
-        losses.append(float(loss))
-
-        if epoch % 10 == 0:
-            print(f"Epoch {epoch}: loss = {loss:.4f}")
-
-    return policy_params, losses
-```
-
-### 5.2 Memory Optimization
-
-For long rollouts, use gradient checkpointing:
-
-```python
-from jax import checkpoint
-
-@checkpoint
-def step_interval_checkpointed(carry, _):
-    # Same as step_interval but memory-efficient
-    ...
-```
+Gradient checkpointing implemented via `jax.checkpoint` decorator on step functions.
+Configurable via `ControllerConfig.use_checkpointing = True` (default).
 
 ---
 
-## Phase 6: Experimental Design
+## Phase 6: Experimental Design (Pending)
 
 ### 6.1 Experiments
 
-| Experiment | Description | Duration | Notes |
-|------------|-------------|----------|-------|
-| Baseline | No MCB, establish climate reference | 10 years | Extract baseline temperature/precip |
-| Static MCB | Uniform 5% albedo increase in SE Pacific | 10 years | Compare to trained policy |
-| Policy Training | Train neural controller | 100 epochs × 1 year | BPTT through simulation |
-| Policy Evaluation | Run trained policy | 10 years | Assess cooling + teleconnections |
-| Ablation | Vary loss weights, network size | Variable | Sensitivity analysis |
+| Experiment | Description | Duration | Status |
+|------------|-------------|----------|--------|
+| Baseline | No MCB, establish climate reference | 10 years | ⏳ Pending |
+| Static MCB | Uniform 5% albedo increase in SE Pacific | 10 years | ⏳ Pending |
+| Policy Training | Train neural controller | 100 epochs × 1 year | ⏳ Pending |
+| Policy Evaluation | Run trained policy | 10 years | ⏳ Pending |
+| Ablation | Vary loss weights, network size | Variable | ⏳ Pending |
 
 ### 6.2 Metrics
 
@@ -436,63 +213,118 @@ def step_interval_checkpointed(carry, _):
 
 ```
 jcm/mcb/
-├── __init__.py           # Exports (update)
+├── __init__.py           # ✅ Exports all public API
 ├── mcb_config.py         # ✅ MCBConfig struct
-├── mcb_regions.py        # ✅ Region masks
-├── mcb_forcing.py        # ✅ Core forcing
-├── mcb_test.py           # ✅ Tests (update)
-├── policy.py             # NEW: Policy networks (Flax)
-├── state_features.py     # NEW: Feature extraction
-├── loss.py               # NEW: Climate loss function
-├── controller.py         # NEW: Differentiable unrolling
-└── train.py              # NEW: BPTT training loop
+├── mcb_regions.py        # ✅ Region masks (stratocumulus + teleconnection)
+├── mcb_forcing.py        # ✅ Core forcing computation
+├── mcb_test.py           # ✅ 54 unit tests
+├── policy.py             # ✅ Policy networks (MLP, CNN, ResNet, Hybrid)
+├── state_features.py     # ✅ Feature extraction (scalar + spatial)
+├── loss.py               # ✅ Climate loss function (6 components)
+├── controller.py         # ✅ Differentiable unrolling with lax.scan
+└── train.py              # ✅ BPTT training loop
 ```
 
 ---
 
-## Implementation Order
+## Implementation Checklist
 
-### Step 1: Policy Network (`policy.py`)
-- [ ] Implement `MCBPolicyMLP` class
-- [ ] Implement `MCBPolicyCNN` class (optional)
-- [ ] Add parameter initialization helpers
+### Step 1: Policy Network (`policy.py`) ✅
+- [x] Implement `MCBPolicyMLP` class
+- [x] Implement `MCBPolicyCNN` class
+- [x] Implement `MCBPolicyResNet` class (added for better gradient flow)
+- [x] Implement `MCBPolicyHybrid` class (added for combined global/spatial)
+- [x] Add `create_policy()` factory function
+- [x] Add `init_policy_params()` helper
 
-### Step 2: State Features (`state_features.py`)
-- [ ] Implement `extract_state_features()`
-- [ ] Add tropical/regional mask utilities
-- [ ] Handle baseline anomaly computation
+### Step 2: State Features (`state_features.py`) ✅
+- [x] Implement `StateFeatureConfig` configuration
+- [x] Implement `ClimateBaseline` struct
+- [x] Implement `extract_scalar_features()` (12 features)
+- [x] Implement `extract_spatial_features()` (for CNN policies)
+- [x] Implement `extract_state_features()` main entry point
+- [x] Add `compute_area_weights()` for proper spatial averaging
+- [x] Add `create_latitude_band_mask()` utility
+- [x] Add `get_feature_dim()` for dimension lookup
 
-### Step 3: Loss Function (`loss.py`)
-- [ ] Implement `compute_climate_loss()`
-- [ ] Add individual loss term functions
-- [ ] Ensure full differentiability
+### Step 3: Loss Function (`loss.py`) ✅
+- [x] Implement `LossWeights` configuration
+- [x] Implement `LossComponents` for detailed breakdown
+- [x] Implement `temperature_loss()`
+- [x] Implement `amazon_precipitation_loss()` (asymmetric)
+- [x] Implement `sahel_precipitation_loss()` (asymmetric)
+- [x] Implement `tropical_precipitation_loss()` (symmetric)
+- [x] Implement `regularization_loss()` (L2 norm)
+- [x] Implement `smoothness_loss()` (total variation)
+- [x] Implement `compute_climate_loss()` main function
+- [x] Ensure full differentiability (no hard thresholds)
 
-### Step 4: Controller (`controller.py`)
-- [ ] Implement `unroll_with_policy()`
-- [ ] Add `jax.lax.scan` for efficient unrolling
-- [ ] Add gradient checkpointing option
+### Step 4: Controller (`controller.py`) ✅
+- [x] Implement `ControllerConfig` configuration
+- [x] Implement `ControlStep` output struct
+- [x] Implement `create_controlled_step()` factory
+- [x] Implement `unroll_with_policy()` with `jax.lax.scan`
+- [x] Implement `unroll_with_policy_simple()` for memory efficiency
+- [x] Implement `create_loss_fn()` curried function
+- [x] Implement `evaluate_policy()` for metrics
+- [x] Implement `compute_policy_gradient()` for BPTT
+- [x] Implement `verify_gradients()` for debugging
+- [x] Add gradient checkpointing option
 
-### Step 5: Training (`train.py`)
-- [ ] Implement `create_train_step()`
-- [ ] Implement `train_policy()`
-- [ ] Add logging and checkpointing
+### Step 5: Training (`train.py`) ✅
+- [x] Implement `TrainingConfig` configuration
+- [x] Implement `TrainingState` state tracking
+- [x] Implement `create_optimizer()` with LR schedules
+- [x] Implement `create_train_step()` JIT-compiled step
+- [x] Implement `initialize_training()` helper
+- [x] Implement `train_policy()` main training loop
+- [x] Implement `validate_training_setup()` pre-check
+- [x] Implement `save_checkpoint()` / `load_checkpoint()`
+- [x] Add early stopping support
+- [x] Add callback hooks for logging
 
-### Step 6: Tests (`mcb_test.py`)
-- [ ] Test policy forward pass
-- [ ] Test loss function gradients
-- [ ] Test single unroll step
-- [ ] Test BPTT gradient flow
+### Step 6: Tests (`mcb_test.py`) ✅
+- [x] Test `MCBPolicyMLP` output shape and bounds
+- [x] Test `MCBPolicyMLP` batched input handling
+- [x] Test `MCBPolicyMLP` JIT compatibility
+- [x] Test `MCBPolicyMLP` gradient flow
+- [x] Test `MCBPolicyCNN` output shape and bounds
+- [x] Test `MCBPolicyResNet` gradient flow
+- [x] Test `create_policy()` factory function
+- [x] Test `StateFeatureConfig` defaults
+- [x] Test `ClimateBaseline.global_mean()`
+- [x] Test `get_feature_dim()`
+- [x] Test `LossWeights` configuration
+- [x] Test `regularization_loss()` (zero and positive cases)
+- [x] Test `smoothness_loss()` (uniform and non-uniform)
+- [x] Test `ControllerConfig` defaults
+- [x] Test `TrainingConfig` defaults
+- [x] Test `create_optimizer()` optimizer creation
+
+### Step 7: Exports (`__init__.py`) ✅
+- [x] Export all policy network classes
+- [x] Export state feature extraction functions
+- [x] Export loss function components
+- [x] Export controller functions
+- [x] Export training functions
 
 ---
 
 ## Verification
 
-### Unit Tests
+### Unit Tests ✅
 ```bash
 pytest jcm/mcb/mcb_test.py -v
+# Result: 54 passed
 ```
 
-### Integration Test
+### Linting ✅
+```bash
+ruff check jcm/mcb/
+# Result: All checks passed!
+```
+
+### Integration Test (Pending)
 ```python
 # Verify end-to-end gradient flow
 def test_bptt_gradient_flow():
@@ -510,9 +342,34 @@ def test_bptt_gradient_flow():
     assert any(jnp.any(g != 0) for g in jax.tree.leaves(grads))
 ```
 
-### Training Verification
+### Training Verification (Pending)
 ```python
 # Verify loss decreases over training
 losses = train_policy(model, policy, ...)
 assert losses[-1] < losses[0]  # Loss should decrease
 ```
+
+---
+
+## Next Steps
+
+1. **Run baseline simulation** to establish reference climate state
+2. **Create ClimateBaseline** from baseline run
+3. **Train policy** with `train_policy()` function
+4. **Evaluate trained policy** with `evaluate_policy()`
+5. **Run ablation studies** varying loss weights and network architectures
+6. **Visualize results** using existing `visualize_mcb_globe.py`
+
+---
+
+## Change Log
+
+### 2024-XX-XX: Neural Network Controller Implementation
+- Created `jcm/mcb/policy.py` with 4 policy network architectures (MLP, CNN, ResNet, Hybrid)
+- Created `jcm/mcb/state_features.py` with scalar and spatial feature extraction
+- Created `jcm/mcb/loss.py` with 6-component differentiable loss function
+- Created `jcm/mcb/controller.py` with `jax.lax.scan`-based unrolling
+- Created `jcm/mcb/train.py` with full BPTT training infrastructure
+- Updated `jcm/mcb/__init__.py` to export all new components
+- Added 27 new unit tests (54 total) to `jcm/mcb/mcb_test.py`
+- All tests passing, all linting checks passing

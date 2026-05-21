@@ -351,5 +351,355 @@ class TestMCBIntegration(unittest.TestCase):
         self.assertIsNone(physics.mcb_config)
 
 
+class TestMCBPolicyMLP(unittest.TestCase):
+    """Tests for MCBPolicyMLP neural network."""
+
+    def setUp(self):
+        self.output_shape = (64, 32)
+        self.input_dim = 12  # Default feature dimension
+
+    def test_mlp_output_shape(self):
+        """MLP should output correct spatial shape."""
+        from jcm.mcb.policy import MCBPolicyMLP
+
+        policy = MCBPolicyMLP(output_shape=self.output_shape)
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_dim))
+        output = policy.apply(params, jnp.zeros(self.input_dim))
+
+        self.assertEqual(output.shape, self.output_shape)
+
+    def test_mlp_output_bounds(self):
+        """MLP output should be bounded [0, max_perturbation]."""
+        from jcm.mcb.policy import MCBPolicyMLP
+
+        max_perturb = 0.15
+        policy = MCBPolicyMLP(output_shape=self.output_shape, max_perturbation=max_perturb)
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_dim))
+
+        # Test with random input
+        rng = jax.random.PRNGKey(1)
+        random_input = jax.random.normal(rng, (self.input_dim,))
+        output = policy.apply(params, random_input)
+
+        self.assertTrue(jnp.all(output >= 0.0))
+        self.assertTrue(jnp.all(output <= max_perturb))
+
+    def test_mlp_batched_input(self):
+        """MLP should handle batched inputs."""
+        from jcm.mcb.policy import MCBPolicyMLP
+
+        batch_size = 4
+        policy = MCBPolicyMLP(output_shape=self.output_shape)
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_dim))
+
+        batched_input = jnp.zeros((batch_size, self.input_dim))
+        output = policy.apply(params, batched_input)
+
+        self.assertEqual(output.shape, (batch_size,) + self.output_shape)
+
+    def test_mlp_jit_compatible(self):
+        """MLP should be JIT-compatible."""
+        from jcm.mcb.policy import MCBPolicyMLP
+
+        policy = MCBPolicyMLP(output_shape=self.output_shape)
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_dim))
+
+        @jax.jit
+        def forward(p, x):
+            return policy.apply(p, x)
+
+        output = forward(params, jnp.zeros(self.input_dim))
+        self.assertEqual(output.shape, self.output_shape)
+
+    def test_mlp_gradient_flow(self):
+        """MLP should allow gradient flow."""
+        from jcm.mcb.policy import MCBPolicyMLP
+
+        policy = MCBPolicyMLP(output_shape=self.output_shape)
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_dim))
+
+        def loss_fn(p):
+            output = policy.apply(p, jnp.ones(self.input_dim))
+            return jnp.mean(output)
+
+        loss, grads = jax.value_and_grad(loss_fn)(params)
+
+        # Check no NaNs in gradients
+        grad_leaves = jax.tree.leaves(grads)
+        has_nans = any(jnp.any(jnp.isnan(g)) for g in grad_leaves)
+        self.assertFalse(has_nans)
+
+        # Check some non-zero gradients
+        has_nonzero = any(jnp.any(g != 0) for g in grad_leaves)
+        self.assertTrue(has_nonzero)
+
+
+class TestMCBPolicyCNN(unittest.TestCase):
+    """Tests for MCBPolicyCNN neural network."""
+
+    def setUp(self):
+        self.input_shape = (64, 32, 3)  # (ix, il, channels)
+
+    def test_cnn_output_shape(self):
+        """CNN should output same spatial shape as input."""
+        from jcm.mcb.policy import MCBPolicyCNN
+
+        policy = MCBPolicyCNN()
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_shape))
+        output = policy.apply(params, jnp.zeros(self.input_shape))
+
+        self.assertEqual(output.shape, self.input_shape[:2])
+
+    def test_cnn_output_bounds(self):
+        """CNN output should be bounded [0, max_perturbation]."""
+        from jcm.mcb.policy import MCBPolicyCNN
+
+        max_perturb = 0.15
+        policy = MCBPolicyCNN(max_perturbation=max_perturb)
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_shape))
+
+        rng = jax.random.PRNGKey(1)
+        random_input = jax.random.normal(rng, self.input_shape)
+        output = policy.apply(params, random_input)
+
+        self.assertTrue(jnp.all(output >= 0.0))
+        self.assertTrue(jnp.all(output <= max_perturb))
+
+
+class TestMCBPolicyResNet(unittest.TestCase):
+    """Tests for MCBPolicyResNet neural network."""
+
+    def setUp(self):
+        self.input_shape = (64, 32, 3)
+
+    def test_resnet_output_shape(self):
+        """ResNet should output same spatial shape as input."""
+        from jcm.mcb.policy import MCBPolicyResNet
+
+        policy = MCBPolicyResNet(num_blocks=2)
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_shape))
+        output = policy.apply(params, jnp.zeros(self.input_shape))
+
+        self.assertEqual(output.shape, self.input_shape[:2])
+
+    def test_resnet_gradient_flow(self):
+        """ResNet should have good gradient flow through residuals."""
+        from jcm.mcb.policy import MCBPolicyResNet
+
+        policy = MCBPolicyResNet(num_blocks=4)
+        params = policy.init(jax.random.PRNGKey(0), jnp.zeros(self.input_shape))
+
+        def loss_fn(p):
+            output = policy.apply(p, jnp.ones(self.input_shape))
+            return jnp.mean(output)
+
+        loss, grads = jax.value_and_grad(loss_fn)(params)
+
+        grad_leaves = jax.tree.leaves(grads)
+        has_nans = any(jnp.any(jnp.isnan(g)) for g in grad_leaves)
+        self.assertFalse(has_nans)
+
+
+class TestCreatePolicy(unittest.TestCase):
+    """Tests for create_policy factory function."""
+
+    def test_create_mlp(self):
+        """create_policy should create MLP correctly."""
+        from jcm.mcb.policy import create_policy, MCBPolicyMLP
+
+        policy = create_policy('mlp', output_shape=(64, 32))
+        self.assertIsInstance(policy, MCBPolicyMLP)
+
+    def test_create_cnn(self):
+        """create_policy should create CNN correctly."""
+        from jcm.mcb.policy import create_policy, MCBPolicyCNN
+
+        policy = create_policy('cnn', output_shape=(64, 32))
+        self.assertIsInstance(policy, MCBPolicyCNN)
+
+    def test_create_resnet(self):
+        """create_policy should create ResNet correctly."""
+        from jcm.mcb.policy import create_policy, MCBPolicyResNet
+
+        policy = create_policy('resnet', output_shape=(64, 32))
+        self.assertIsInstance(policy, MCBPolicyResNet)
+
+    def test_create_invalid_policy(self):
+        """create_policy should raise error for invalid type."""
+        from jcm.mcb.policy import create_policy
+
+        with self.assertRaises(ValueError):
+            create_policy('invalid', output_shape=(64, 32))
+
+
+class TestStateFeatures(unittest.TestCase):
+    """Tests for state feature extraction."""
+
+    def test_state_feature_config_defaults(self):
+        """StateFeatureConfig should have sensible defaults."""
+        from jcm.mcb.state_features import StateFeatureConfig
+
+        config = StateFeatureConfig()
+
+        self.assertTrue(config.include_temperature)
+        self.assertTrue(config.include_precipitation)
+        self.assertFalse(config.include_spatial)
+
+    def test_get_feature_dim(self):
+        """get_feature_dim should return expected dimension."""
+        from jcm.mcb.state_features import get_feature_dim, StateFeatureConfig
+
+        dim = get_feature_dim(StateFeatureConfig())
+        self.assertEqual(dim, 12)
+
+    def test_climate_baseline_global_mean(self):
+        """ClimateBaseline.global_mean should create correct shapes."""
+        from jcm.mcb.state_features import ClimateBaseline
+
+        nodal_shape = (64, 32)
+        baseline = ClimateBaseline.global_mean(nodal_shape, target_temp=288.0)
+
+        self.assertEqual(baseline.surface_temperature.shape, nodal_shape)
+        self.assertEqual(baseline.precipitation.shape, nodal_shape)
+        self.assertEqual(baseline.temperature.shape, nodal_shape + (8,))
+
+
+class TestLossWeights(unittest.TestCase):
+    """Tests for LossWeights configuration."""
+
+    def test_loss_weights_defaults(self):
+        """LossWeights should have sensible defaults."""
+        from jcm.mcb.loss import LossWeights
+
+        weights = LossWeights()
+
+        self.assertEqual(weights.temperature, 1.0)
+        self.assertEqual(weights.amazon, 1.0)
+        self.assertGreater(weights.regularization, 0.0)
+
+    def test_loss_weights_custom(self):
+        """LossWeights should accept custom values."""
+        from jcm.mcb.loss import LossWeights
+
+        weights = LossWeights(temperature=2.0, amazon=0.5)
+
+        self.assertEqual(weights.temperature, 2.0)
+        self.assertEqual(weights.amazon, 0.5)
+
+
+class TestRegularizationLoss(unittest.TestCase):
+    """Tests for MCB forcing regularization loss."""
+
+    def test_regularization_loss_zero_forcing(self):
+        """Zero forcing should give zero regularization loss."""
+        from jcm.mcb.loss import regularization_loss
+
+        forcing = jnp.zeros((64, 32))
+        loss = regularization_loss(forcing)
+
+        self.assertTrue(jnp.isclose(loss, 0.0))
+
+    def test_regularization_loss_positive(self):
+        """Non-zero forcing should give positive regularization loss."""
+        from jcm.mcb.loss import regularization_loss
+
+        forcing = jnp.ones((64, 32)) * 0.1
+        loss = regularization_loss(forcing)
+
+        self.assertTrue(loss > 0.0)
+
+    def test_regularization_loss_gradient(self):
+        """Regularization loss should be differentiable."""
+        from jcm.mcb.loss import regularization_loss
+
+        forcing = jnp.ones((64, 32)) * 0.1
+
+        grad = jax.grad(regularization_loss)(forcing)
+
+        self.assertFalse(jnp.any(jnp.isnan(grad)))
+        self.assertTrue(jnp.any(grad != 0))
+
+
+class TestSmoothnessLoss(unittest.TestCase):
+    """Tests for MCB forcing smoothness loss."""
+
+    def test_smoothness_loss_uniform(self):
+        """Uniform forcing should give zero smoothness loss."""
+        from jcm.mcb.loss import smoothness_loss
+
+        forcing = jnp.ones((64, 32)) * 0.1
+        loss = smoothness_loss(forcing)
+
+        self.assertTrue(jnp.isclose(loss, 0.0))
+
+    def test_smoothness_loss_nonuniform(self):
+        """Non-uniform forcing should give positive smoothness loss."""
+        from jcm.mcb.loss import smoothness_loss
+
+        # Create checkerboard pattern
+        x = jnp.arange(64)
+        y = jnp.arange(32)
+        xx, yy = jnp.meshgrid(x, y, indexing='ij')
+        forcing = ((xx + yy) % 2).astype(jnp.float32) * 0.1
+
+        loss = smoothness_loss(forcing)
+
+        self.assertTrue(loss > 0.0)
+
+
+class TestControllerConfig(unittest.TestCase):
+    """Tests for ControllerConfig."""
+
+    def test_controller_config_defaults(self):
+        """ControllerConfig should have sensible defaults."""
+        from jcm.mcb.controller import ControllerConfig
+
+        config = ControllerConfig()
+
+        self.assertEqual(config.control_interval_days, 30.0)
+        self.assertEqual(config.total_days, 365.0)
+        self.assertEqual(config.target_cooling, -0.5)
+        self.assertTrue(config.use_checkpointing)
+
+    def test_controller_config_custom(self):
+        """ControllerConfig should accept custom values."""
+        from jcm.mcb.controller import ControllerConfig
+
+        config = ControllerConfig(
+            control_interval_days=15.0,
+            total_days=180.0,
+            target_cooling=-1.0,
+        )
+
+        self.assertEqual(config.control_interval_days, 15.0)
+        self.assertEqual(config.total_days, 180.0)
+        self.assertEqual(config.target_cooling, -1.0)
+
+
+class TestTrainingConfig(unittest.TestCase):
+    """Tests for TrainingConfig."""
+
+    def test_training_config_defaults(self):
+        """TrainingConfig should have sensible defaults."""
+        from jcm.mcb.train import TrainingConfig
+
+        config = TrainingConfig()
+
+        self.assertEqual(config.num_epochs, 100)
+        self.assertEqual(config.learning_rate, 1e-3)
+        self.assertEqual(config.optimizer, 'adam')
+
+    def test_create_optimizer(self):
+        """create_optimizer should create valid optimizer."""
+        from jcm.mcb.train import TrainingConfig, create_optimizer
+
+        config = TrainingConfig(learning_rate=1e-3, optimizer='adam')
+        optimizer = create_optimizer(config)
+
+        # Should be callable
+        self.assertTrue(hasattr(optimizer, 'init'))
+        self.assertTrue(hasattr(optimizer, 'update'))
+
+
 if __name__ == '__main__':
     unittest.main()
