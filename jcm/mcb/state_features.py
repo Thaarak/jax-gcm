@@ -212,8 +212,10 @@ def extract_scalar_features(
 
     # --- Temperature features ---
 
-    # Surface temperature
-    surf_temp = predictions.physics.temperature_tendency.surface_temp
+    # Surface temperature - squeeze out time dimension if present
+    surf_temp = predictions.physics.surface_flux.tsfc
+    if surf_temp.ndim == 3:
+        surf_temp = surf_temp[0]  # Remove time dimension (1, ix, il) -> (ix, il)
 
     # Global mean surface temperature anomaly
     global_temp = jnp.sum(surf_temp * area_weights)
@@ -250,8 +252,13 @@ def extract_scalar_features(
 
     # --- Precipitation features ---
 
-    # Total precipitation
-    precip = predictions.physics.convection.precnv + predictions.physics.condensation.precls
+    # Total precipitation - squeeze out time dimension if present
+    precnv = predictions.physics.convection.precnv
+    precls = predictions.physics.condensation.precls
+    if precnv.ndim == 3:
+        precnv = precnv[0]
+        precls = precls[0]
+    precip = precnv + precls
 
     # Global mean precipitation
     global_precip = jnp.sum(precip * area_weights)
@@ -306,20 +313,31 @@ def extract_spatial_features(
     channels = []
 
     if config.include_temperature:
-        # Surface temperature anomaly
-        surf_temp = predictions.physics.temperature_tendency.surface_temp
+        # Surface temperature anomaly - squeeze out time dimension if present
+        surf_temp = predictions.physics.surface_flux.tsfc
+        if surf_temp.ndim == 3:
+            surf_temp = surf_temp[0]
         surf_temp_anomaly = surf_temp - baseline.surface_temperature
         channels.append(surf_temp_anomaly)
 
         # Multi-level temperature anomalies
+        # predictions.dynamics.temperature has shape (time, level, lon, lat)
+        temp_3d = predictions.dynamics.temperature
+        if temp_3d.ndim == 4:
+            temp_3d = temp_3d[0]  # Remove time dim: (level, lon, lat)
         for level in config.temperature_levels:
-            temp_level = predictions.dynamics.temperature[:, :, level]
+            temp_level = temp_3d[level]  # (lon, lat)
             baseline_level = baseline.temperature[:, :, level]
             channels.append(temp_level - baseline_level)
 
     if config.include_precipitation:
-        # Precipitation anomaly
-        precip = predictions.physics.convection.precnv + predictions.physics.condensation.precls
+        # Precipitation anomaly - squeeze out time dimension if present
+        precnv = predictions.physics.convection.precnv
+        precls = predictions.physics.condensation.precls
+        if precnv.ndim == 3:
+            precnv = precnv[0]
+            precls = precls[0]
+        precip = precnv + precls
         precip_anomaly = precip - baseline.precipitation
         channels.append(precip_anomaly)
 

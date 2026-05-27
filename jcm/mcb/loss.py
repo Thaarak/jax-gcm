@@ -90,8 +90,10 @@ def temperature_loss(
         Scalar temperature loss.
 
     """
-    # Current global mean surface temperature
-    surf_temp = predictions.physics.temperature_tendency.surface_temp
+    # Current global mean surface temperature - squeeze time dim if present
+    surf_temp = predictions.physics.surface_flux.tsfc
+    if surf_temp.ndim == 3:
+        surf_temp = surf_temp[0]
     global_temp = jnp.sum(surf_temp * area_weights)
 
     # Baseline global mean
@@ -135,8 +137,13 @@ def amazon_precipitation_loss(
         amazon_bounds[2:]
     )
 
-    # Current precipitation
-    precip = predictions.physics.convection.precnv + predictions.physics.condensation.precls
+    # Current precipitation - squeeze time dim if present
+    precnv = predictions.physics.convection.precnv
+    precls = predictions.physics.condensation.precls
+    if precnv.ndim == 3:
+        precnv = precnv[0]
+        precls = precls[0]
+    precip = precnv + precls
 
     # Regional means
     amazon_precip = compute_regional_mean(precip, amazon_mask, area_weights)
@@ -180,8 +187,13 @@ def sahel_precipitation_loss(
         sahel_bounds[2:]
     )
 
-    # Current precipitation
-    precip = predictions.physics.convection.precnv + predictions.physics.condensation.precls
+    # Current precipitation - squeeze time dim if present
+    precnv = predictions.physics.convection.precnv
+    precls = predictions.physics.condensation.precls
+    if precnv.ndim == 3:
+        precnv = precnv[0]
+        precls = precls[0]
+    precip = precnv + precls
 
     # Regional means
     sahel_precip = compute_regional_mean(precip, sahel_mask, area_weights)
@@ -220,8 +232,13 @@ def tropical_precipitation_loss(
     # Tropical mask (30S - 30N)
     tropical_mask = create_latitude_band_mask(coords, -30.0, 30.0)
 
-    # Current precipitation
-    precip = predictions.physics.convection.precnv + predictions.physics.condensation.precls
+    # Current precipitation - squeeze time dim if present
+    precnv = predictions.physics.convection.precnv
+    precls = predictions.physics.condensation.precls
+    if precnv.ndim == 3:
+        precnv = precnv[0]
+        precls = precls[0]
+    precip = precnv + precls
 
     # Regional means
     tropical_precip = compute_regional_mean(precip, tropical_mask, area_weights)
