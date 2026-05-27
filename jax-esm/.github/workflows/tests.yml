@@ -1,0 +1,86 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, dev/** ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Get jax-gcm
+      uses: actions/checkout@v4
+      with:
+        repository: climate-analytics-lab/jax-gcm
+        path: jax-gcm
+
+    - name: Get jittable veros
+      uses: actions/checkout@v4
+      with:
+        repository: meteorologytoday/veros-jittable
+        path: veros-jittable
+
+    - name: Show Working directory
+      run: ls
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        pip install jupyter nbconvert nbformat ipykernel
+        python -m ipykernel install --user --name python3 --display-name "Python 3"
+        python -m jupyter kernelspec list
+
+    - name: Run tests with pytest
+      run: |
+        export PYTHONPATH=./jax-gcm:./veros-jittable:$PYTHONPATH
+        pytest tests/ -v --tb=short --cov=jem --cov-report=xml --cov-report=term --ignore=tests/ignore
+
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  lint:
+    runs-on: ubuntu-latest 
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff mypy 
+
+
+    - name: Check import sorting with ruff
+      run: |
+        ruff check --output-format=github jem/
+
+    - name: Type check with mypy
+      run: |
+        mypy jem/ --ignore-missing-imports

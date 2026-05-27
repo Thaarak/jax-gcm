@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-esm"
+version = "0.1.0"
+description = "A JAX-based Earth System Model coupler for coupling atmospheric, land, and ocean components"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {name = "JAX-ESM Developers", email = "dwatsonparris@ucsd.edu"},
+]
+keywords = ["earth-system-modeling", "climate", "jax", "coupling"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+dependencies = [
+    "jax>=0.4.0",
+    "jaxlib>=0.4.0",
+    "numpy>=1.21.0",
+    "typing-extensions>=4.0.0",
+    "dataclasses-json>=0.5.0",
+    "typeguard",
+    "jax_datetime",
+    "jax_tqdm",
+    "tqdm",
+    "netcdf4",
+    "xarray",
+    "tree_math",
+    "coordax",
+    "jcm>=1.1.1",
+    "matplotlib",
+    "cartopy",
+    "sphinx",
+    "shibuya",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0",
+    "mypy>=0.900",
+    "ruff",
+    "nbformat",
+    "nbconvert",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/climate-analytics-lab/jax-esm"
+"Bug Reports" = "https://github.com/climate-analytics-lab/jax-esm/issues"
+"Source" = "https://github.com/climate-analytics-lab/jax-esm"
+
+[tool.setuptools.packages.find]
+include = ["jem*"]  # Automatically finds jem, jem.base, etc.
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
