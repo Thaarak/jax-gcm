@@ -1,0 +1,534 @@
+"""Coupled MCB controller for training with ocean feedback.
+
+Adapts the atmosphere-only controller to work with JAX-ESM
+coupled simulations, enabling gradient flow through ocean feedback.
+
+The key difference is that we:
+1. Extract features from coupled state (both atm and ocn)
+2. Inject MCB perturbation into the coupled carry
+3. Run the coupler's step function
+4. Compute loss using ocean SST
+
+Example usage:
+    from jcm.mcb.coupled_controller import (
+        unroll_coupled_with_policy,
+        CoupledControllerConfig,
+    )
+
+    total_loss, final_carry, trajectory = unroll_coupled_with_policy(
+        coupler=coupler,
+        workflow=["coupling", "atm", "ocn"],
+        policy_fn=policy.apply,
+        policy_params=params,
+        initial_carry=initial_carry,
+        baseline=baseline,
+        coords=coords,
+        ocean_mask=ocean_mask,
+    )
+"""
+
+import jax
+import jax.numpy as jnp
+from jax import lax
+from typing import Callable, Tuple, Any, NamedTuple
+from functools import partial
+
+from jcm.mcb.coupled_features import (
+    extract_coupled_features,
+    CoupledBaseline,
+    CoupledFeatureConfig,
+)
+from jcm.mcb.coupled_loss import (
+    compute_coupled_loss,
+    CoupledLossWeights,
+)
+
+
+class CoupledControllerConfig(NamedTuple):
+    """Configuration for coupled MCB controller.
+
+    Attributes:
+        control_interval_steps: Coupler steps between policy applications.
+        total_steps: Total coupler steps to run.
+        target_cooling: Target SST change (K, negative for cooling).
+        loss_weights: Weights for loss components.
+        feature_config: Configuration for feature extraction.
+        max_perturbation: Maximum MCB albedo perturbation.
+        use_checkpointing: Enable gradient checkpointing for memory.
+
+    """
+
+    control_interval_steps: int = 30  # e.g., 30 days if daily coupling
+    total_steps: int = 365  # e.g., 1 year
+    target_cooling: float = -0.5
+    loss_weights: CoupledLossWeights = CoupledLossWeights()
+    feature_config: CoupledFeatureConfig = CoupledFeatureConfig()
+    max_perturbation: float = 0.15
+    use_checkpointing: bool = True
+
+
+class CoupledControlStep(NamedTuple):
+    """Output from a single coupled control step.
+
+    Attributes:
+        carry: Final coupled carry after the control interval.
+        mcb_forcing: Applied MCB forcing field.
+        loss: Loss value for this interval.
+
+    """
+
+    carry: dict  # CoupledCarry
+    mcb_forcing: jnp.ndarray
+    loss: jnp.ndarray
+
+
+def create_coupled_step_fn(
+    coupler,
+    workflow: list,
+    jitted: bool = True,
+):
+    """Create a single-step function for the coupler.
+
+    Args:
+        coupler: JEM Coupler instance.
+        workflow: Coupling workflow (e.g., ["coupling", "atm", "ocn"]).
+        jitted: Whether to JIT compile the step function.
+
+    Returns:
+        Function (carry, step) -> (new_carry, predictions).
+
+    """
+    step_fn = coupler.generate_step_function(
+        workflow=workflow,
+        jitted=jitted,
+        show_progress=False,
+        verbose=False,
+    )
+    return step_fn
+
+
+def run_coupled_interval(
+    carry: dict,
+    step_fn: Callable,
+    num_steps: int,
+) -> Tuple[dict, Any]:
+    """Run coupled simulation for a control interval.
+
+    Args:
+        carry: Initial coupled carry.
+        step_fn: Coupler step function.
+        num_steps: Number of coupling steps to run.
+
+    Returns:
+        Tuple of (final_carry, stacked_predictions).
+
+    """
+    def scan_body(c, step_idx):
+        new_c, preds = step_fn(c, step_idx)
+        return new_c, preds
+
+    final_carry, trajectory = lax.scan(
+        scan_body,
+        carry,
+        jnp.arange(num_steps),
+    )
+    return final_carry, trajectory
+
+
+def create_coupled_control_step(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    baseline: CoupledBaseline,
+    coords,
+    config: CoupledControllerConfig,
+    ocean_mask: jnp.ndarray,
+) -> Callable:
+    """Create a single coupled control step function.
+
+    This creates a differentiable function that:
+    1. Extracts features from coupled state
+    2. Applies policy to get MCB forcing
+    3. Injects MCB into coupled carry
+    4. Runs coupler for control interval
+    5. Computes loss from SST
+
+    Args:
+        coupler: JEM Coupler instance.
+        workflow: Coupling workflow.
+        policy_fn: Policy network apply function.
+        baseline: Coupled climate baseline.
+        coords: Model coordinates.
+        config: Controller configuration.
+        ocean_mask: Ocean cell mask for MCB application.
+
+    Returns:
+        Function (carry, policy_params) -> CoupledControlStep.
+
+    """
+    # Get coupler step function
+    step_fn = create_coupled_step_fn(coupler, workflow, jitted=True)
+
+    def control_step(
+        carry: dict,
+        policy_params: dict,
+    ) -> CoupledControlStep:
+        """Execute one control interval with policy application."""
+        # Extract features from current coupled state
+        features = extract_coupled_features(
+            coupled_carry=carry,
+            baseline=baseline,
+            coords=coords,
+            config=config.feature_config,
+        )
+
+        # Get MCB perturbation from policy
+        mcb_perturbation = policy_fn(policy_params, features)
+
+        # Clip and apply ocean mask
+        mcb_perturbation = jnp.clip(mcb_perturbation, 0.0, config.max_perturbation)
+        mcb_perturbation = mcb_perturbation * ocean_mask
+
+        # Inject MCB into atmosphere forcing
+        # The JCM wrapper will read this and pass to physics
+        carry["atm"]["derived"]["mcb_perturbation"] = mcb_perturbation
+
+        # Run coupled simulation for control interval
+        final_carry, _ = run_coupled_interval(
+            carry=carry,
+            step_fn=step_fn,
+            num_steps=config.control_interval_steps,
+        )
+
+        # Compute loss using ocean SST
+        loss = compute_coupled_loss(
+            coupled_carry=final_carry,
+            baseline_sst=baseline.sst,
+            baseline_precip=baseline.precipitation,
+            target_cooling=config.target_cooling,
+            mcb_forcing=mcb_perturbation,
+            coords=coords,
+            weights=config.loss_weights,
+        )
+
+        return CoupledControlStep(
+            carry=final_carry,
+            mcb_forcing=mcb_perturbation,
+            loss=loss,
+        )
+
+    return control_step
+
+
+def unroll_coupled_with_policy(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    policy_params: dict,
+    initial_carry: dict,
+    baseline: CoupledBaseline,
+    coords,
+    ocean_mask: jnp.ndarray,
+    config: CoupledControllerConfig = CoupledControllerConfig(),
+) -> Tuple[jnp.ndarray, dict, Any]:
+    """Unroll coupled simulation with neural network control.
+
+    Main entry point for differentiable coupled MCB control.
+
+    Args:
+        coupler: JEM Coupler instance.
+        workflow: Coupling workflow (e.g., ["coupling", "atm", "ocn"]).
+        policy_fn: Policy network apply function (params, features) -> forcing.
+        policy_params: Policy network parameters.
+        initial_carry: Initial coupled carry.
+        baseline: Climate baseline for anomalies.
+        coords: Model coordinates.
+        ocean_mask: Ocean mask for MCB application.
+        config: Controller configuration.
+
+    Returns:
+        Tuple of:
+        - total_loss: Sum of losses over all control intervals
+        - final_carry: Coupled carry after full simulation
+        - trajectory: Stacked CoupledControlStep outputs
+
+    """
+    num_intervals = config.total_steps // config.control_interval_steps
+
+    # Create control step function
+    control_step = create_coupled_control_step(
+        coupler=coupler,
+        workflow=workflow,
+        policy_fn=policy_fn,
+        baseline=baseline,
+        coords=coords,
+        config=config,
+        ocean_mask=ocean_mask,
+    )
+
+    # Optionally wrap with checkpointing for memory efficiency
+    if config.use_checkpointing:
+        control_step = jax.checkpoint(control_step)
+
+    # Unroll with scan
+    def scan_body(state, _):
+        carry, cumulative_loss = state
+        step_output = control_step(carry, policy_params)
+        new_state = (step_output.carry, cumulative_loss + step_output.loss)
+        return new_state, step_output
+
+    (final_carry, total_loss), trajectory = lax.scan(
+        scan_body,
+        (initial_carry, jnp.array(0.0)),
+        None,
+        length=num_intervals,
+    )
+
+    return total_loss, final_carry, trajectory
+
+
+def unroll_coupled_simple(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    policy_params: dict,
+    initial_carry: dict,
+    baseline: CoupledBaseline,
+    coords,
+    ocean_mask: jnp.ndarray,
+    config: CoupledControllerConfig = CoupledControllerConfig(),
+) -> jnp.ndarray:
+    """Simplified unroll returning only total loss (for training).
+
+    More memory efficient as it doesn't store trajectory.
+
+    Args:
+        Same as unroll_coupled_with_policy.
+
+    Returns:
+        Scalar total loss over all control intervals.
+
+    """
+    total_loss, _, _ = unroll_coupled_with_policy(
+        coupler=coupler,
+        workflow=workflow,
+        policy_fn=policy_fn,
+        policy_params=policy_params,
+        initial_carry=initial_carry,
+        baseline=baseline,
+        coords=coords,
+        ocean_mask=ocean_mask,
+        config=config,
+    )
+    return total_loss
+
+
+def create_coupled_loss_fn(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    initial_carry: dict,
+    baseline: CoupledBaseline,
+    coords,
+    ocean_mask: jnp.ndarray,
+    config: CoupledControllerConfig = CoupledControllerConfig(),
+) -> Callable[[dict], jnp.ndarray]:
+    """Create loss function that only depends on policy parameters.
+
+    Useful for training with jax.value_and_grad.
+
+    Args:
+        coupler: JEM Coupler instance.
+        workflow: Coupling workflow.
+        policy_fn: Policy network apply function.
+        initial_carry: Initial coupled carry.
+        baseline: Climate baseline.
+        coords: Model coordinates.
+        ocean_mask: Ocean mask.
+        config: Controller configuration.
+
+    Returns:
+        Function (policy_params) -> scalar loss.
+
+    """
+    @partial(jax.jit)
+    def loss_fn(policy_params: dict) -> jnp.ndarray:
+        return unroll_coupled_simple(
+            coupler=coupler,
+            workflow=workflow,
+            policy_fn=policy_fn,
+            policy_params=policy_params,
+            initial_carry=initial_carry,
+            baseline=baseline,
+            coords=coords,
+            ocean_mask=ocean_mask,
+            config=config,
+        )
+
+    return loss_fn
+
+
+def evaluate_coupled_policy(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    policy_params: dict,
+    initial_carry: dict,
+    baseline: CoupledBaseline,
+    coords,
+    ocean_mask: jnp.ndarray,
+    config: CoupledControllerConfig = CoupledControllerConfig(),
+) -> dict:
+    """Evaluate a trained policy and return detailed metrics.
+
+    Args:
+        Same as unroll_coupled_with_policy.
+
+    Returns:
+        Dictionary with metrics:
+        - total_loss: Sum of interval losses
+        - mean_loss: Average loss per interval
+        - final_sst_change: Final global SST change
+        - mean_mcb_forcing: Average MCB forcing magnitude
+        - max_mcb_forcing: Maximum MCB forcing
+        - trajectory: Full control step trajectory
+
+    """
+    from jcm.mcb.state_features import compute_area_weights
+
+    total_loss, final_carry, trajectory = unroll_coupled_with_policy(
+        coupler=coupler,
+        workflow=workflow,
+        policy_fn=policy_fn,
+        policy_params=policy_params,
+        initial_carry=initial_carry,
+        baseline=baseline,
+        coords=coords,
+        ocean_mask=ocean_mask,
+        config=config,
+    )
+
+    num_intervals = config.total_steps // config.control_interval_steps
+    area_weights = compute_area_weights(coords)
+
+    # Compute SST change
+    final_sst = final_carry["ocn"]["state"].sea_surface_temperature
+    baseline_sst = baseline.sst
+    global_final_sst = jnp.sum(final_sst * area_weights)
+    global_baseline_sst = jnp.sum(baseline_sst * area_weights)
+    sst_change = global_final_sst - global_baseline_sst
+
+    # Aggregate metrics
+    metrics = {
+        'total_loss': float(total_loss),
+        'mean_loss': float(total_loss / num_intervals),
+        'final_sst_change': float(sst_change),
+        'target_cooling': config.target_cooling,
+        'mean_mcb_forcing': float(jnp.mean(trajectory.mcb_forcing)),
+        'max_mcb_forcing': float(jnp.max(trajectory.mcb_forcing)),
+        'loss_trajectory': jax.device_get(trajectory.loss),
+    }
+
+    return {
+        'total_loss': total_loss,
+        'final_carry': final_carry,
+        'trajectory': trajectory,
+        'metrics': metrics,
+    }
+
+
+def compute_coupled_policy_gradient(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    policy_params: dict,
+    initial_carry: dict,
+    baseline: CoupledBaseline,
+    coords,
+    ocean_mask: jnp.ndarray,
+    config: CoupledControllerConfig = CoupledControllerConfig(),
+) -> Tuple[jnp.ndarray, dict]:
+    """Compute gradient of total loss with respect to policy parameters.
+
+    Main function for BPTT training. Backpropagates through the entire
+    coupled simulation trajectory.
+
+    Args:
+        Same as unroll_coupled_with_policy.
+
+    Returns:
+        Tuple of:
+        - loss: Total loss value
+        - grads: Gradient dictionary matching policy_params structure
+
+    """
+    loss_fn = create_coupled_loss_fn(
+        coupler=coupler,
+        workflow=workflow,
+        policy_fn=policy_fn,
+        initial_carry=initial_carry,
+        baseline=baseline,
+        coords=coords,
+        ocean_mask=ocean_mask,
+        config=config,
+    )
+
+    loss, grads = jax.value_and_grad(loss_fn)(policy_params)
+    return loss, grads
+
+
+def verify_coupled_gradients(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    policy_params: dict,
+    initial_carry: dict,
+    baseline: CoupledBaseline,
+    coords,
+    ocean_mask: jnp.ndarray,
+    config: CoupledControllerConfig = CoupledControllerConfig(),
+) -> dict:
+    """Verify gradient computation is working correctly.
+
+    Checks for NaN gradients and zero gradients.
+
+    Args:
+        Same as unroll_coupled_with_policy.
+
+    Returns:
+        Dictionary with verification results:
+        - has_nans: Whether any gradient is NaN
+        - all_zeros: Whether all gradients are zero
+        - gradient_norm: L2 norm of flattened gradients
+        - loss: Loss value
+
+    """
+    loss, grads = compute_coupled_policy_gradient(
+        coupler=coupler,
+        workflow=workflow,
+        policy_fn=policy_fn,
+        policy_params=policy_params,
+        initial_carry=initial_carry,
+        baseline=baseline,
+        coords=coords,
+        ocean_mask=ocean_mask,
+        config=config,
+    )
+
+    # Check for NaNs
+    grad_leaves = jax.tree.leaves(grads)
+    has_nans = any(jnp.any(jnp.isnan(g)) for g in grad_leaves)
+
+    # Check for all zeros
+    all_zeros = all(jnp.allclose(g, 0.0) for g in grad_leaves)
+
+    # Compute gradient norm
+    grad_flat = jnp.concatenate([g.ravel() for g in grad_leaves])
+    gradient_norm = jnp.linalg.norm(grad_flat)
+
+    return {
+        'has_nans': bool(has_nans),
+        'all_zeros': bool(all_zeros),
+        'gradient_norm': float(gradient_norm),
+        'loss': float(loss),
+    }

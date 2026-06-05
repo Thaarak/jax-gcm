@@ -69,6 +69,7 @@ def make_jem_compatible(
                 "physics" : physics_no_time_dimension,
                 "total_heat_flux" : jnp.zeros(D2_nodal_shape),
                 "total_freshwater_flux" : jnp.zeros(D2_nodal_shape),
+                "mcb_perturbation" : None,  # For coupled MCB training
             },
             forcing=forcing,
         ))
@@ -78,14 +79,22 @@ def make_jem_compatible(
         #         static parameters, we cannot pass in traceable
         #         object. So use item() to convert from scalar
         #         jax.Array to float.
-        save_interval_day=(coupling_timestep / jdt.to_timedelta(1, "day")).item() 
+        save_interval_day=(coupling_timestep / jdt.to_timedelta(1, "day")).item()
         total_time_day=(coupling_timestep / jdt.to_timedelta(1, "day")).item()
         def step_function(carry, step):
             state = carry["state"]
             forcing = asfloat64(carry["forcing"])
+
+            # Check for dynamic MCB perturbation from coupled controller
+            mcb_perturbation = carry.get("derived", {}).get("mcb_perturbation", None)
+            if mcb_perturbation is not None:
+                model.physics.set_mcb_perturbation(mcb_perturbation)
+            else:
+                model.physics.clear_mcb_perturbation()
+
             new_atm_modal_state, predictions = model.run_from_state(
                 initial_state=state,
-                save_interval=save_interval_day,  
+                save_interval=save_interval_day,
                 total_time=total_time_day,
                 forcing=forcing,
                 output_averages=True,

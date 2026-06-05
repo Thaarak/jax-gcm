@@ -18,7 +18,7 @@ This plan outlines the implementation of a **neural network-based feedback contr
 | Phase 4: Differentiable Unrolling | ✅ Complete | `jax.lax.scan`-based simulation unrolling |
 | Phase 5: BPTT Training Loop | ✅ Complete | Full training infrastructure with checkpointing |
 | Phase 6: Experimental Design | 🔄 In Progress | Training + evaluation done, needs GPU retraining |
-| Phase 7: Coupled Earth System | 🔄 In Progress | JAX-ESM working, MCB cooling achieved (-0.33 K) |
+| Phase 7: Coupled Earth System | ✅ Framework Complete | JAX-ESM + coupled training framework, MCB cooling achieved (-0.33 K) |
 
 **Test Coverage**: 54 unit tests passing | **Linting**: All checks pass
 
@@ -28,7 +28,9 @@ This plan outlines the implementation of a **neural network-based feedback contr
 - ✅ First training attempt complete (50 epochs, CPU)
 - ✅ Evaluation complete (policy not working - causes warming)
 - ✅ Diagnostics complete (identified 4 root causes)
-- ⏳ **NEXT**: Retrain on GPU with tuned hyperparameters
+- ✅ JAX-ESM coupling verified (MCB achieves -0.33 K cooling)
+- ✅ **Coupled training framework complete** (4 new modules + training script)
+- ⏳ **NEXT**: Train coupled policy on GPU
 
 ---
 
@@ -414,10 +416,13 @@ Where:
 - [x] Create `run_coupled_mcb_longrun.py` for 90-day run
 - [x] Achieved global cooling: -0.035 K (vs baseline +0.29 K)
 
-#### Step 4: Coupled Policy Training ⏳
-- [ ] Adapt training loop for coupled model
-- [ ] Update loss function for coupled state
-- [ ] Train MCB policy with ocean feedback
+#### Step 4: Coupled Policy Training ✅
+- [x] Adapt training loop for coupled model
+- [x] Update loss function for coupled state
+- [x] Create coupled feature extraction
+- [x] Create coupled controller for BPTT through JAX-ESM
+- [x] Create training script `run_coupled_training.py`
+- [ ] Train MCB policy with ocean feedback (pending GPU)
 - [ ] Compare to atmosphere-only training
 
 ### 7.6 Expected Differences from Atmosphere-Only
@@ -438,7 +443,7 @@ Where:
 | Coupled Baseline | JCM + Slab Ocean, no MCB | 60 days | ✅ Complete |
 | Static MCB Coupled (short) | Fixed 10% MCB in Sc regions | 60 days | ✅ Complete |
 | Static MCB Coupled (long) | Fixed 10% MCB in Sc regions | 90 days | ✅ Complete |
-| Policy Training Coupled | BPTT with ocean feedback | TBD | ⏳ Pending |
+| Policy Training Coupled | BPTT with ocean feedback | TBD | ✅ Framework Ready |
 | Long-term Stability | Trained policy, multi-year | TBD | ⏳ Pending |
 
 ### 7.8 Coupled MCB Results ✅
@@ -540,7 +545,7 @@ initial_state, final_state, predictions = model.run(
 
 ```
 jcm/mcb/                          # MCB forcing and policy (existing)
-├── __init__.py           # ✅ Exports all public API
+├── __init__.py           # ✅ Exports all public API (updated for coupled)
 ├── mcb_config.py         # ✅ MCBConfig struct
 ├── mcb_regions.py        # ✅ Region masks (stratocumulus + teleconnection)
 ├── mcb_forcing.py        # ✅ Core forcing computation
@@ -549,7 +554,11 @@ jcm/mcb/                          # MCB forcing and policy (existing)
 ├── state_features.py     # ✅ Feature extraction (scalar + spatial) - FIXED
 ├── loss.py               # ✅ Climate loss function (6 components) - FIXED
 ├── controller.py         # ✅ Differentiable unrolling with lax.scan
-└── train.py              # ✅ BPTT training loop
+├── train.py              # ✅ BPTT training loop
+├── coupled_features.py   # ✅ NEW: Coupled feature extraction (SST, heat flux)
+├── coupled_loss.py       # ✅ NEW: Loss functions using ocean SST
+├── coupled_controller.py # ✅ NEW: BPTT through JAX-ESM coupler
+└── coupled_train.py      # ✅ NEW: Training loop for coupled simulation
 
 jax-esm/                          # Earth System Model Coupler (NEW)
 ├── jem/                          # Main package
@@ -580,6 +589,7 @@ Experiment Scripts (root directory):
 ├── run_coupled_baseline.py       # ✅ Coupled baseline (Phase 7)
 ├── run_coupled_mcb.py            # ✅ Coupled MCB 60-day (Phase 7)
 ├── run_coupled_mcb_longrun.py    # ✅ Coupled MCB 90-day (Phase 7)
+├── run_coupled_training.py       # ✅ NEW: Coupled policy training script
 └── mcb_experiments/              # ✅ Output directory
     ├── baseline_predictions.nc         # 1-year baseline simulation
     ├── baseline_climate.pkl            # ClimateBaseline object
@@ -838,6 +848,43 @@ First training attempt showed minimal convergence:
 ---
 
 ## Change Log
+
+### 2024-XX-XX: Coupled Policy Training Framework (Phase 7 complete)
+- **Created 4 new coupled modules** for training with ocean feedback:
+  - `jcm/mcb/coupled_features.py` - Feature extraction from coupled state
+    - `CoupledFeatureConfig` - configurable feature selection
+    - `CoupledBaseline` - baseline SST, heat flux, precipitation for anomalies
+    - `extract_coupled_features()` - extracts ~10 scalar features from coupled carry
+    - `get_coupled_feature_dim()` - returns feature dimension
+  - `jcm/mcb/coupled_loss.py` - Loss functions using ocean SST
+    - `CoupledLossWeights` - weights for sst_cooling, sst_uniformity, amazon, sahel, tropics, regularization, smoothness
+    - `sst_cooling_loss()` - penalizes deviation from target SST change
+    - `sst_uniformity_loss()` - penalizes non-uniform cooling (teleconnections)
+    - `compute_coupled_loss()` - combines all loss components
+  - `jcm/mcb/coupled_controller.py` - BPTT through JAX-ESM coupler
+    - `CoupledControllerConfig` - control interval, total steps, target cooling
+    - `unroll_coupled_with_policy()` - main entry point using `jax.lax.scan`
+    - `unroll_coupled_simple()` - returns only scalar loss (memory efficient)
+    - `verify_coupled_gradients()` - gradient flow verification
+  - `jcm/mcb/coupled_train.py` - Training loop for coupled simulation
+    - `train_coupled_policy()` - main training loop with early stopping
+    - `validate_coupled_training_setup()` - pre-training checks
+    - `resume_coupled_training()` - resume from checkpoint
+- **Modified 4 existing files** for dynamic MCB injection:
+  - `jcm/physics/speedy/forcing.py` - Added `mcb_perturbation` parameter to `set_forcing()`
+  - `jcm/physics/speedy/speedy_physics.py` - Added `set_mcb_perturbation()` method, closure-based access
+  - `jax-esm/jem/components/JCM.py` - Reads `mcb_perturbation` from `carry["derived"]`, sets on physics
+  - `jcm/mcb/__init__.py` - Exports all new coupled modules
+- **Created training script**: `run_coupled_training.py`
+  - Demonstrates coupled MCB training usage
+  - Configurable epochs, learning rate, target cooling
+  - Validation mode for setup verification
+- **Key design decisions**:
+  - MCB injection via `carry["atm"]["derived"]["mcb_perturbation"]` (no physics rebuild)
+  - Primary loss uses ocean SST (`coupled_carry["ocn"]["state"].sea_surface_temperature`)
+  - Gradient checkpointing per control interval for memory efficiency
+  - Closure pattern in SpeedyPhysics for dynamic mcb_perturbation access
+- **All 54 existing tests still passing**
 
 ### 2024-XX-XX: Coupled MCB Experiments (Phase 7 continued)
 - **Created coupled MCB scripts**:

@@ -459,7 +459,7 @@
         <h1>Solving the MCB Inverse Problem</h1>
         <h3>Differentiable Climate Control with JAX-GCM</h3>
         <p style="margin-top: 60px; color: #666;">Marine Cloud Brightening Optimization via Backpropagation Through Time</p>
-        <div class="slide-number">1 / 20</div>
+        <div class="slide-number">1 / 21</div>
     </div>
 
     <!-- Slide 2: Research Problem -->
@@ -490,7 +490,7 @@
                 </div>
             </div>
         </div>
-        <div class="slide-number">2 / 20</div>
+        <div class="slide-number">2 / 21</div>
     </div>
 
     <!-- Slide 3: Our Approach -->
@@ -520,7 +520,7 @@
                 </div>
             </div>
         </div>
-        <div class="slide-number">3 / 20</div>
+        <div class="slide-number">3 / 21</div>
     </div>
 
     <!-- Slide 4: What We Built -->
@@ -557,7 +557,7 @@
                 </div>
             </div>
         </div>
-        <div class="slide-number">4 / 20</div>
+        <div class="slide-number">4 / 21</div>
     </div>
 
     <!-- Slide 5: Loss Function -->
@@ -590,7 +590,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 <p>No if/else, no non-differentiable operations. Gradients flow through all loss terms for end-to-end optimization.</p>
             </div>
         </div>
-        <div class="slide-number">5 / 20</div>
+        <div class="slide-number">5 / 21</div>
     </div>
 
     <!-- Slide 6: Baseline Simulation -->
@@ -617,7 +617,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 </div>
             </div>
         </div>
-        <div class="slide-number">6 / 20</div>
+        <div class="slide-number">6 / 21</div>
     </div>
 
     <!-- Slide 7: Training Results -->
@@ -655,7 +655,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 </div>
             </div>
         </div>
-        <div class="slide-number">7 / 20</div>
+        <div class="slide-number">7 / 21</div>
     </div>
 
     <!-- Slide 8: Evaluation Results -->
@@ -688,7 +688,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                    The policy IS applying forcing, but in wrong patterns.</p>
             </div>
         </div>
-        <div class="slide-number">8 / 20</div>
+        <div class="slide-number">8 / 21</div>
     </div>
 
     <!-- Slide 9: MCB Pattern Visualization -->
@@ -697,7 +697,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
         <div class="image-container">
             <img src="mcb_experiments/mcb_pattern_visualization.png" alt="MCB Pattern Visualization">
         </div>
-        <div class="slide-number">9 / 20</div>
+        <div class="slide-number">9 / 21</div>
     </div>
 
     <!-- Slide 10: Training Analysis -->
@@ -706,7 +706,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
         <div class="image-container">
             <img src="mcb_experiments/training_analysis.png" alt="Training Analysis">
         </div>
-        <div class="slide-number">10 / 20</div>
+        <div class="slide-number">10 / 21</div>
     </div>
 
     <!-- Slide 11: Why Training Failed -->
@@ -739,7 +739,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 </div>
             </div>
         </div>
-        <div class="slide-number">11 / 20</div>
+        <div class="slide-number">11 / 21</div>
     </div>
 
     <!-- Slide 12: Why Coupled Modeling -->
@@ -785,7 +785,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
             <div class="flow-arrow">→</div>
             <div class="flow-box" style="border-color: #4caf50;">Global Cooling</div>
         </div>
-        <div class="slide-number">12 / 20</div>
+        <div class="slide-number">12 / 21</div>
     </div>
 
     <!-- Slide 13: Coupled Baseline -->
@@ -826,7 +826,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 </div>
             </div>
         </div>
-        <div class="slide-number">13 / 20</div>
+        <div class="slide-number">13 / 21</div>
     </div>
 
     <!-- Slide 14: Coupled MCB Results -->
@@ -867,7 +867,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 </table>
             </div>
         </div>
-        <div class="slide-number">14 / 20</div>
+        <div class="slide-number">14 / 21</div>
     </div>
 
     <!-- Slide 15: Physical Mechanism Verified -->
@@ -907,10 +907,55 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 </div>
             </div>
         </div>
-        <div class="slide-number">15 / 20</div>
+        <div class="slide-number">15 / 21</div>
     </div>
 
-    <!-- Slide 16: Project Timeline -->
+    <!-- Slide 16: Coupled Training Framework (NEW) -->
+    <div class="slide">
+        <h2>Coupled Training Framework</h2>
+        <p class="subtitle">BPTT through atmosphere-ocean simulation</p>
+        <div class="two-column">
+            <div class="column">
+                <div class="file-tree">
+                    <span class="folder">jcm/mcb/</span> (4 new modules)<br>
+                    &nbsp;&nbsp;<span class="file new">coupled_features.py</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;↳ SST, heat flux, precip anomalies<br>
+                    &nbsp;&nbsp;<span class="file new">coupled_loss.py</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;↳ SST cooling + uniformity loss<br>
+                    &nbsp;&nbsp;<span class="file new">coupled_controller.py</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;↳ BPTT through JAX-ESM coupler<br>
+                    &nbsp;&nbsp;<span class="file new">coupled_train.py</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;↳ Training loop + checkpoints
+                </div>
+                <div class="card success" style="margin-top: 20px;">
+                    <h4>Key Design: Dynamic MCB Injection</h4>
+                    <p style="font-family: monospace; font-size: 0.85em;">
+                        carry["atm"]["derived"]["mcb_perturbation"]<br>
+                        → SpeedyPhysics.set_mcb_perturbation()<br>
+                        → forcing.py applies to albedo
+                    </p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="architecture-diagram">
+                    <h4 style="color: #4caf50; margin-bottom: 20px;">Coupled Training Flow</h4>
+                    <div class="flow-box">Extract Features</div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-box" style="border-color: #4caf50;">Policy Network</div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-box">MCB Perturbation</div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-box">Coupler.step()</div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-box" style="border-color: #ff9800;">SST Loss</div>
+                    <p style="margin-top: 15px; color: #4caf50; font-size: 0.9em;">Gradients flow through ocean feedback</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">16 / 21</div>
+    </div>
+
+    <!-- Slide 17: Project Timeline -->
     <div class="slide">
         <h2>Implementation Progress</h2>
         <div class="timeline">
@@ -938,9 +983,9 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 <div class="dot">6</div>
                 <div class="label">Coupled MCB<br><span class="checkmark">Done</span></div>
             </div>
-            <div class="timeline-item current">
+            <div class="timeline-item completed">
                 <div class="dot">7</div>
-                <div class="label">Policy Train<br><span class="pending-mark">Next</span></div>
+                <div class="label">Policy Train<br><span class="checkmark">Ready</span></div>
             </div>
         </div>
         <div class="two-column" style="margin-top: 20px;">
@@ -950,25 +995,25 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                     <li>Full MCB optimization framework</li>
                     <li>JAX-ESM atmosphere-ocean coupling</li>
                     <li><strong>MCB cooling verified: -0.33 K</strong></li>
-                    <li>60-day and 90-day coupled runs</li>
+                    <li><strong>Coupled training framework</strong></li>
                     <li>Physical mechanism confirmed</li>
                     <li>54 unit tests passing</li>
                 </ul>
             </div>
-            <div class="card">
-                <h4>Next Steps</h4>
+            <div class="card success">
+                <h4>Coupled Training Framework</h4>
                 <ul style="font-size: 0.95em;">
-                    <li>Train policy with coupled model</li>
-                    <li>Longer rollouts with ocean feedback</li>
-                    <li>Multi-year simulations</li>
-                    <li>Regional impact analysis</li>
+                    <li><strong>4 new modules created</strong></li>
+                    <li>Dynamic MCB injection via carry</li>
+                    <li>SST-based loss function</li>
+                    <li>Ready for GPU training</li>
                 </ul>
             </div>
         </div>
-        <div class="slide-number">16 / 20</div>
+        <div class="slide-number">17 / 21</div>
     </div>
 
-    <!-- Slide 13: Technical Challenges -->
+    <!-- Slide 18: Technical Challenges -->
     <div class="slide">
         <h2>Technical Challenges Solved</h2>
         <div class="two-column">
@@ -993,10 +1038,10 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 <p style="color: #4caf50; margin-top: 10px;"><strong>Solution:</strong> VJP/JVP tests in unit test suite</p>
             </div>
         </div>
-        <div class="slide-number">17 / 20</div>
+        <div class="slide-number">18 / 21</div>
     </div>
 
-    <!-- Slide 18: Key Innovation -->
+    <!-- Slide 19: Key Innovation -->
     <div class="slide">
         <h2>Key Innovation</h2>
         <div class="two-column">
@@ -1023,10 +1068,10 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 </div>
             </div>
         </div>
-        <div class="slide-number">18 / 20</div>
+        <div class="slide-number">19 / 21</div>
     </div>
 
-    <!-- Slide 19: Lessons Learned -->
+    <!-- Slide 20: Lessons Learned -->
     <div class="slide">
         <h2>Lessons Learned</h2>
         <div class="two-column">
@@ -1038,7 +1083,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                         <li>Modular architecture - easy to swap components</li>
                         <li><strong>JAX-ESM coupling for realistic physics</strong></li>
                         <li><strong>MCB achieves cooling with ocean feedback</strong></li>
-                        <li>Physical mechanism verified end-to-end</li>
+                        <li><strong>Dynamic MCB via carry injection</strong></li>
                     </ul>
                 </div>
             </div>
@@ -1056,31 +1101,32 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
         </div>
         <div class="architecture-diagram" style="margin-top: 30px;">
             <h4 style="color: #4caf50; margin-bottom: 15px;">MCB Cooling Achieved: -0.33 K in 90 days</h4>
-            <p style="color: #888;">With coupled atmosphere-ocean modeling, MCB produces realistic global cooling.<br>
-            Ready for policy training with proper ocean feedback.</p>
+            <p style="color: #888;">Coupled training framework complete with BPTT through JAX-ESM.<br>
+            Ready for GPU training with realistic ocean feedback.</p>
         </div>
-        <div class="slide-number">19 / 20</div>
+        <div class="slide-number">20 / 21</div>
     </div>
 
-    <!-- Slide 20: Summary -->
+    <!-- Slide 21: Summary -->
     <div class="slide title-slide">
         <h2 style="font-size: 2.5em; margin-bottom: 40px;">Summary</h2>
         <div style="text-align: left; max-width: 900px;">
             <ul>
-                <li><span class="highlight">Built</span> complete MCB optimization framework (10 modules, 54 tests)</li>
+                <li><span class="highlight">Built</span> complete MCB optimization framework (14 modules, 54 tests)</li>
                 <li><span class="highlight">Integrated</span> JAX-ESM for atmosphere-ocean coupling</li>
                 <li><span class="success-text">Achieved</span> MCB cooling: <strong>-0.33 K</strong> in 90-day coupled simulation</li>
                 <li><span class="highlight">Verified</span> physical mechanism: MCB → ↓heat flux → ↓SST → cooling</li>
-                <li><span class="highlight">Ready</span> for policy training with realistic ocean feedback</li>
+                <li><span class="success-text">Created</span> coupled training framework with dynamic MCB injection</li>
+                <li><span class="highlight">Ready</span> for GPU training with realistic ocean feedback</li>
             </ul>
         </div>
         <div style="margin-top: 40px; padding: 20px; background: #1a1a2e; border-radius: 15px; max-width: 700px;">
             <p style="color: #4caf50; font-size: 1.2em; margin-bottom: 10px;">Key Achievement</p>
             <p style="color: #ddd; font-size: 1em;">Coupled MCB achieves <strong>actual global cooling</strong> (-0.035 K global, -0.38 K in MCB regions).<br>
-            Atmosphere-only models cannot capture this - ocean feedback is essential.</p>
+            Training framework complete with dynamic MCB injection through coupled simulation.</p>
         </div>
         <h3 style="margin-top: 40px;">Questions?</h3>
-        <div class="slide-number">20 / 20</div>
+        <div class="slide-number">21 / 21</div>
     </div>
 
     <div class="nav-hint">Use arrow keys or click to navigate</div>

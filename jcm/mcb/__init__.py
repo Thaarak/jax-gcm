@@ -98,6 +98,40 @@ from jcm.mcb.train import (
     load_checkpoint,
 )
 
+# Coupled (JAX-ESM) modules
+from jcm.mcb.coupled_features import (
+    CoupledFeatureConfig,
+    CoupledBaseline,
+    extract_coupled_features,
+    get_coupled_feature_dim,
+    create_coupled_feature_extractor,
+)
+
+from jcm.mcb.coupled_loss import (
+    CoupledLossWeights,
+    CoupledLossComponents,
+    compute_coupled_loss,
+    compute_coupled_loss_from_baseline,
+    create_coupled_loss_fn,
+    sst_cooling_loss,
+)
+
+from jcm.mcb.coupled_controller import (
+    CoupledControllerConfig,
+    CoupledControlStep,
+    unroll_coupled_with_policy,
+    unroll_coupled_simple,
+    create_coupled_loss_fn as create_coupled_controller_loss_fn,
+    evaluate_coupled_policy,
+    verify_coupled_gradients,
+)
+
+from jcm.mcb.coupled_train import (
+    train_coupled_policy,
+    validate_coupled_training_setup,
+    resume_coupled_training,
+)
+
 __all__ = [
     # Config
     'MCBConfig',
@@ -147,4 +181,29 @@ __all__ = [
     'validate_training_setup',
     'save_checkpoint',
     'load_checkpoint',
+    # Coupled features
+    'CoupledFeatureConfig',
+    'CoupledBaseline',
+    'extract_coupled_features',
+    'get_coupled_feature_dim',
+    'create_coupled_feature_extractor',
+    # Coupled loss
+    'CoupledLossWeights',
+    'CoupledLossComponents',
+    'compute_coupled_loss',
+    'compute_coupled_loss_from_baseline',
+    'create_coupled_loss_fn',
+    'sst_cooling_loss',
+    # Coupled controller
+    'CoupledControllerConfig',
+    'CoupledControlStep',
+    'unroll_coupled_with_policy',
+    'unroll_coupled_simple',
+    'create_coupled_controller_loss_fn',
+    'evaluate_coupled_policy',
+    'verify_coupled_gradients',
+    # Coupled training
+    'train_coupled_policy',
+    'validate_coupled_training_setup',
+    'resume_coupled_training',
 ]
