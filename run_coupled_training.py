@@ -28,7 +28,7 @@ import jax_datetime as jdt
 import jcm
 from jcm.physics.speedy.speedy_coords import get_speedy_coords
 from jcm.forcing import default_forcing
-from jcm.terrain import get_terrain
+from jcm.terrain import TerrainData
 
 # MCB imports
 from jcm.mcb import (
@@ -71,7 +71,7 @@ def setup_coupled_model(start_datetime, coupling_timestep):
 
     # Get coordinates and terrain
     coords = get_speedy_coords()
-    terrain = get_terrain(coords.horizontal.nodal_shape)
+    terrain = TerrainData.aquaplanet(coords)
 
     # Create atmosphere model (no static MCB - will be dynamic from policy)
     atm_model = jcm.model.Model(
@@ -82,10 +82,11 @@ def setup_coupled_model(start_datetime, coupling_timestep):
     # Make JEM-compatible
     atm_model = make_jem_compatible(atm_model, coupling_timestep)
 
-    # Create slab ocean model
+    # Create slab ocean model (timestep needs to be in seconds as float)
+    timestep_seconds = 86400.0  # 1 day in seconds
     ocn_model = SlabOceanModel(
         start_datetime=start_datetime,
-        timestep=coupling_timestep,
+        timestep=timestep_seconds,
     )
 
     # Create mapper for atmosphere-ocean coupling

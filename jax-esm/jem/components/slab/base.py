@@ -71,6 +71,10 @@ class SlabModelBase(ABC):
         # Get grid shape for state/forcing class creation
         self.grid_shape = self.horizontal_grids["T"].shape
 
+        # Pre-compute start_day_offset to avoid JIT tracing issues with datetime
+        # This is used for climatology lookup and must be a concrete Python float
+        self._start_day_offset = self._compute_start_day_offset_static()
+
         # Subclass creates state and forcing classes
         self._create_state_and_forcing_classes()
         self._create_variable_registries()
@@ -129,15 +133,26 @@ class SlabModelBase(ABC):
             axis=lat_dim_idx,
         )
 
-    def _compute_start_day_offset(self) -> float:
+    def _compute_start_day_offset_static(self) -> float:
         """Compute the day offset from start of year for climatology lookup.
+
+        This is called once during __init__ to avoid JIT tracing issues
+        with datetime operations.
 
         Returns:
             Number of seconds from Jan 1 of start year to start_datetime
         """
         ref_year = self.start_datetime.to_pydatetime().year
         ref_dt = jdt.to_datetime(f"{ref_year:d}-01-01")
-        return float( (self.start_datetime - ref_dt) / jdt.to_timedelta(1, "second") )
+        return float((self.start_datetime - ref_dt) / jdt.to_timedelta(1, "second"))
+
+    def _compute_start_day_offset(self) -> float:
+        """Return the pre-computed start day offset.
+
+        Returns:
+            Number of seconds from Jan 1 of start year to start_datetime
+        """
+        return self._start_day_offset
 
     def _get_climatology_indices(
         self,

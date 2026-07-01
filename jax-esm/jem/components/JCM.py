@@ -43,6 +43,11 @@ def make_jem_compatible(
     if timestep * np.floor(coupling_timestep / timestep) != coupling_timestep:
         raise Exception("Coupling timestep should be a multiple of timestep.")
 
+    # Pre-compute these values outside closures to avoid JIT tracing issues
+    # when these closures are called inside JIT-compiled functions
+    _timestep_days = float((timestep / jdt.to_timedelta(1, "day")).item())
+    _coupling_timestep_days = float((coupling_timestep / jdt.to_timedelta(1, "day")).item())
+
     D2_nodal_shape = model.coords.nodal_shape[1:]
     def initialize():
 
@@ -51,13 +56,12 @@ def make_jem_compatible(
         
         # Predictions shape is still morphing in the development.
         # Use run_from_state to get the shape of predictions. This might
-        # cost a few second extra but will be resilience to major code 
+        # cost a few second extra but will be resilience to major code
         # update in jcm
-        save_interval_day = (timestep / jdt.to_timedelta(1, "day")).item() 
         _, predictions = model.run_from_state(
             initial_state=state,
-            save_interval=save_interval_day,  
-            total_time=save_interval_day,
+            save_interval=_timestep_days,
+            total_time=_timestep_days,
             forcing=forcing,
             output_averages=True,
         )
@@ -69,18 +73,13 @@ def make_jem_compatible(
                 "physics" : physics_no_time_dimension,
                 "total_heat_flux" : jnp.zeros(D2_nodal_shape),
                 "total_freshwater_flux" : jnp.zeros(D2_nodal_shape),
-                "mcb_perturbation" : None,  # For coupled MCB training
+                "mcb_perturbation" : jnp.zeros(D2_nodal_shape),  # For coupled MCB training
             },
             forcing=forcing,
         ))
 
     def generate_step_function():
-        # Notice: since save_interval and total_time are claimed
-        #         static parameters, we cannot pass in traceable
-        #         object. So use item() to convert from scalar
-        #         jax.Array to float.
-        save_interval_day=(coupling_timestep / jdt.to_timedelta(1, "day")).item()
-        total_time_day=(coupling_timestep / jdt.to_timedelta(1, "day")).item()
+        # Use pre-computed values to avoid JIT tracing issues
         def step_function(carry, step):
             state = carry["state"]
             forcing = asfloat64(carry["forcing"])
@@ -94,8 +93,8 @@ def make_jem_compatible(
 
             new_atm_modal_state, predictions = model.run_from_state(
                 initial_state=state,
-                save_interval=save_interval_day,
-                total_time=total_time_day,
+                save_interval=_coupling_timestep_days,
+                total_time=_coupling_timestep_days,
                 forcing=forcing,
                 output_averages=True,
             )
@@ -116,6 +115,7 @@ def make_jem_compatible(
                         "physics" : physics_no_time_dimension,
                         "total_heat_flux" : total_heat_flux,
                         "total_freshwater_flux" : total_freshwater_flux,
+                        "mcb_perturbation" : mcb_perturbation,  # Preserve for JAX scan
                     },
                     forcing=forcing,
                 )),

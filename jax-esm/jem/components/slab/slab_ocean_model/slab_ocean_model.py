@@ -185,9 +185,10 @@ class SlabOceanModel(SlabModelBase):
                 + constants.freezing_point_K
             )
 
-        # Apply mask
-        init_sea_surface_temperature = init_sea_surface_temperature.at[nonocn_idx].set(
-            default_land_surface_temperature
+        # Apply mask using jnp.where for JAX compatibility
+        ocn_idx = self.horizontal_grids["T"].bmask == self.mask_value
+        init_sea_surface_temperature = jnp.where(
+            ocn_idx, init_sea_surface_temperature, default_land_surface_temperature
         )
 
         # Validate mask consistency
@@ -297,10 +298,10 @@ class SlabOceanModel(SlabModelBase):
                     snapshot_SST_clim_beg + SST_clim_trend * self.timestep
                 )
             
-            # Apply land mask
-            new_sea_surface_temperature = new_sea_surface_temperature.at[
-                nonocn_idx
-            ].set(default_land_surface_temperature)
+            # Apply land mask using jnp.where for JAX differentiability
+            new_sea_surface_temperature = jnp.where(
+                ocn_idx, new_sea_surface_temperature, default_land_surface_temperature
+            )
 
             new_state = state.copy(
                 {

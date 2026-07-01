@@ -19,6 +19,7 @@ This plan outlines the implementation of a **neural network-based feedback contr
 | Phase 5: BPTT Training Loop | ✅ Complete | Full training infrastructure with checkpointing |
 | Phase 6: Experimental Design | 🔄 In Progress | Training + evaluation done, needs GPU retraining |
 | Phase 7: Coupled Earth System | ✅ Framework Complete | JAX-ESM + coupled training framework, MCB cooling achieved (-0.33 K) |
+| Phase 8: GPU Training | ⚠️ Complete (Trivial Solution) | 196 epochs on diya GPU, loss minimally decreased, policy outputs constant |
 
 **Test Coverage**: 54 unit tests passing | **Linting**: All checks pass
 
@@ -30,7 +31,9 @@ This plan outlines the implementation of a **neural network-based feedback contr
 - ✅ Diagnostics complete (identified 4 root causes)
 - ✅ JAX-ESM coupling verified (MCB achieves -0.33 K cooling)
 - ✅ **Coupled training framework complete** (4 new modules + training script)
-- ⏳ **NEXT**: Train coupled policy on GPU
+- ✅ **GPU training complete (diya)** - 196 epochs, 50.7 minutes
+- ⚠️ **Policy learned trivial solution** - constant output, no cooling
+- ⏳ **NEXT**: Fix baseline issue (features all zeros) and retrain
 
 ---
 
@@ -770,16 +773,40 @@ python analyze_training.py
 
 ## Next Steps (TODO)
 
-### ⭐ NEW PRIORITY: Coupled Earth System (Phase 7)
+### ⭐ CRITICAL: Fix Baseline Feature Issue (Phase 8 Root Cause)
 
-The atmosphere-only model cannot properly simulate global temperature changes from MCB.
-**JAX-ESM coupling is required for physically realistic results.**
+The GPU training revealed that **input features are all zeros** because the baseline equals the initial state.
+**This must be fixed before any further training attempts.**
 
-- [ ] **Install jax-esm**: `pip install -e jax-esm/`
-- [ ] **Test basic coupling**: Run aquaplanet notebook (JCM + slab ocean)
-- [ ] **Run coupled baseline**: 5-year simulation without MCB
-- [ ] **Test MCB in coupled mode**: Verify heat flux reduction → SST cooling
-- [ ] **Coupled policy training**: BPTT with ocean feedback (1-2 year rollouts)
+- [ ] **Fix 1: Use Climatological Baseline** (RECOMMENDED)
+  - Pre-run a long baseline simulation (e.g., 1 year coupled, no MCB)
+  - Compute time-averaged climate state as baseline
+  - Baseline represents "typical climate" not "initial state"
+  - Features will be non-zero anomalies from typical climate
+
+- [ ] **Fix 2: Warm-Up Period Before Computing Baseline**
+  - Run simulation forward for N steps before starting training
+  - Use the warmed-up state as baseline (not t=0 state)
+  - Ensures SST/heat flux have departed from initial conditions
+
+- [ ] **Fix 3: Use Absolute Values Instead of Anomalies**
+  - Remove baseline subtraction from feature extraction
+  - Use raw SST, heat flux values directly
+  - May require feature normalization for stable training
+
+- [ ] **Fix 4: Add Explicit Cooling Reward**
+  - Currently loss is `|SST_change - target|`
+  - If SST_change ≈ 0, gradient is weak
+  - Add explicit reward for any cooling: `-λ * max(0, -SST_change)`
+
+### ✅ COMPLETED: Coupled Earth System (Phase 7)
+
+- [x] **Install jax-esm**: `pip install -e jax-esm/`
+- [x] **Test basic coupling**: Run aquaplanet notebook (JCM + slab ocean)
+- [x] **Run coupled baseline**: Verified SST evolution
+- [x] **Test MCB in coupled mode**: Verified -0.328 K cooling effect (90 days)
+- [x] **Coupled policy training framework**: Complete (4 modules + script)
+- [x] **GPU training**: Complete (196 epochs on diya) - trivial solution
 
 ### Previously Planned: Fix Atmosphere-Only Training
 - [ ] **Increase learning rate**: Change from 0.001 to 0.01 or 0.1
@@ -813,6 +840,31 @@ The atmosphere-only model cannot properly simulate global temperature changes fr
 ---
 
 ## Known Issues
+
+### ⚠️ Critical: Baseline Feature Issue (Blocks Training)
+
+**Problem**: `CoupledBaseline.from_coupled_carry(initial_carry, coords)` creates the baseline from the **initial simulation state**. When training starts from the same initial state, all anomaly features are zero:
+
+```python
+# At training start:
+current_sst = initial_sst  # Same value
+baseline_sst = initial_sst  # Same value (computed from initial_carry)
+sst_anomaly = current_sst - baseline_sst  # = 0 everywhere!
+```
+
+**Impact**:
+- All input features to policy network are zeros
+- Policy learns to output only the bias term (constant ~0.002)
+- No spatial structure, no meaningful MCB forcing
+- No cooling achieved
+
+**Fixes Required** (see TODO section):
+1. Use climatological baseline from long pre-run (recommended)
+2. Warm up simulation before computing baseline
+3. Use absolute values instead of anomalies
+4. Add explicit cooling reward to loss function
+
+**Status**: Identified during Phase 8 GPU training. Must be fixed before next training attempt.
 
 ### NumPy 2.x Compatibility Warning
 Some dependencies (numexpr, sklearn) show warnings about NumPy 2.x compatibility but continue to function. The warnings can be ignored or resolved by reinstalling affected packages.
@@ -848,6 +900,30 @@ First training attempt showed minimal convergence:
 ---
 
 ## Change Log
+
+### 2024-XX-XX: GPU Training on diya (Phase 8 - Trivial Solution)
+- **Completed GPU training**: 196 epochs in 50.7 minutes on NVIDIA GB10
+- **Training metrics**:
+  - Loss: 5.3354 → 5.3320 (0.064% reduction)
+  - Gradient norm: 0.0117 → 0.000028 (vanished)
+  - Time per epoch: ~15.5 seconds (6-10x speedup vs CPU)
+- **Evaluation showed trivial solution**:
+  - MCB output: constant ~0.002 everywhere (1.3% of max)
+  - MCB effect: 0.0000 K (no additional cooling)
+  - Policy learned to output bias term (all-zero features)
+- **Root cause identified**: Input features all zeros
+  - `CoupledBaseline` created from initial state
+  - Training starts from same initial state
+  - `current - baseline = 0` at t=0, stays near zero
+- **Technical fixes applied** (all JIT tracing issues resolved):
+  - Memory: `XLA_PYTHON_CLIENT_PREALLOCATE=false`
+  - Terrain: `TerrainData.aquaplanet(coords)` instead of `get_terrain()`
+  - Timestep: `float` seconds instead of `Timedelta`
+  - Pre-compute datetime values outside JIT closures
+  - Replace boolean indexing with `jnp.where()`
+  - Ensure pytree structure consistency (mcb_perturbation key)
+  - Initialize `mcb_perturbation = jnp.zeros(...)` not `None`
+- **Recommendations added** to fix baseline issue before next training
 
 ### 2024-XX-XX: Coupled Policy Training Framework (Phase 7 complete)
 - **Created 4 new coupled modules** for training with ocean feedback:
@@ -986,12 +1062,19 @@ First training attempt showed minimal convergence:
 - **JAX-ESM coupled modeling** - MCB achieves realistic cooling with ocean feedback
 - **MCBConfig → SpeedyPhysics → Model** integration path works seamlessly
 
-### What Didn't Work (First Attempt)
+### What Didn't Work (First Attempt - CPU, Atmosphere-Only)
 - Conservative learning rate (0.001) → minimal updates
 - Short rollout (90 days) → climate doesn't respond
 - Aggressive target (-0.5 K) → loss dominated by gap
 - CPU training → too slow for adequate epochs
 - MLP architecture → may lack spatial awareness
+
+### What Didn't Work (GPU Training - Phase 8)
+- **Baseline from initial state** → all anomaly features = 0
+- Policy saw all-zero inputs → learned only bias term (constant output)
+- No spatial structure, no meaningful forcing
+- 0.0000 K MCB effect (trivial solution)
+- **Key lesson**: Data pipeline (features) is as important as model architecture
 
 ### Key Insight
 **The framework works. Gradients flow. Training converges (slowly).**
@@ -1012,3 +1095,106 @@ Why the first attempt showed warming (+2.55 K) instead of cooling:
 - MCB → reduced heat flux → ocean absorbs less heat → SST decreases → atmosphere cools
 - This is the physically correct mechanism for MCB-induced cooling
 - **Result**: 90-day coupled MCB achieved -0.328 K cooling effect (vs baseline)
+
+---
+
+## Phase 8: GPU Training on Diya (Complete - Trivial Solution)
+
+### 8.1 Training Environment
+
+| Parameter | Value |
+|-----------|-------|
+| Machine | diya (Tailscale: 100.76.85.47) |
+| OS | Ubuntu 24.04 LTS (aarch64/ARM64) |
+| GPU | NVIDIA GB10, CUDA 13.0 |
+| RAM | 121GB total |
+| JAX Memory | `XLA_PYTHON_CLIENT_PREALLOCATE=false`, `XLA_PYTHON_CLIENT_MEM_FRACTION=0.8` |
+
+### 8.2 Training Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| Epochs | 200 (completed 196 before early stopping) |
+| Learning Rate | 0.01 |
+| Target Cooling | -0.1 K |
+| Total Simulation | 180 days per epoch |
+| Control Interval | 30 days |
+| Policy Architecture | MLP (256, 256) with 1.25M parameters |
+| Mode | Coupled (atmosphere + slab ocean) |
+| Total Training Time | **50.7 minutes** |
+
+### 8.3 Training Results
+
+| Metric | Value |
+|--------|-------|
+| Initial Loss | 5.3354 |
+| Final Loss | 5.3320 |
+| Best Loss | 5.3320 |
+| Loss Reduction | **0.064%** (minimal!) |
+| Initial Gradient Norm | 0.0117 |
+| Final Gradient Norm | 0.000028 (vanished to near-zero) |
+| Time per Epoch | ~15.5 seconds (GPU speedup: ~6-10x vs CPU) |
+
+### 8.4 Evaluation Results
+
+**MCB Pattern Analysis**:
+| Metric | Value |
+|--------|-------|
+| Mean MCB Output | 0.00220 |
+| Min MCB Output | 0.00217 |
+| Max MCB Output | 0.00224 |
+| Output Range | 0.00007 (essentially constant!) |
+| As % of Max (0.15) | **1.3%** (near-zero forcing) |
+
+**Cooling Performance**:
+| Metric | Baseline | With Policy | MCB Effect |
+|--------|----------|-------------|------------|
+| Global SST Change | -0.0004 K | -0.0004 K | **0.0000 K** |
+
+**Key Finding**: The policy learned a **trivial solution** - outputting a near-constant, near-zero value everywhere. There is no spatial structure and no additional cooling beyond baseline.
+
+### 8.5 Root Cause Analysis
+
+**Critical Bug Identified**: The input features were all zeros throughout training!
+
+```
+Feature statistics:
+  sst_global_anomaly:     mean=0.0000, std=0.0000
+  sst_tropics_anomaly:    mean=0.0000, std=0.0000
+  sst_atlantic_anomaly:   mean=0.0000, std=0.0000
+  sst_pacific_anomaly:    mean=0.0000, std=0.0000
+  heat_flux_global:       mean=0.0000, std=0.0000
+  precip_tropics_anomaly: mean=0.0000, std=0.0000
+```
+
+**Why Features Were Zero**:
+1. `CoupledBaseline.from_coupled_carry(initial_carry, coords)` creates baseline from **initial state**
+2. Training starts from the **same initial state**
+3. At step 0: `current_state - baseline = initial_state - initial_state = 0`
+4. Policy sees all-zero features → learns constant output (the bias term)
+5. Near-zero forcing → no SST change → features stay near zero
+6. **Feedback loop**: zero features → constant output → no change → zero features
+
+**This is a data/baseline issue, not a model architecture issue.**
+
+### 8.6 Technical Issues Encountered & Resolved
+
+During GPU training setup, several JAX-related issues were fixed:
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| Memory crash | 91GB GPU pre-allocation on 121GB system | `XLA_PYTHON_CLIENT_PREALLOCATE=false` |
+| Terrain API | `get_terrain()` not found | Use `TerrainData.aquaplanet(coords)` |
+| Timestep type | `float + Timedelta` error | Pass `timestep=86400.0` (float seconds) |
+| JIT tracing | `.item()` inside closure | Pre-compute `_timestep_days` outside closure |
+| Datetime tracing | `_compute_start_day_offset()` traced | Pre-compute in `__init__`, cache as `_start_day_offset` |
+| Boolean indexing | `NonConcreteBooleanIndexError` | Replace `.at[idx].set()` with `jnp.where()` |
+| Pytree mismatch | `mcb_perturbation` key missing | Add key to both input and output dicts |
+| Pytree type | `NoneType vs ShapedArray` | Initialize `mcb_perturbation = jnp.zeros(...)` |
+
+### 8.7 Output Files
+
+- `mcb_experiments_gpu/coupled_trained_policy.pkl` - Trained policy (1.25M params)
+- `mcb_experiments_gpu/coupled_training_history.pkl` - Loss/gradient history
+- `mcb_experiments_gpu/coupled_training_analysis.png` - Training visualization
+- `mcb_experiments_gpu/policy_evaluation.png` - MCB pattern visualization
