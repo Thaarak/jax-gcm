@@ -84,12 +84,14 @@ def make_jem_compatible(
             state = carry["state"]
             forcing = asfloat64(carry["forcing"])
 
-            # Check for dynamic MCB perturbation from coupled controller
+            # Dynamic MCB perturbation from coupled controller: inject it into
+            # the ForcingData (a traced argument of run_from_state) so it is
+            # visible to JIT and differentiable. NEVER via attribute mutation:
+            # run_from_state is jitted with static self, so mutated model
+            # fields are silently ignored after the first trace.
             mcb_perturbation = carry.get("derived", {}).get("mcb_perturbation", None)
             if mcb_perturbation is not None:
-                model.physics.set_mcb_perturbation(mcb_perturbation)
-            else:
-                model.physics.clear_mcb_perturbation()
+                forcing = forcing.copy(mcb_perturbation=mcb_perturbation)
 
             new_atm_modal_state, predictions = model.run_from_state(
                 initial_state=state,

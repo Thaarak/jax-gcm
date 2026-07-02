@@ -15,7 +15,6 @@ def set_forcing(
     forcing: ForcingData=None,
     terrain: TerrainData=None,
     mcb_config=None,
-    mcb_perturbation=None,
 ) -> tuple[PhysicsTendency, PhysicsData]:
     # 2. daily-mean radiative forcing
     physics_data = get_zonal_average_fields(state, physics_data, forcing=forcing, terrain=terrain)
@@ -41,11 +40,11 @@ def set_forcing(
         alb_s = alb_s + ocean_mask * mcb_config.active_mask * (
             mcb_albedo - parameters.mod_radcon.albsea
         )
-    elif mcb_perturbation is not None:
-        # Dynamic MCB perturbation from coupled controller
-        # mcb_perturbation is already masked to ocean cells
-        ocean_mask = 1.0 - fmask
-        alb_s = alb_s + ocean_mask * mcb_perturbation
+
+    # Dynamic MCB perturbation (traced forcing field; zeros when inactive).
+    # Applied over ocean only. Unlike the static mcb_config path above, this
+    # participates in JIT tracing and autodiff, so it can be optimized/controlled.
+    alb_s = alb_s + (1.0 - fmask) * forcing.mcb_perturbation
 
     albsfc = alb_s + fmask * (alb_l - alb_s)
 

@@ -62,7 +62,6 @@ class SpeedyPhysics(Physics):
         """
         self.parameters = parameters
         self.mcb_config = mcb_config
-        self.mcb_perturbation = None  # Dynamic MCB for coupled training
 
         from jcm.physics.speedy.humidity import spec_hum_to_rel_hum
         from jcm.physics.speedy.convection import get_convection_tendencies
@@ -74,14 +73,14 @@ class SpeedyPhysics(Physics):
         from jcm.physics.speedy.forcing import set_forcing
         # from jcm.physics.speedy.orographic_correction import get_orographic_correction_tendencies
 
-        # Create set_forcing wrapper that accesses mcb_config and mcb_perturbation dynamically
-        # This allows mcb_perturbation to be updated for coupled training
+        # Wrapper binding the static mcb_config. Dynamic (trainable) MCB
+        # perturbations flow through forcing.mcb_perturbation instead, which is
+        # a traced argument and therefore visible to JIT and autodiff.
         def create_set_forcing_wrapper(physics_instance):
             def set_forcing_wrapper(state, data, params, forcing, terrain):
                 return set_forcing(
                     state, data, params, forcing, terrain,
                     mcb_config=physics_instance.mcb_config,
-                    mcb_perturbation=physics_instance.mcb_perturbation,
                 )
             return set_forcing_wrapper
 
@@ -166,19 +165,3 @@ class SpeedyPhysics(Physics):
         # Zero out everything except speedy_coords (which should remain constant)
         return tree_map(lambda x: 0*x, empty_data).copy(speedy_coords=speedy_coords)
 
-    def set_mcb_perturbation(self, perturbation):
-        """Set dynamic MCB perturbation for coupled training.
-
-        This method allows updating the MCB albedo perturbation at each
-        control step during coupled training with JAX-ESM.
-
-        Args:
-            perturbation: MCB albedo perturbation array (ix, il) or None to disable.
-                Should already be masked to ocean cells.
-
-        """
-        self.mcb_perturbation = perturbation
-
-    def clear_mcb_perturbation(self):
-        """Clear dynamic MCB perturbation."""
-        self.mcb_perturbation = None

@@ -33,7 +33,83 @@ This plan outlines the implementation of a **neural network-based feedback contr
 - ✅ **Coupled training framework complete** (4 new modules + training script)
 - ✅ **GPU training complete (diya)** - 196 epochs, 50.7 minutes
 - ⚠️ **Policy learned trivial solution** - constant output, no cooling
-- ⏳ **NEXT**: Fix baseline issue (features all zeros) and retrain
+- ✅ **Post-mortem complete** - 5 compounding issues identified (see Revised Roadmap below)
+- ✅ **Stage 0 complete** - plumbing was BROKEN (confirmed silent zero); fixed by threading `mcb_perturbation` through `ForcingData`; gradient verified vs finite differences (1.6% error). **GATE OPEN**
+- ⏳ **NEXT**: Stage 1 - direct static pattern optimization (no NN)
+
+---
+
+## ⭐ Revised Roadmap (Current Strategy - Supersedes Previous "Retrain" Plan)
+
+Post-mortem of the GPU training run (Phase 8) identified **five compounding issues**, only one of
+which (zero features) was previously known. Fixing features alone would likely NOT have produced a
+working policy. This staged roadmap de-risks each issue in order of cheapness and severity.
+
+### Full Post-Mortem: Diagnosed Issues
+
+| # | Issue | Evidence | Consequence |
+|---|-------|----------|-------------|
+| 1 | **Unverified MCB injection path** | Training uses `carry["derived"]["mcb_perturbation"]` → `model.physics.set_mcb_perturbation()` — an attribute mutation *inside a traced function* (`jax-esm/jem/components/JCM.py:90`). Never tested with a large perturbation. The verified -0.33 K result used a *different* path (`MCBConfig → SpeedyPhysics(mcb_config=...)`). | The observed 0.0000 K MCB effect may mean the perturbation **never reaches the physics** (baked in as zeros at JIT trace time) — not merely that the output was small |
+| 2 | **Zero input features** | Baseline computed from initial state; training starts from same state → all anomalies = 0 | Weight gradients are zero (inputs are zero); only bias can learn → constant output |
+| 3 | **Loss dominated by uncontrollable terms** | Final loss = 5.33, but the `sst_cooling` term with ΔSST≈0 vs target -0.1 K contributes only ~0.01 | ~99.8% of the loss is (near-)constant w.r.t. the policy → vanishing gradients; meanwhile reg + smoothness actively push output to zero. **The trivial solution is the attractor of this loss** |
+| 4 | **Aquaplanet vs land loss terms** | `TerrainData.aquaplanet(coords)` has no land, but the loss penalizes Amazon/Sahel precipitation | Physically meaningless terms contribute noise/constants to the loss |
+| 5 | **Baseline is a state, not a trajectory** | Coupled aquaplanet drifts +0.29 K / 90 days with no MCB | Anomalies vs a static baseline conflate MCB effect with natural model drift |
+
+### Stage 0: Verify Plumbing & Diagnose Loss ✅ COMPLETE (2026-07-01) — GATE OPEN
+
+Diagnostic script: `run_stage0_plumbing_test.py` (reuses the exact training path via
+`setup_coupled_model` + `create_coupled_step_fn` + `run_coupled_interval`).
+
+- [x] Inject constant `mcb_perturbation = 0.1` through the **training code path** → **initially FAILED**: MCB effect was *bitwise* +0.0000 K over the forward run. Issue #1 confirmed: `set_mcb_perturbation()` attribute mutation is invisible to `run_from_state`'s `@jax.jit` with static `self` — the perturbation was baked in as `None` at first trace
+- [x] **Plumbing fixed** by threading the perturbation through a **traced argument**:
+  - `jcm/forcing.py`: added `mcb_perturbation` field to `ForcingData` (zeros = inactive; defaults to zeros in `zeros()`, `ones()`, `copy()`, `from_file`, `default_forcing`)
+  - `jcm/physics/speedy/forcing.py`: `set_forcing` now applies `alb_s += (1 - fmask) * forcing.mcb_perturbation` unconditionally (removed the dead `mcb_perturbation` kwarg); static `mcb_config` path unchanged
+  - `jcm/physics/speedy/speedy_physics.py`: removed `set_mcb_perturbation()` / `clear_mcb_perturbation()` / `self.mcb_perturbation` (broken-by-design under jit)
+  - `jax-esm/jem/components/JCM.py`: step function now does `forcing = forcing.copy(mcb_perturbation=...)` from `carry["derived"]["mcb_perturbation"]`
+  - Regression: `forcing_test.py`, `speedy_physics_test.py`, `shortwave_radiation_test.py` all pass
+- [x] **Test 1 after fix (60-day forward, 0.1 over all ocean)**: baseline dSST = +0.189 K, MCB dSST = -0.218 K → **MCB effect = -0.407 K / 60 days** (consistent with the -0.33 K / 90 days static-path result which covered only stratocumulus regions)
+- [x] **Test 2 gradient check (10-day rollout)**: `d(global_SST)/d(uniform_mcb_scalar)` = **-0.752 K per unit albedo** (AD) vs **-0.740** (central finite difference), relative error **1.6%** — gradient is real, negative, and correct
+- [x] **Test 3 loss breakdown (60-day states, training config)**: `sst_uniformity` dominates (**92-98% of total**) because it measures spatial deviation vs the *initial-state* baseline, which conflates model drift with MCB effect (Issue #5). `sst_cooling` is only 2-7%. On aquaplanet, amazon/sahel are ~0. → Confirms Stage 2 must use a **paired baseline trajectory** and rebalanced weights before policy training
+
+**Gate: OPEN.** Both plumbing and gradient checks pass; proceed to Stage 1.
+
+### Stage 1: Direct Static Pattern Optimization (de-risking + standalone scientific result)
+
+- [ ] Optimize the 96×48 MCB field **directly as parameters** (no neural network) via gradient descent through the coupled model
+- [ ] Loss: SST cooling (paired vs baseline trajectory) + uniformity + regularization + smoothness — **NO land terms**
+- [ ] Success criterion: achieves target cooling (-0.1 K) with a spatially structured (non-uniform) pattern
+- [ ] Deliverables: (a) "optimal spatial MCB pattern" — a publishable result on its own, (b) warm-start values for Stage 3, (c) the loss scale a good policy should reach
+
+**Rationale**: This is a vastly easier inverse problem than policy learning. If it fails, the problem is in the simulator/loss, not the network. If it succeeds, everything downstream is validated.
+
+### Stage 2: Fix Features & Loss for Policy Training
+
+- [ ] Precompute **paired no-MCB baseline trajectory** over the full training window (one 180-day coupled run; save per-step SST, heat flux, precipitation)
+- [ ] Features: `SST(t) − SST_baseline(t)` etc. — isolates the MCB-caused signal from natural drift exactly
+- [ ] Loss: paired difference vs baseline trajectory at matching timestep (not vs initial state)
+- [ ] Remove Amazon/Sahel terms from `CoupledLossWeights` for aquaplanet runs
+- [ ] Rebalance weights so `sst_cooling` dominates the loss (verify via Stage 0 breakdown)
+- [ ] Consider adding time-of-rollout as a feature (policy may need schedule-dependence)
+
+### Stage 3: Neural Network Policy Training (the end goal)
+
+- [ ] Warm-start: initialize output-layer bias so the initial policy output ≈ Stage 1 optimized pattern magnitude (avoids re-escaping the trivial attractor)
+- [ ] Retrain on diya GPU (pipeline proven fast: ~15.5 s/epoch, 200 epochs ≈ 50 min)
+- [ ] Success criteria:
+  - Loss ≤ Stage 1 static-pattern loss (a policy should match or beat a static field)
+  - Spatially structured, non-constant output
+  - Measurable cooling vs paired baseline (target -0.1 K)
+
+### Stage 4: Make Feedback Meaningful (controller justification)
+
+In a deterministic single-trajectory setup, a "policy" is effectively an open-loop schedule — the
+feedback aspect adds nothing. To demonstrate a genuine adaptive *controller* (the novel contribution
+per MCB_CONTEXT.md):
+
+- [ ] Train across varied initial conditions / perturbed initial states
+- [ ] Verify policy output actually depends on state (responds differently to different climates)
+- [ ] Later: switch to realistic terrain + seasonal boundary conditions → reinstate Amazon/Sahel teleconnection penalties (this is when the original research goal — cooling with minimized teleconnections — becomes fully testable)
+- [ ] Long-horizon stability evaluation (multi-year rollout with trained policy)
 
 ---
 
@@ -773,69 +849,45 @@ python analyze_training.py
 
 ## Next Steps (TODO)
 
-### ⭐ CRITICAL: Fix Baseline Feature Issue (Phase 8 Root Cause)
+**⭐ The authoritative task list is the [Revised Roadmap](#-revised-roadmap-current-strategy---supersedes-previous-retrain-plan) at the top of this document.** Summary:
 
-The GPU training revealed that **input features are all zeros** because the baseline equals the initial state.
-**This must be fixed before any further training attempts.**
+### ✅ Stage 0 — verify plumbing (COMPLETE 2026-07-01, GATE OPEN)
+- [x] Test large constant perturbation (0.1) through the dynamic injection path → initially FAILED (bitwise 0.0 K); after fix: **-0.407 K / 60 days**
+- [x] Fixed plumbing: `mcb_perturbation` is now a traced `ForcingData` field (attribute mutation removed) — see Stage 0 section in Revised Roadmap for file-level details
+- [x] Gradient check: `d(SST)/d(uniform_mcb_scalar)` = -0.752 K/unit (AD), matches finite differences within 1.6%
+- [x] Per-component loss breakdown logged (`run_stage0_plumbing_test.py`): uniformity-vs-initial-state dominates 92-98% → confirms Stage 2 paired-baseline requirement
 
-- [ ] **Fix 1: Use Climatological Baseline** (RECOMMENDED)
-  - Pre-run a long baseline simulation (e.g., 1 year coupled, no MCB)
-  - Compute time-averaged climate state as baseline
-  - Baseline represents "typical climate" not "initial state"
-  - Features will be non-zero anomalies from typical climate
+### ⏳ NEXT (Stage 1 — static pattern optimization)
+- [ ] Create `optimize_mcb_pattern.py`: optimize 96×48 field directly (no NN) through coupled model
+- [ ] Loss: paired SST cooling + uniformity + reg + smoothness (drop Amazon/Sahel — aquaplanet)
+- [ ] Deliverable: optimal spatial pattern + reference loss scale
 
-- [ ] **Fix 2: Warm-Up Period Before Computing Baseline**
-  - Run simulation forward for N steps before starting training
-  - Use the warmed-up state as baseline (not t=0 state)
-  - Ensures SST/heat flux have departed from initial conditions
+### Then (Stage 2 — fix features & loss)
+- [ ] Precompute paired no-MCB baseline **trajectory** (180-day coupled run, per-step outputs saved)
+- [ ] Features and loss computed as `X(t) − X_baseline(t)` (isolates MCB effect from drift)
+- [ ] Remove land teleconnection terms from `CoupledLossWeights` for aquaplanet
+- [ ] Rebalance weights so `sst_cooling` dominates
 
-- [ ] **Fix 3: Use Absolute Values Instead of Anomalies**
-  - Remove baseline subtraction from feature extraction
-  - Use raw SST, heat flux values directly
-  - May require feature normalization for stable training
+### Then (Stage 3 — NN policy training)
+- [ ] Warm-start output bias from Stage 1 pattern
+- [ ] Retrain on diya GPU
+- [ ] Success gates: loss ≤ static-pattern loss; non-constant spatial output; measurable paired cooling
 
-- [ ] **Fix 4: Add Explicit Cooling Reward**
-  - Currently loss is `|SST_change - target|`
-  - If SST_change ≈ 0, gradient is weak
-  - Add explicit reward for any cooling: `-λ * max(0, -SST_change)`
+### Later (Stage 4 — genuine feedback controller)
+- [ ] Varied initial conditions; verify state-dependence of policy output
+- [ ] Realistic terrain + seasonal BCs → reinstate Amazon/Sahel penalties (original research goal)
+- [ ] Multi-year stability run; architecture/loss-weight ablations
 
-### ✅ COMPLETED: Coupled Earth System (Phase 7)
+### ✅ COMPLETED
+- [x] **Coupled Earth System (Phase 7)**: jax-esm install, coupling verified, static MCB -0.328 K
+- [x] **Coupled training framework**: 4 modules + `run_coupled_training.py`
+- [x] **GPU environment (diya)**: JAX + CUDA working, ~15.5 s/epoch (6-10x CPU speedup)
+- [x] **First GPU training run**: 196 epochs — trivial solution, post-mortem complete
 
-- [x] **Install jax-esm**: `pip install -e jax-esm/`
-- [x] **Test basic coupling**: Run aquaplanet notebook (JCM + slab ocean)
-- [x] **Run coupled baseline**: Verified SST evolution
-- [x] **Test MCB in coupled mode**: Verified -0.328 K cooling effect (90 days)
-- [x] **Coupled policy training framework**: Complete (4 modules + script)
-- [x] **GPU training**: Complete (196 epochs on diya) - trivial solution
-
-### Previously Planned: Fix Atmosphere-Only Training
-- [ ] **Increase learning rate**: Change from 0.001 to 0.01 or 0.1
-- [ ] **Easier target**: Start with -0.1 K cooling instead of -0.5 K
-- [ ] **Longer rollouts**: Use 180 days on GPU (vs 90 days on CPU)
-- [ ] **More epochs**: Train for 200-500 epochs with early stopping
-
-### GPU/TPU Setup
-- [ ] **Configure GPU environment**: Install JAX with CUDA support
-- [ ] **Benchmark GPU speed**: Compare epoch time vs CPU (~100s/epoch)
-- [ ] **Adjust batch size**: May need to reduce for GPU memory
-
-### Hyperparameter Tuning
-- [ ] **Learning rate sweep**: Try [0.01, 0.03, 0.1]
-- [ ] **Target cooling sweep**: Try [-0.1, -0.2, -0.3, -0.5] K
-- [ ] **Rollout length sweep**: Try [90, 180, 365] days
-- [ ] **Architecture comparison**: MLP vs CNN vs Hybrid
-
-### Curriculum Learning (Recommended)
-- [ ] **Phase 1**: Train with easy target (-0.1 K), short rollout (90 days)
-- [ ] **Phase 2**: Increase target to -0.3 K
-- [ ] **Phase 3**: Increase rollout to 180 days
-- [ ] **Phase 4**: Full target (-0.5 K), full rollout (365 days)
-
-### Analysis (After Successful Training)
-- [ ] **Compare architectures**: Which policy works best?
-- [ ] **Ablation on loss weights**: How important is each term?
-- [ ] **Long-term stability**: 10-year simulation with trained policy
-- [ ] **Regional analysis**: Detailed impact maps
+### ❌ SUPERSEDED (do not pursue)
+- ~~Fix atmosphere-only training~~ — atmosphere-only cannot capture MCB cooling (no ocean feedback); all training is now coupled
+- ~~Hyperparameter sweeps / curriculum learning before Stage 0-2~~ — pointless while gradients don't reach the policy; revisit after Stage 3 works
+- ~~Climatological-mean baseline~~ — paired baseline trajectory chosen instead (isolates MCB effect from drift exactly)
 
 ---
 
@@ -858,13 +910,46 @@ sst_anomaly = current_sst - baseline_sst  # = 0 everywhere!
 - No spatial structure, no meaningful MCB forcing
 - No cooling achieved
 
-**Fixes Required** (see TODO section):
-1. Use climatological baseline from long pre-run (recommended)
-2. Warm up simulation before computing baseline
-3. Use absolute values instead of anomalies
-4. Add explicit cooling reward to loss function
+**Fix chosen**: Paired no-MCB baseline **trajectory** (see Revised Roadmap Stage 2). Features and loss
+computed as `X(t) − X_baseline(t)`, which isolates the MCB-caused signal from natural model drift.
 
-**Status**: Identified during Phase 8 GPU training. Must be fixed before next training attempt.
+**Status**: Identified during Phase 8 GPU training. Fix scheduled in Stage 2.
+
+### ✅ RESOLVED: Dynamic MCB Injection Path Was Broken (Silent Zero)
+
+**Problem**: The training loop injected MCB via `carry["derived"]["mcb_perturbation"]` →
+`model.physics.set_mcb_perturbation()` inside the JEM step function — an **attribute mutation
+inside a traced/JIT'd function**. `run_from_state` is `@jax.jit` with static `self`, so the
+perturbation was baked in as `None` at first trace and all runtime values silently ignored.
+
+**Confirmation (Stage 0, 2026-07-01)**: A 0.1 albedo perturbation over ALL ocean produced a
+*bitwise* +0.0000 K SST difference, and `d(SST)/d(mcb_scalar)` was exactly 0.0. All GPU training
+gradients w.r.t. the ocean pathway were structurally zero — the policy could never have learned.
+
+**Fix (implemented)**: `mcb_perturbation` is now a field of `ForcingData` (a traced argument of
+`run_from_state`), applied in `set_forcing` as `alb_s += (1 - fmask) * forcing.mcb_perturbation`.
+The JEM step injects via `forcing.copy(mcb_perturbation=...)`. The mutation-based API was removed.
+Verified: -0.407 K / 60 days effect; AD gradient matches finite differences within 1.6%.
+
+### ⚠️ Loss Dominated by Terms the Policy Cannot Influence
+
+**Problem**: Final training loss was 5.33, but with ΔSST≈0 and target -0.1 K, the `sst_cooling` term
+contributes only ~0.01. The remaining ~5.3 comes from precipitation/uniformity terms computed against
+the same broken zero baselines — large near-constants with near-zero gradients w.r.t. the policy.
+Regularization + smoothness then actively push output toward zero. **The trivial solution is the
+attractor of this loss configuration.**
+
+**Fix**: Stage 0 per-component loss logging; Stage 2 rebalancing so `sst_cooling` dominates.
+
+### ⚠️ Aquaplanet Configuration vs Land Teleconnection Terms
+
+**Problem**: Experiments use `TerrainData.aquaplanet(coords)` — there is **no land** — yet the coupled
+loss penalizes Amazon and Sahel precipitation. These terms are physically meaningless in this
+configuration and only add noise/constants to the loss.
+
+**Fix**: Drop Amazon/Sahel terms for aquaplanet runs (Stage 2). Reinstate them when switching to
+realistic terrain + boundary conditions (Stage 4), which is when the original research goal
+(cooling with minimized teleconnections) becomes fully testable.
 
 ### NumPy 2.x Compatibility Warning
 Some dependencies (numexpr, sklearn) show warnings about NumPy 2.x compatibility but continue to function. The warnings can be ignored or resolved by reinstalling affected packages.
@@ -900,6 +985,41 @@ First training attempt showed minimal convergence:
 ---
 
 ## Change Log
+
+### 2026-07-01: Stage 0 Complete — Injection Plumbing Was Broken, Now Fixed (GATE OPEN)
+- **Created `run_stage0_plumbing_test.py`**: reuses the exact training path (`setup_coupled_model`, `create_coupled_step_fn`, `run_coupled_interval`, carry-based injection); 3 tests: forward plumbing, AD gradient (+ FD cross-check), loss breakdown
+- **Confirmed Issue #1**: dynamic path gave *bitwise* 0.0000 K effect and exactly-zero gradient — `set_mcb_perturbation()` attribute mutation invisible to `run_from_state`'s jit (static `self`). All prior coupled training was structurally incapable of learning
+- **Fix implemented (4 files)**:
+  - `jcm/forcing.py`: new `ForcingData.mcb_perturbation` field (traced; zeros = inactive)
+  - `jcm/physics/speedy/forcing.py`: `set_forcing` applies `alb_s += (1 - fmask) * forcing.mcb_perturbation`; dead kwarg removed
+  - `jcm/physics/speedy/speedy_physics.py`: removed mutation API (`set_mcb_perturbation`/`clear_mcb_perturbation`/`self.mcb_perturbation`)
+  - `jax-esm/jem/components/JCM.py`: injects via `forcing.copy(mcb_perturbation=...)`
+- **Verification (local CPU)**:
+  - Test 1: MCB 0.1 over all ocean → **-0.407 K / 60 days** vs baseline (baseline drift +0.189 K)
+  - Test 2: `d(SST)/d(scalar)` = -0.752 K/unit (AD) vs -0.740 (FD), rel. error 1.6%
+  - Test 3: with initial-state baseline, `sst_uniformity` dominates loss at 92-98% after 60 days → drift conflation confirmed; Stage 2 paired-baseline is mandatory
+  - Regression tests pass (`forcing_test`, `speedy_physics_test`, `shortwave_radiation_test`)
+- **Next**: Stage 1 (direct static pattern optimization)
+
+### 2026-07-01: Strategy Revision — Staged Roadmap (Post-Mortem)
+- **Full post-mortem of Phase 8** identified 5 compounding issues (only zero-features was previously known):
+  1. Dynamic MCB injection path unverified (0.0000 K effect may mean perturbation never reaches physics)
+  2. Zero input features (baseline = initial state)
+  3. Loss dominated by uncontrollable terms (5.33 total vs ~0.01 from sst_cooling) — trivial solution is the loss attractor
+  4. Amazon/Sahel loss terms meaningless on aquaplanet (no land exists)
+  5. Baseline is a state, not a trajectory (drift conflated with MCB effect)
+- **Added Revised Roadmap (Stages 0-4)**:
+  - Stage 0: Verify injection plumbing + gradient check + loss breakdown (gate for all training)
+  - Stage 1: Direct static pattern optimization (de-risking + standalone scientific result + warm-start)
+  - Stage 2: Paired baseline trajectory for features/loss; drop land terms; rebalance weights
+  - Stage 3: NN policy training, warm-started from Stage 1
+  - Stage 4: Varied initial conditions (genuine feedback), realistic terrain, teleconnection penalties
+- **Design decisions confirmed**:
+  - Aquaplanet retained for now; land terms dropped until Stage 4
+  - Paired no-MCB baseline trajectory chosen over climatological mean
+  - Pattern optimization inserted before policy retraining
+- **Superseded**: atmosphere-only training fixes, pre-Stage-3 hyperparameter sweeps, climatological baseline
+- **Rewrote Next Steps (TODO)** around the staged roadmap; added 3 new Known Issues entries
 
 ### 2024-XX-XX: GPU Training on diya (Phase 8 - Trivial Solution)
 - **Completed GPU training**: 196 epochs in 50.7 minutes on NVIDIA GB10
@@ -1176,6 +1296,12 @@ Feature statistics:
 6. **Feedback loop**: zero features → constant output → no change → zero features
 
 **This is a data/baseline issue, not a model architecture issue.**
+
+**Update (post-mortem)**: Deeper analysis found this was only 1 of 5 compounding issues. The others:
+unverified dynamic MCB injection plumbing (the 0.0000 K effect may be a broken path, not just tiny
+output), loss dominated by uncontrollable terms (5.33 total vs ~0.01 from sst_cooling), meaningless
+Amazon/Sahel terms on an aquaplanet, and state-based (rather than trajectory-based) baseline. See the
+**Revised Roadmap** section at the top of this document for the full diagnosis and staged fix plan.
 
 ### 8.6 Technical Issues Encountered & Resolved
 
