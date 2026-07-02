@@ -9,19 +9,30 @@ The key difference is that we:
 3. Run the coupler's step function
 4. Compute loss using ocean SST
 
+Features and loss are computed against a PAIRED no-MCB baseline trajectory
+(CoupledBaselineTrajectory): anomalies at coupling step t are taken against
+the no-MCB run at the same step t, so natural model drift cancels exactly and
+only the MCB-caused signal remains (Stage 2 fix).
+
 Example usage:
+    from jcm.mcb.coupled_features import compute_baseline_trajectory
     from jcm.mcb.coupled_controller import (
+        create_coupled_step_fn,
         unroll_coupled_with_policy,
         CoupledControllerConfig,
     )
 
+    step_fn = create_coupled_step_fn(coupler, ["coupling", "atm", "ocn"])
+    baseline_trajectory = compute_baseline_trajectory(
+        initial_carry, step_fn, num_steps=config.total_steps, coords=coords
+    )
     total_loss, final_carry, trajectory = unroll_coupled_with_policy(
         coupler=coupler,
         workflow=["coupling", "atm", "ocn"],
         policy_fn=policy.apply,
         policy_params=params,
         initial_carry=initial_carry,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         coords=coords,
         ocean_mask=ocean_mask,
     )
@@ -35,7 +46,7 @@ from functools import partial
 
 from jcm.mcb.coupled_features import (
     extract_coupled_features,
-    CoupledBaseline,
+    CoupledBaselineTrajectory,
     CoupledFeatureConfig,
 )
 from jcm.mcb.coupled_loss import (
@@ -59,8 +70,8 @@ class CoupledControllerConfig(NamedTuple):
     """
 
     control_interval_steps: int = 30  # e.g., 30 days if daily coupling
-    total_steps: int = 365  # e.g., 1 year
-    target_cooling: float = -0.5
+    total_steps: int = 180  # tuned training window (days at daily coupling)
+    target_cooling: float = -0.1
     loss_weights: CoupledLossWeights = CoupledLossWeights()
     feature_config: CoupledFeatureConfig = CoupledFeatureConfig()
     max_perturbation: float = 0.15
@@ -135,11 +146,41 @@ def run_coupled_interval(
     return final_carry, trajectory
 
 
+def run_interval_final_carry(
+    carry: dict,
+    step_fn: Callable,
+    num_steps: int,
+) -> dict:
+    """Run a control interval, returning only the final carry.
+
+    Unlike run_coupled_interval, per-step predictions are discarded, so the
+    scan does not stack a full trajectory of physics outputs (major memory
+    saving under reverse-mode AD). Each coupling step is checkpointed.
+    Proven in Stage 1 pattern optimization (60-day rollouts fwd+bwd on GPU).
+
+    Args:
+        carry: Initial coupled carry.
+        step_fn: Coupler step function.
+        num_steps: Number of coupling steps to run.
+
+    Returns:
+        Final coupled carry.
+
+    """
+    def body(c, step_idx):
+        new_c, _ = step_fn(c, step_idx)
+        return new_c, None
+
+    body = jax.checkpoint(body)
+    final_carry, _ = lax.scan(body, carry, jnp.arange(num_steps))
+    return final_carry
+
+
 def create_coupled_control_step(
     coupler,
     workflow: list,
     policy_fn: Callable,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     coords,
     config: CoupledControllerConfig,
     ocean_mask: jnp.ndarray,
@@ -147,23 +188,25 @@ def create_coupled_control_step(
     """Create a single coupled control step function.
 
     This creates a differentiable function that:
-    1. Extracts features from coupled state
+    1. Extracts features from coupled state (anomalies vs the PAIRED no-MCB
+       baseline at the same coupling step, plus time-of-rollout)
     2. Applies policy to get MCB forcing
     3. Injects MCB into coupled carry
     4. Runs coupler for control interval
-    5. Computes loss from SST
+    5. Computes loss from SST (paired difference at the interval's end step)
 
     Args:
         coupler: JEM Coupler instance.
         workflow: Coupling workflow.
         policy_fn: Policy network apply function.
-        baseline: Coupled climate baseline.
+        baseline_trajectory: Paired no-MCB baseline trajectory covering at
+            least config.total_steps coupling steps.
         coords: Model coordinates.
         config: Controller configuration.
         ocean_mask: Ocean cell mask for MCB application.
 
     Returns:
-        Function (carry, policy_params) -> CoupledControlStep.
+        Function (carry, policy_params, interval_idx) -> CoupledControlStep.
 
     """
     # Get coupler step function
@@ -172,14 +215,19 @@ def create_coupled_control_step(
     def control_step(
         carry: dict,
         policy_params: dict,
+        interval_idx: jnp.ndarray,
     ) -> CoupledControlStep:
         """Execute one control interval with policy application."""
-        # Extract features from current coupled state
+        t_start = interval_idx * config.control_interval_steps
+        t_end = t_start + config.control_interval_steps
+
+        # Extract features vs the paired baseline at the interval start
         features = extract_coupled_features(
             coupled_carry=carry,
-            baseline=baseline,
+            baseline=baseline_trajectory.at_step(t_start),
             coords=coords,
             config=config.feature_config,
+            time_fraction=t_start / config.total_steps,
         )
 
         # Get MCB perturbation from policy
@@ -193,18 +241,20 @@ def create_coupled_control_step(
         # The JCM wrapper will read this and pass to physics
         carry["atm"]["derived"]["mcb_perturbation"] = mcb_perturbation
 
-        # Run coupled simulation for control interval
-        final_carry, _ = run_coupled_interval(
+        # Run coupled simulation for control interval (predictions discarded
+        # for memory efficiency under BPTT)
+        final_carry = run_interval_final_carry(
             carry=carry,
             step_fn=step_fn,
             num_steps=config.control_interval_steps,
         )
 
-        # Compute loss using ocean SST
+        # Compute loss vs the paired baseline at the interval end
+        loss_baseline = baseline_trajectory.at_step(t_end)
         loss = compute_coupled_loss(
             coupled_carry=final_carry,
-            baseline_sst=baseline.sst,
-            baseline_precip=baseline.precipitation,
+            baseline_sst=loss_baseline.sst,
+            baseline_precip=loss_baseline.precipitation,
             target_cooling=config.target_cooling,
             mcb_forcing=mcb_perturbation,
             coords=coords,
@@ -226,7 +276,7 @@ def unroll_coupled_with_policy(
     policy_fn: Callable,
     policy_params: dict,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
@@ -240,8 +290,9 @@ def unroll_coupled_with_policy(
         workflow: Coupling workflow (e.g., ["coupling", "atm", "ocn"]).
         policy_fn: Policy network apply function (params, features) -> forcing.
         policy_params: Policy network parameters.
-        initial_carry: Initial coupled carry.
-        baseline: Climate baseline for anomalies.
+        initial_carry: Initial coupled carry (must be the same state the
+            baseline trajectory was computed from, for exact pairing).
+        baseline_trajectory: Paired no-MCB baseline trajectory.
         coords: Model coordinates.
         ocean_mask: Ocean mask for MCB application.
         config: Controller configuration.
@@ -260,7 +311,7 @@ def unroll_coupled_with_policy(
         coupler=coupler,
         workflow=workflow,
         policy_fn=policy_fn,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         coords=coords,
         config=config,
         ocean_mask=ocean_mask,
@@ -270,18 +321,18 @@ def unroll_coupled_with_policy(
     if config.use_checkpointing:
         control_step = jax.checkpoint(control_step)
 
-    # Unroll with scan
-    def scan_body(state, _):
+    # Unroll with scan over interval indices (needed to index the paired
+    # baseline trajectory at the right timesteps)
+    def scan_body(state, interval_idx):
         carry, cumulative_loss = state
-        step_output = control_step(carry, policy_params)
+        step_output = control_step(carry, policy_params, interval_idx)
         new_state = (step_output.carry, cumulative_loss + step_output.loss)
         return new_state, step_output
 
     (final_carry, total_loss), trajectory = lax.scan(
         scan_body,
         (initial_carry, jnp.array(0.0)),
-        None,
-        length=num_intervals,
+        jnp.arange(num_intervals),
     )
 
     return total_loss, final_carry, trajectory
@@ -293,7 +344,7 @@ def unroll_coupled_simple(
     policy_fn: Callable,
     policy_params: dict,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
@@ -315,7 +366,7 @@ def unroll_coupled_simple(
         policy_fn=policy_fn,
         policy_params=policy_params,
         initial_carry=initial_carry,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         coords=coords,
         ocean_mask=ocean_mask,
         config=config,
@@ -328,7 +379,7 @@ def create_coupled_loss_fn(
     workflow: list,
     policy_fn: Callable,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
@@ -342,7 +393,7 @@ def create_coupled_loss_fn(
         workflow: Coupling workflow.
         policy_fn: Policy network apply function.
         initial_carry: Initial coupled carry.
-        baseline: Climate baseline.
+        baseline_trajectory: Paired no-MCB baseline trajectory.
         coords: Model coordinates.
         ocean_mask: Ocean mask.
         config: Controller configuration.
@@ -359,7 +410,7 @@ def create_coupled_loss_fn(
             policy_fn=policy_fn,
             policy_params=policy_params,
             initial_carry=initial_carry,
-            baseline=baseline,
+            baseline_trajectory=baseline_trajectory,
             coords=coords,
             ocean_mask=ocean_mask,
             config=config,
@@ -374,7 +425,7 @@ def evaluate_coupled_policy(
     policy_fn: Callable,
     policy_params: dict,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
@@ -402,7 +453,7 @@ def evaluate_coupled_policy(
         policy_fn=policy_fn,
         policy_params=policy_params,
         initial_carry=initial_carry,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         coords=coords,
         ocean_mask=ocean_mask,
         config=config,
@@ -411,9 +462,9 @@ def evaluate_coupled_policy(
     num_intervals = config.total_steps // config.control_interval_steps
     area_weights = compute_area_weights(coords)
 
-    # Compute SST change
+    # Compute SST change vs the paired baseline at the same final step
     final_sst = final_carry["ocn"]["state"].sea_surface_temperature
-    baseline_sst = baseline.sst
+    baseline_sst = baseline_trajectory.at_step(config.total_steps).sst
     global_final_sst = jnp.sum(final_sst * area_weights)
     global_baseline_sst = jnp.sum(baseline_sst * area_weights)
     sst_change = global_final_sst - global_baseline_sst
@@ -443,7 +494,7 @@ def compute_coupled_policy_gradient(
     policy_fn: Callable,
     policy_params: dict,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
@@ -467,7 +518,7 @@ def compute_coupled_policy_gradient(
         workflow=workflow,
         policy_fn=policy_fn,
         initial_carry=initial_carry,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         coords=coords,
         ocean_mask=ocean_mask,
         config=config,
@@ -483,7 +534,7 @@ def verify_coupled_gradients(
     policy_fn: Callable,
     policy_params: dict,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
@@ -509,7 +560,7 @@ def verify_coupled_gradients(
         policy_fn=policy_fn,
         policy_params=policy_params,
         initial_carry=initial_carry,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         coords=coords,
         ocean_mask=ocean_mask,
         config=config,

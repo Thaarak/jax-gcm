@@ -102,6 +102,8 @@ from jcm.mcb.train import (
 from jcm.mcb.coupled_features import (
     CoupledFeatureConfig,
     CoupledBaseline,
+    CoupledBaselineTrajectory,
+    compute_baseline_trajectory,
     extract_coupled_features,
     get_coupled_feature_dim,
     create_coupled_feature_extractor,
@@ -184,6 +186,8 @@ __all__ = [
     # Coupled features
     'CoupledFeatureConfig',
     'CoupledBaseline',
+    'CoupledBaselineTrajectory',
+    'compute_baseline_trajectory',
     'extract_coupled_features',
     'get_coupled_feature_dim',
     'create_coupled_feature_extractor',

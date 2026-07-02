@@ -21,25 +21,23 @@ import pickle
 from pathlib import Path
 
 import jax
-import jax.numpy as jnp
 import jax_datetime as jdt
 
 # JCM imports
 import jcm
 from jcm.physics.speedy.speedy_coords import get_speedy_coords
-from jcm.forcing import default_forcing
 from jcm.terrain import TerrainData
 
 # MCB imports
 from jcm.mcb import (
     MCBPolicyMLP,
-    CoupledBaseline,
     CoupledControllerConfig,
     CoupledFeatureConfig,
     CoupledLossWeights,
+    compute_baseline_trajectory,
     get_coupled_feature_dim,
-    create_ocean_mask,
 )
+from jcm.mcb.coupled_controller import create_coupled_step_fn
 from jcm.mcb.coupled_train import (
     train_coupled_policy,
     validate_coupled_training_setup,
@@ -57,7 +55,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Coupled MCB Policy Training")
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--learning-rate", type=float, default=0.01, help="Learning rate")
-    parser.add_argument("--target-cooling", type=float, default=-0.3, help="Target SST cooling (K)")
+    parser.add_argument("--target-cooling", type=float, default=-0.1, help="Target SST cooling (K)")
     parser.add_argument("--control-interval", type=int, default=30, help="Days between policy applications")
     parser.add_argument("--total-days", type=int, default=180, help="Total simulation days per epoch")
     parser.add_argument("--output-dir", type=str, default="mcb_experiments", help="Output directory")
@@ -129,20 +127,34 @@ def main():
     print("Initializing coupled simulation...")
     initial_carry = coupler.initialize()
 
-    # Create baseline from initial state
-    print("Creating climate baseline...")
-    baseline = CoupledBaseline.from_coupled_carry(initial_carry, coords)
+    # Paired no-MCB baseline trajectory (Stage 2): one forward run of the
+    # full training window from the SAME initial state. Features and loss are
+    # computed as X(t) - X_baseline(t), so natural drift cancels exactly.
+    workflow = ["coupling", "atm", "ocn"]
+    print(f"Computing paired no-MCB baseline trajectory ({args.total_days} days)...")
+    step_fn = create_coupled_step_fn(coupler, workflow, jitted=True)
+    baseline_trajectory = compute_baseline_trajectory(
+        initial_carry, step_fn, num_steps=args.total_days, coords=coords
+    )
+    baseline_path = output_dir / f"baseline_trajectory_{args.total_days}d.pkl"
+    with open(baseline_path, 'wb') as f:
+        pickle.dump(jax.device_get({
+            'sst': baseline_trajectory.sst,
+            'surface_temperature': baseline_trajectory.surface_temperature,
+            'precipitation': baseline_trajectory.precipitation,
+            'heat_flux': baseline_trajectory.heat_flux,
+        }), f)
+    print(f"  Saved baseline trajectory to {baseline_path}")
 
-    # Ocean mask for MCB application
-    ocean_mask = create_ocean_mask(coords.horizontal, terrain.fmask)
-
-    # Configure feature extraction
+    # Configure feature extraction (include_time gives the policy
+    # schedule-dependence and a non-zero input at the first interval)
     feature_config = CoupledFeatureConfig(
         include_sst=True,
         include_sst_regions=True,
         include_heat_flux=True,
         include_atm_temperature=True,
         include_precipitation=True,
+        include_time=True,
     )
 
     # Create policy network
@@ -157,19 +169,21 @@ def main():
     print(f"  Input features: {feature_dim}")
     print(f"  Output shape: {output_shape}")
 
-    # Controller configuration
+    # Controller configuration. Loss weights are the Stage 2 aquaplanet set:
+    # no land teleconnection terms (amazon/sahel/tropics = 0 — no land
+    # exists), and the Stage 1-proven weights so sst_cooling dominates.
     controller_config = CoupledControllerConfig(
         control_interval_steps=args.control_interval,
         total_steps=args.total_days,
         target_cooling=args.target_cooling,
         loss_weights=CoupledLossWeights(
             sst_cooling=1.0,
-            sst_uniformity=0.3,
-            amazon=1.0,
-            sahel=0.5,
-            tropics=0.3,
-            regularization=0.01,
-            smoothness=0.01,
+            sst_uniformity=0.1,
+            amazon=0.0,
+            sahel=0.0,
+            tropics=0.0,
+            regularization=0.001,
+            smoothness=0.001,
         ),
         feature_config=feature_config,
         max_perturbation=0.15,
@@ -187,9 +201,6 @@ def main():
         early_stopping_patience=20,
     )
 
-    # Workflow
-    workflow = ["coupling", "atm", "ocn"]
-
     # Validate setup
     print("\n" + "=" * 60)
     print("Validating training setup...")
@@ -201,7 +212,7 @@ def main():
         coords=coords,
         terrain_fmask=terrain.fmask,
         initial_carry=initial_carry,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         controller_config=controller_config,
     )
 
@@ -231,7 +242,7 @@ def main():
         coords=coords,
         terrain_fmask=terrain.fmask,
         initial_carry=initial_carry,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         training_config=training_config,
         controller_config=controller_config,
     )

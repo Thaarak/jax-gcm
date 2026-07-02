@@ -33,6 +33,16 @@ from jcm.mcb.state_features import (
 class CoupledLossWeights(NamedTuple):
     """Weights for coupled loss components.
 
+    Defaults are the Stage 2 aquaplanet configuration: land teleconnection
+    terms (amazon/sahel) and tropics are OFF (weight 0.0 — there is no land
+    on an aquaplanet), and the remaining weights match the values that
+    succeeded in Stage 1 direct pattern optimization, so `sst_cooling`
+    dominates the loss. Components with weight 0.0 are skipped entirely in
+    compute_coupled_loss (exactly zero contribution, no constant offsets).
+
+    Reinstate amazon/sahel/tropics when switching to realistic terrain
+    (Stage 4).
+
     Attributes:
         sst_cooling: Weight for SST-based cooling objective.
         sst_uniformity: Weight for uniform SST change (avoid hotspots).
@@ -45,12 +55,12 @@ class CoupledLossWeights(NamedTuple):
     """
 
     sst_cooling: float = 1.0
-    sst_uniformity: float = 0.3
-    amazon: float = 1.0
-    sahel: float = 0.5
-    tropics: float = 0.3
-    regularization: float = 0.01
-    smoothness: float = 0.01
+    sst_uniformity: float = 0.1
+    amazon: float = 0.0
+    sahel: float = 0.0
+    tropics: float = 0.0
+    regularization: float = 0.001
+    smoothness: float = 0.001
 
 
 @tree_math.struct
@@ -271,10 +281,20 @@ def compute_coupled_loss(
     Main loss function for coupled training. Uses ocean SST for the
     primary cooling objective while protecting regional precipitation.
 
+    For Stage 2+ training, `baseline_sst`/`baseline_precip` should be the
+    paired no-MCB snapshots at the SAME timestep (from
+    CoupledBaselineTrajectory.at_step), so the differences isolate the
+    MCB-caused signal from natural drift.
+
+    Components whose weight is exactly 0.0 (a static Python float) are
+    skipped entirely: they contribute exactly zero to the total (avoiding
+    constant offsets such as softplus(0) from the precipitation terms) and
+    cost nothing to compute.
+
     Args:
         coupled_carry: Current coupled simulation state.
-        baseline_sst: Baseline ocean SST.
-        baseline_precip: Baseline precipitation.
+        baseline_sst: Baseline ocean SST (paired, same timestep).
+        baseline_precip: Baseline precipitation (paired, same timestep).
         target_cooling: Target SST change (K, negative for cooling).
         mcb_forcing: Applied MCB forcing field.
         coords: Model coordinates.
@@ -286,25 +306,38 @@ def compute_coupled_loss(
 
     """
     area_weights = compute_area_weights(coords)
+    zero = jnp.array(0.0)
 
     # SST-based losses
-    L_sst = sst_cooling_loss(coupled_carry, baseline_sst, target_cooling, area_weights)
-    L_uniform = sst_uniformity_loss(coupled_carry, baseline_sst, area_weights)
+    L_sst = (
+        sst_cooling_loss(coupled_carry, baseline_sst, target_cooling, area_weights)
+        if weights.sst_cooling != 0.0 else zero
+    )
+    L_uniform = (
+        sst_uniformity_loss(coupled_carry, baseline_sst, area_weights)
+        if weights.sst_uniformity != 0.0 else zero
+    )
 
-    # Precipitation protection
-    L_amazon = coupled_precipitation_loss(
-        coupled_carry, baseline_precip, coords, area_weights, 'amazon'
+    # Precipitation protection (off by default on aquaplanet)
+    L_amazon = (
+        coupled_precipitation_loss(
+            coupled_carry, baseline_precip, coords, area_weights, 'amazon'
+        ) if weights.amazon != 0.0 else zero
     )
-    L_sahel = coupled_precipitation_loss(
-        coupled_carry, baseline_precip, coords, area_weights, 'sahel'
+    L_sahel = (
+        coupled_precipitation_loss(
+            coupled_carry, baseline_precip, coords, area_weights, 'sahel'
+        ) if weights.sahel != 0.0 else zero
     )
-    L_tropics = tropical_precipitation_loss(
-        coupled_carry, baseline_precip, coords, area_weights
+    L_tropics = (
+        tropical_precipitation_loss(
+            coupled_carry, baseline_precip, coords, area_weights
+        ) if weights.tropics != 0.0 else zero
     )
 
     # Regularization
-    L_reg = regularization_loss(mcb_forcing)
-    L_smooth = smoothness_loss(mcb_forcing)
+    L_reg = regularization_loss(mcb_forcing) if weights.regularization != 0.0 else zero
+    L_smooth = smoothness_loss(mcb_forcing) if weights.smoothness != 0.0 else zero
 
     # Total weighted loss
     total = (

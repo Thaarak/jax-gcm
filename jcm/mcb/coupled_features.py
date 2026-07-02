@@ -6,13 +6,19 @@ the coupled carry structure for use as policy network inputs.
 This module is designed for JAX-ESM coupled simulations where
 the coupled_carry dict contains both "atm" and "ocn" components.
 
-Example usage:
-    from jcm.mcb.coupled_features import extract_coupled_features, CoupledBaseline
+Example usage (Stage 2, paired baseline trajectory):
+    from jcm.mcb.coupled_features import (
+        compute_baseline_trajectory,
+        extract_coupled_features,
+    )
 
-    baseline = CoupledBaseline.from_coupled_carry(initial_carry, coords)
-    features = extract_coupled_features(coupled_carry, baseline, coords)
+    trajectory = compute_baseline_trajectory(initial_carry, step_fn, num_steps=180)
+    baseline_t = trajectory.at_step(t)  # CoupledBaseline at day t
+    features = extract_coupled_features(coupled_carry, baseline_t, coords,
+                                        time_fraction=t / 180)
 """
 
+import jax
 import jax.numpy as jnp
 from typing import NamedTuple, Optional
 import tree_math
@@ -42,6 +48,10 @@ class CoupledFeatureConfig(NamedTuple):
         include_heat_flux: Include air-sea heat flux.
         include_atm_temperature: Include atmospheric temperature.
         include_precipitation: Include precipitation features.
+        include_time: Include normalized time-of-rollout (0 at start, 1 at
+            end). Gives the policy schedule-dependence, and guarantees a
+            non-constant input even when paired anomalies are zero (e.g. at
+            the very first control interval).
 
     """
 
@@ -50,6 +60,7 @@ class CoupledFeatureConfig(NamedTuple):
     include_heat_flux: bool = True
     include_atm_temperature: bool = True
     include_precipitation: bool = True
+    include_time: bool = True
 
 
 @tree_math.struct
@@ -126,22 +137,117 @@ class CoupledBaseline:
         )
 
 
+@tree_math.struct
+class CoupledBaselineTrajectory:
+    """Paired no-MCB baseline trajectory for features and loss.
+
+    Stores per-coupling-step snapshots of the baseline fields from a no-MCB
+    run started from the SAME initial state as training. Anomalies computed
+    against `at_step(t)` isolate the MCB-caused signal exactly: natural model
+    drift is identical in both runs and cancels in the difference.
+
+    All fields have a leading time dimension of length num_steps + 1
+    (index 0 = initial state, index t = state after t coupling steps).
+
+    Attributes:
+        sst: (T+1, ix, il) sea surface temperature.
+        surface_temperature: (T+1, ix, il) atmospheric surface temperature.
+        precipitation: (T+1, ix, il) total precipitation.
+        heat_flux: (T+1, ix, il) air-sea heat flux.
+
+    """
+
+    sst: jnp.ndarray
+    surface_temperature: jnp.ndarray
+    precipitation: jnp.ndarray
+    heat_flux: jnp.ndarray
+
+    @property
+    def num_steps(self) -> int:
+        return self.sst.shape[0] - 1
+
+    def at_step(self, step: jnp.ndarray) -> CoupledBaseline:
+        """Return the CoupledBaseline snapshot at a given coupling step.
+
+        Works with traced integer indices (usable inside jit/scan).
+        """
+        return CoupledBaseline(
+            sst=self.sst[step],
+            surface_temperature=self.surface_temperature[step],
+            precipitation=self.precipitation[step],
+            heat_flux=self.heat_flux[step],
+        )
+
+
+def compute_baseline_trajectory(
+    initial_carry: dict,
+    step_fn,
+    num_steps: int,
+    coords,
+) -> CoupledBaselineTrajectory:
+    """Run the paired no-MCB baseline and record per-step snapshots.
+
+    Runs the coupler forward from `initial_carry` with the MCB perturbation
+    forced to zero, recording the baseline fields after every coupling step
+    (plus the initial state at index 0). Forward-only: not differentiated.
+
+    Args:
+        initial_carry: Initial coupled carry (same one used for training).
+        step_fn: Coupler step function (carry, step_idx) -> (carry, preds).
+        num_steps: Number of coupling steps (e.g. total training days).
+        coords: Model coordinates.
+
+    Returns:
+        CoupledBaselineTrajectory with num_steps + 1 snapshots.
+
+    """
+    # Copy the carry and zero the MCB perturbation without mutating the input.
+    carry = jax.tree_util.tree_map(lambda x: x, initial_carry)
+    existing = carry["atm"]["derived"]["mcb_perturbation"]
+    carry["atm"]["derived"]["mcb_perturbation"] = jnp.zeros_like(existing)
+
+    def body(c, step_idx):
+        new_c, _ = step_fn(c, step_idx)
+        return new_c, CoupledBaseline.from_coupled_carry(new_c, coords)
+
+    _, snapshots = jax.lax.scan(body, carry, jnp.arange(num_steps))
+
+    initial = CoupledBaseline.from_coupled_carry(carry, coords)
+    stacked = jax.tree_util.tree_map(
+        lambda first, rest: jnp.concatenate([first[None], rest], axis=0),
+        initial, snapshots,
+    )
+    return CoupledBaselineTrajectory(
+        sst=stacked.sst,
+        surface_temperature=stacked.surface_temperature,
+        precipitation=stacked.precipitation,
+        heat_flux=stacked.heat_flux,
+    )
+
+
 def extract_coupled_features(
     coupled_carry: dict,
     baseline: CoupledBaseline,
     coords,
     config: CoupledFeatureConfig = CoupledFeatureConfig(),
+    time_fraction: float = 0.0,
 ) -> jnp.ndarray:
     """Extract features from coupled simulation state.
 
     Main entry point for coupled feature extraction. Returns scalar features
     for use with MLP policy networks.
 
+    For Stage 2+ training, `baseline` should be the paired no-MCB snapshot at
+    the SAME timestep (from CoupledBaselineTrajectory.at_step), so that the
+    anomalies isolate the MCB-caused signal from natural drift.
+
     Args:
         coupled_carry: JEM coupled carry dict with "atm" and "ocn" components.
         baseline: CoupledBaseline for anomaly computation.
         coords: Model coordinates.
         config: Feature extraction configuration.
+        time_fraction: Normalized time-of-rollout in [0, 1]; used when
+            config.include_time is True.
 
     Returns:
         1D array of scalar features for policy input.
@@ -222,6 +328,10 @@ def extract_coupled_features(
         sahel_baseline = compute_regional_mean(baseline.precipitation, sahel_mask, area_weights)
         features.append(sahel_precip - sahel_baseline)
 
+    # --- Time-of-rollout feature ---
+    if config.include_time:
+        features.append(jnp.asarray(time_fraction, dtype=jnp.float64))
+
     return jnp.array(features)
 
 
@@ -246,6 +356,8 @@ def get_coupled_feature_dim(config: CoupledFeatureConfig = CoupledFeatureConfig(
         dim += 1  # global heat flux
     if config.include_precipitation:
         dim += 3  # tropical + amazon + sahel
+    if config.include_time:
+        dim += 1  # normalized time-of-rollout
     return dim
 
 
@@ -267,6 +379,8 @@ def create_coupled_feature_extractor(
         Function (coupled_carry) -> features array.
 
     """
-    def extractor(coupled_carry: dict) -> jnp.ndarray:
-        return extract_coupled_features(coupled_carry, baseline, coords, config)
+    def extractor(coupled_carry: dict, time_fraction: float = 0.0) -> jnp.ndarray:
+        return extract_coupled_features(
+            coupled_carry, baseline, coords, config, time_fraction=time_fraction
+        )
     return extractor

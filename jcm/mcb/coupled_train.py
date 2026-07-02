@@ -3,11 +3,21 @@
 Extends train.py to work with JAX-ESM coupled simulations,
 enabling gradient flow through ocean feedback.
 
+Features and loss use a PAIRED no-MCB baseline trajectory (Stage 2): compute
+it once with compute_baseline_trajectory from the same initial carry used for
+training, then pass it as baseline_trajectory.
+
 Example usage:
+    from jcm.mcb.coupled_features import compute_baseline_trajectory
+    from jcm.mcb.coupled_controller import create_coupled_step_fn
     from jcm.mcb.coupled_train import train_coupled_policy
     from jcm.mcb.policy import MCBPolicyMLP
 
     policy = MCBPolicyMLP(output_shape=(96, 48))
+    step_fn = create_coupled_step_fn(coupler, ["coupling", "atm", "ocn"])
+    baseline_trajectory = compute_baseline_trajectory(
+        initial_carry, step_fn, num_steps=180, coords=coords
+    )
 
     trained_params, history = train_coupled_policy(
         coupler=coupler,
@@ -16,7 +26,7 @@ Example usage:
         coords=coords,
         terrain_fmask=fmask,
         initial_carry=initial_carry,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
     )
 """
 
@@ -32,7 +42,7 @@ from jcm.mcb.coupled_controller import (
     verify_coupled_gradients,
 )
 from jcm.mcb.coupled_features import (
-    CoupledBaseline,
+    CoupledBaselineTrajectory,
     get_coupled_feature_dim,
 )
 from jcm.mcb.train import (
@@ -47,7 +57,7 @@ def create_coupled_train_step(
     coupler,
     workflow: list,
     policy_fn: Callable,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     coords,
     ocean_mask: jnp.ndarray,
     controller_config: CoupledControllerConfig,
@@ -59,7 +69,7 @@ def create_coupled_train_step(
         coupler: JEM Coupler instance.
         workflow: Coupling workflow.
         policy_fn: Policy apply function.
-        baseline: Climate baseline.
+        baseline_trajectory: Paired no-MCB baseline trajectory.
         coords: Model coordinates.
         ocean_mask: Ocean mask for MCB.
         controller_config: Controller config.
@@ -93,7 +103,7 @@ def create_coupled_train_step(
                 policy_fn=policy_fn,
                 policy_params=p,
                 initial_carry=initial_carry,
-                baseline=baseline,
+                baseline_trajectory=baseline_trajectory,
                 coords=coords,
                 ocean_mask=ocean_mask,
                 config=controller_config,
@@ -156,7 +166,7 @@ def train_coupled_policy(
     coords,
     terrain_fmask: jnp.ndarray,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     training_config: TrainingConfig = TrainingConfig(),
     controller_config: CoupledControllerConfig = CoupledControllerConfig(),
     callback: Optional[Callable[[TrainingState], None]] = None,
@@ -173,7 +183,7 @@ def train_coupled_policy(
         coords: Model coordinates.
         terrain_fmask: Land mask (1.0 = land, 0.0 = ocean).
         initial_carry: Initial coupled state.
-        baseline: Climate baseline for anomalies.
+        baseline_trajectory: Paired no-MCB baseline trajectory for anomalies.
         training_config: Training hyperparameters.
         controller_config: Controller configuration.
         callback: Optional epoch callback.
@@ -199,7 +209,7 @@ def train_coupled_policy(
         coupler=coupler,
         workflow=workflow,
         policy_fn=policy.apply,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         coords=coords,
         ocean_mask=ocean_mask,
         controller_config=controller_config,
@@ -308,7 +318,7 @@ def validate_coupled_training_setup(
     coords,
     terrain_fmask: jnp.ndarray,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     controller_config: CoupledControllerConfig = CoupledControllerConfig(),
 ) -> Dict[str, Any]:
     """Validate coupled training setup before full training.
@@ -350,7 +360,7 @@ def validate_coupled_training_setup(
             policy_fn=policy.apply,
             policy_params=params,
             initial_carry=initial_carry,
-            baseline=baseline,
+            baseline_trajectory=baseline_trajectory,
             coords=coords,
             ocean_mask=ocean_mask,
             config=controller_config,
@@ -394,7 +404,7 @@ def resume_coupled_training(
     coords,
     terrain_fmask: jnp.ndarray,
     initial_carry: dict,
-    baseline: CoupledBaseline,
+    baseline_trajectory: CoupledBaselineTrajectory,
     checkpoint_path: str,
     training_config: TrainingConfig = TrainingConfig(),
     controller_config: CoupledControllerConfig = CoupledControllerConfig(),
@@ -427,7 +437,7 @@ def resume_coupled_training(
         coupler=coupler,
         workflow=workflow,
         policy_fn=policy.apply,
-        baseline=baseline,
+        baseline_trajectory=baseline_trajectory,
         coords=coords,
         ocean_mask=ocean_mask,
         controller_config=controller_config,

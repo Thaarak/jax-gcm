@@ -35,7 +35,9 @@ This plan outlines the implementation of a **neural network-based feedback contr
 - ⚠️ **Policy learned trivial solution** - constant output, no cooling
 - ✅ **Post-mortem complete** - 5 compounding issues identified (see Revised Roadmap below)
 - ✅ **Stage 0 complete** - plumbing was BROKEN (confirmed silent zero); fixed by threading `mcb_perturbation` through `ForcingData`; gradient verified vs finite differences (1.6% error). **GATE OPEN**
-- ⏳ **NEXT**: Stage 1 - direct static pattern optimization (no NN)
+- ✅ **Stage 1 complete** - direct pattern optimization on diya GPU: achieved **-0.097 K** (target -0.1 K) with a **spatially structured** pattern (peak ~50°N). Both success criteria MET
+- ✅ **Stage 2 complete** - paired no-MCB baseline **trajectory** features/loss implemented and verified (`run_stage2_verification.py`): bitwise drift cancellation, loss 100% cooling-dominated at zero MCB, finite non-zero BPTT gradients. **GATE OPEN**
+- ⏳ **NEXT**: Stage 3 - NN policy training on diya (warm-started from Stage 1 pattern)
 
 ---
 
@@ -73,25 +75,33 @@ Diagnostic script: `run_stage0_plumbing_test.py` (reuses the exact training path
 
 **Gate: OPEN.** Both plumbing and gradient checks pass; proceed to Stage 1.
 
-### Stage 1: Direct Static Pattern Optimization (de-risking + standalone scientific result)
+### Stage 1: Direct Static Pattern Optimization ✅ COMPLETE (2026-07-01) — BOTH CRITERIA MET
 
-- [ ] Optimize the 96×48 MCB field **directly as parameters** (no neural network) via gradient descent through the coupled model
-- [ ] Loss: SST cooling (paired vs baseline trajectory) + uniformity + regularization + smoothness — **NO land terms**
-- [ ] Success criterion: achieves target cooling (-0.1 K) with a spatially structured (non-uniform) pattern
-- [ ] Deliverables: (a) "optimal spatial MCB pattern" — a publishable result on its own, (b) warm-start values for Stage 3, (c) the loss scale a good policy should reach
+Script: `optimize_mcb_pattern.py`. Run on diya GPU: 150 Adam iterations, 60-day coupled rollouts,
+paired no-MCB baseline, sigmoid parameterization (`0.15 * sigmoid(theta) * ocean_mask`),
+loss = cooling (w=1.0) + uniformity (w=0.1) + reg (w=0.001) + smoothness (w=0.001), **no land terms**.
 
-**Rationale**: This is a vastly easier inverse problem than policy learning. If it fails, the problem is in the simulator/loss, not the network. If it succeeds, everything downstream is validated.
+- [x] Optimized the 96×48 MCB field directly (no NN) via gradient descent through the coupled model
+- [x] **Achieved dSST = -0.0972 K vs paired baseline (target -0.1 K)** — cooling-loss component driven to ~0 by iteration ~87
+- [x] **Pattern is spatially structured** (std 0.029; range 0.0045–0.132): brightening concentrated in NH mid-latitudes (zonal-mean peak 0.116 at ~50°N, band ~40–55°N) over a ~0.02 background, with zonal structure (within-band std up to 0.03)
+- [x] Reference loss scale for Stage 3: best total loss **0.004497** (uniformity now dominates the residual, fluctuating ~0.05–0.07 raw — weather noise in the 60-day paired difference)
+- [x] Warm-start artifact saved: `mcb_experiments(_gpu)/stage1/stage1_optimized_pattern.pkl` (best_theta, best_pattern, baseline SST, full history, config)
+- Performance: 26.0 s/iter on GB10 (60-day rollout fwd+bwd), 65 min total. Memory fine with per-day `jax.checkpoint` + trajectory-discarding scan
 
-### Stage 2: Fix Features & Loss for Policy Training
+**Rationale (validated)**: the simulator, loss, and gradients are now all proven end-to-end. Any Stage 3 failure is attributable to the policy/feature setup, not the substrate.
 
-- [ ] Precompute **paired no-MCB baseline trajectory** over the full training window (one 180-day coupled run; save per-step SST, heat flux, precipitation)
-- [ ] Features: `SST(t) − SST_baseline(t)` etc. — isolates the MCB-caused signal from natural drift exactly
-- [ ] Loss: paired difference vs baseline trajectory at matching timestep (not vs initial state)
-- [ ] Remove Amazon/Sahel terms from `CoupledLossWeights` for aquaplanet runs
-- [ ] Rebalance weights so `sst_cooling` dominates the loss (verify via Stage 0 breakdown)
-- [ ] Consider adding time-of-rollout as a feature (policy may need schedule-dependence)
+### Stage 2: Fix Features & Loss for Policy Training ✅ COMPLETE (2026-07-02) — GATE OPEN
 
-### Stage 3: Neural Network Policy Training (the end goal)
+Verification script: `run_stage2_verification.py` (3 tests, all PASS — see Change Log for numbers).
+
+- [x] Precompute **paired no-MCB baseline trajectory** over the full training window: `CoupledBaselineTrajectory` struct + `compute_baseline_trajectory()` (single `lax.scan` from the same initial carry; per-step SST, surface T, precipitation, heat flux; `at_step(t)` supports traced indices)
+- [x] Features: `X(t) − X_baseline(t)` — `extract_coupled_features` takes `baseline_trajectory.at_step(t_start)`; verified anomalies are **bitwise zero** under zero MCB (drift cancels exactly)
+- [x] Loss: paired difference vs baseline trajectory at matching timestep (`at_step(t_end)` inside each control interval)
+- [x] Removed Amazon/Sahel/tropics terms for aquaplanet (`CoupledLossWeights` defaults now 0.0; zero-weight components skipped at trace time to kill constant offsets like softplus(0))
+- [x] Rebalanced weights so `sst_cooling` dominates: verified breakdown = **100.0%** sst_cooling at zero MCB (raw = target² exactly)
+- [x] Added time-of-rollout feature (`include_time=True`, feature dim 11) — non-zero policy input at the first interval where paired anomalies are exactly 0
+
+### Stage 3: Neural Network Policy Training (the end goal) ⏳ NEXT
 
 - [ ] Warm-start: initialize output-layer bias so the initial policy output ≈ Stage 1 optimized pattern magnitude (avoids re-escaping the trivial attractor)
 - [ ] Retrain on diya GPU (pipeline proven fast: ~15.5 s/epoch, 200 epochs ≈ 50 min)
@@ -857,19 +867,22 @@ python analyze_training.py
 - [x] Gradient check: `d(SST)/d(uniform_mcb_scalar)` = -0.752 K/unit (AD), matches finite differences within 1.6%
 - [x] Per-component loss breakdown logged (`run_stage0_plumbing_test.py`): uniformity-vs-initial-state dominates 92-98% → confirms Stage 2 paired-baseline requirement
 
-### ⏳ NEXT (Stage 1 — static pattern optimization)
-- [ ] Create `optimize_mcb_pattern.py`: optimize 96×48 field directly (no NN) through coupled model
-- [ ] Loss: paired SST cooling + uniformity + reg + smoothness (drop Amazon/Sahel — aquaplanet)
-- [ ] Deliverable: optimal spatial pattern + reference loss scale
+### ✅ Stage 1 — static pattern optimization (COMPLETE 2026-07-01)
+- [x] Created `optimize_mcb_pattern.py`: optimizes 96×48 field directly (no NN) through coupled model
+- [x] Loss: paired SST cooling + uniformity + reg + smoothness (no Amazon/Sahel — aquaplanet)
+- [x] Result: **-0.097 K achieved (target -0.1 K)**, structured pattern (peak ~50°N); best loss 0.004497 = Stage 3 reference; artifact: `stage1/stage1_optimized_pattern.pkl`
 
-### Then (Stage 2 — fix features & loss)
-- [ ] Precompute paired no-MCB baseline **trajectory** (180-day coupled run, per-step outputs saved)
-- [ ] Features and loss computed as `X(t) − X_baseline(t)` (isolates MCB effect from drift)
-- [ ] Remove land teleconnection terms from `CoupledLossWeights` for aquaplanet
-- [ ] Rebalance weights so `sst_cooling` dominates
+### ✅ Stage 2 — fix features & loss (COMPLETE 2026-07-02, GATE OPEN)
+- [x] Paired no-MCB baseline **trajectory**: `CoupledBaselineTrajectory` + `compute_baseline_trajectory()`; `run_coupled_training.py` precomputes and pickles it
+- [x] Features and loss computed as `X(t) − X_baseline(t)` at matching timesteps — verified **bitwise** drift cancellation
+- [x] Land teleconnection terms removed for aquaplanet (weights 0.0, skipped at trace time)
+- [x] Weights rebalanced: zero-MCB loss is **100% sst_cooling** (= target²)
+- [x] Time-of-rollout feature added (dim 11); BPTT gradient through interval-indexed unroll verified (|grad| = 7.29, no NaNs)
+- [x] Gate script: `run_stage2_verification.py` — all 3 tests PASS
 
-### Then (Stage 3 — NN policy training)
-- [ ] Warm-start output bias from Stage 1 pattern
+### ⏳ NEXT (Stage 3 — NN policy training)
+- [ ] Re-sync codebase to diya (Stage 2 changes not yet on the GPU box; exclude `mcb_experiments*`/`*.pkl` to protect artifacts)
+- [ ] Warm-start output bias from Stage 1 pattern (`mcb_experiments_gpu/stage1/stage1_optimized_pattern.pkl`)
 - [ ] Retrain on diya GPU
 - [ ] Success gates: loss ≤ static-pattern loss; non-constant spatial output; measurable paired cooling
 
@@ -893,27 +906,18 @@ python analyze_training.py
 
 ## Known Issues
 
-### ⚠️ Critical: Baseline Feature Issue (Blocks Training)
+### ✅ RESOLVED: Baseline Feature Issue (Was Blocking Training)
 
-**Problem**: `CoupledBaseline.from_coupled_carry(initial_carry, coords)` creates the baseline from the **initial simulation state**. When training starts from the same initial state, all anomaly features are zero:
+**Problem**: `CoupledBaseline.from_coupled_carry(initial_carry, coords)` created the baseline from the **initial simulation state**. When training starts from the same initial state, all anomaly features were zero → policy could only learn the bias term (constant output, no cooling). Anomalies vs a static baseline also conflated MCB effect with natural drift (+0.29 K / 90 days).
 
-```python
-# At training start:
-current_sst = initial_sst  # Same value
-baseline_sst = initial_sst  # Same value (computed from initial_carry)
-sst_anomaly = current_sst - baseline_sst  # = 0 everywhere!
-```
+**Fix (implemented, Stage 2 2026-07-02)**: Paired no-MCB baseline **trajectory**
+(`CoupledBaselineTrajectory` + `compute_baseline_trajectory()` in `jcm/mcb/coupled_features.py`).
+Features and loss are computed as `X(t) − X_baseline(t)` at matching timesteps, isolating the
+MCB-caused signal from drift exactly. A time-of-rollout feature (`include_time=True`) gives the
+policy a non-zero input at the first interval, where paired anomalies are exactly 0 by construction.
 
-**Impact**:
-- All input features to policy network are zeros
-- Policy learns to output only the bias term (constant ~0.002)
-- No spatial structure, no meaningful MCB forcing
-- No cooling achieved
-
-**Fix chosen**: Paired no-MCB baseline **trajectory** (see Revised Roadmap Stage 2). Features and loss
-computed as `X(t) − X_baseline(t)`, which isolates the MCB-caused signal from natural model drift.
-
-**Status**: Identified during Phase 8 GPU training. Fix scheduled in Stage 2.
+**Verified** (`run_stage2_verification.py` Test 1): zero-MCB rollout matches the precomputed
+trajectory **bitwise** (max |dSST| = 0.0); all anomaly features = 0.0; time feature exact.
 
 ### ✅ RESOLVED: Dynamic MCB Injection Path Was Broken (Silent Zero)
 
@@ -931,25 +935,30 @@ gradients w.r.t. the ocean pathway were structurally zero — the policy could n
 The JEM step injects via `forcing.copy(mcb_perturbation=...)`. The mutation-based API was removed.
 Verified: -0.407 K / 60 days effect; AD gradient matches finite differences within 1.6%.
 
-### ⚠️ Loss Dominated by Terms the Policy Cannot Influence
+### ✅ RESOLVED: Loss Dominated by Terms the Policy Cannot Influence
 
 **Problem**: Final training loss was 5.33, but with ΔSST≈0 and target -0.1 K, the `sst_cooling` term
-contributes only ~0.01. The remaining ~5.3 comes from precipitation/uniformity terms computed against
-the same broken zero baselines — large near-constants with near-zero gradients w.r.t. the policy.
-Regularization + smoothness then actively push output toward zero. **The trivial solution is the
-attractor of this loss configuration.**
+contributed only ~0.01. The remaining ~5.3 came from precipitation/uniformity terms computed against
+broken zero baselines — large near-constants with near-zero gradients w.r.t. the policy.
+Regularization + smoothness then actively pushed output toward zero: the trivial solution was the
+attractor of that loss configuration.
 
-**Fix**: Stage 0 per-component loss logging; Stage 2 rebalancing so `sst_cooling` dominates.
+**Fix (implemented, Stage 2 2026-07-02)**: `CoupledLossWeights` defaults rebalanced to the
+Stage 1-proven set (sst_cooling=1.0, sst_uniformity=0.1, reg=0.001, smoothness=0.001); zero-weight
+components are skipped at trace time (kills constant offsets like softplus(0)/100). Verified
+(`run_stage2_verification.py` Test 2): at zero MCB with the paired baseline, the loss is
+**100.0% sst_cooling** (raw = target² exactly) — the cooling objective is now the attractor.
 
-### ⚠️ Aquaplanet Configuration vs Land Teleconnection Terms
+### ✅ RESOLVED: Aquaplanet Configuration vs Land Teleconnection Terms
 
 **Problem**: Experiments use `TerrainData.aquaplanet(coords)` — there is **no land** — yet the coupled
-loss penalizes Amazon and Sahel precipitation. These terms are physically meaningless in this
-configuration and only add noise/constants to the loss.
+loss penalized Amazon and Sahel precipitation. These terms are physically meaningless in this
+configuration and only added noise/constants to the loss.
 
-**Fix**: Drop Amazon/Sahel terms for aquaplanet runs (Stage 2). Reinstate them when switching to
-realistic terrain + boundary conditions (Stage 4), which is when the original research goal
-(cooling with minimized teleconnections) becomes fully testable.
+**Fix (implemented, Stage 2 2026-07-02)**: Amazon/Sahel/tropics weights default to 0.0 and
+zero-weight terms are skipped entirely (verified exactly 0.0 in the Test 2 breakdown). Reinstate
+them when switching to realistic terrain + boundary conditions (Stage 4), which is when the original
+research goal (cooling with minimized teleconnections) becomes fully testable.
 
 ### NumPy 2.x Compatibility Warning
 Some dependencies (numexpr, sklearn) show warnings about NumPy 2.x compatibility but continue to function. The warnings can be ignored or resolved by reinstalling affected packages.
@@ -985,6 +994,31 @@ First training attempt showed minimal convergence:
 ---
 
 ## Change Log
+
+### 2026-07-02: Stage 2 Complete — Paired Baseline Trajectory Features & Loss (GATE OPEN)
+- **`jcm/mcb/coupled_features.py`**: added `CoupledBaselineTrajectory` (tree_math.struct; per-step `sst`/`surface_temperature`/`precipitation`/`heat_flux`, shape (T+1, ix, il); `at_step(t)` works with traced indices) and `compute_baseline_trajectory()` (single zero-MCB `lax.scan` from the same initial carry). `extract_coupled_features` gained `time_fraction`; `CoupledFeatureConfig.include_time=True` appends a normalized time-of-rollout feature (feature dim now 11)
+- **`jcm/mcb/coupled_loss.py`**: `CoupledLossWeights` defaults rebalanced to the Stage 1-proven aquaplanet set (sst_cooling=1.0, sst_uniformity=0.1, amazon/sahel/tropics=0.0, reg/smoothness=0.001); zero-weight components skipped at trace time (removes constant offsets like softplus(0)/100 ≈ 0.00693 and wasted compute)
+- **`jcm/mcb/coupled_controller.py`**: control step now scans over interval indices, extracting features vs `trajectory.at_step(t_start)` (with `time_fraction`) and computing loss vs `trajectory.at_step(t_end)`; added `run_interval_final_carry` (per-day `jax.checkpoint`, trajectory-discarding scan — the proven Stage 1 memory pattern, now inside BPTT); defaults `total_steps=180`, `target_cooling=-0.1`; `baseline` → `baseline_trajectory` throughout
+- **`jcm/mcb/coupled_train.py`**, **`jcm/mcb/__init__.py`**: threaded `baseline_trajectory`; exported `CoupledBaselineTrajectory`, `compute_baseline_trajectory`
+- **`run_coupled_training.py`**: precomputes and pickles the paired 180-day baseline trajectory before training; `include_time=True`; Stage 2 loss weights; `--target-cooling` default -0.1; dead imports removed (ruff clean)
+- **Created `run_stage2_verification.py`** (gate script) — all 3 tests PASS (local CPU, 6-day/2-interval config):
+  - Test 1 (paired cancellation): zero-MCB rollout vs trajectory max |dSST| = **0.000e+00 K** (bitwise); mid-rollout anomaly features all 0.0; time feature = 0.500 exact
+  - Test 2 (loss breakdown): zero-MCB loss = **100.0% sst_cooling**, raw 0.010000 = target² exactly; amazon/sahel/tropics/uniformity/reg/smoothness all exactly 0
+  - Test 3 (gradient): BPTT through the full Stage 2 unroll (trajectory indexing + time feature + checkpointed interval runner): loss 0.012060, **|grad| = 7.292**, no NaNs, not all-zero
+- **Resolves post-mortem Issues #2, #3, #4, #5** (zero features, uncontrollable loss terms, land terms on aquaplanet, static baseline)
+- **Next**: Stage 3 (NN policy training on diya, warm-started from Stage 1 pattern; re-sync codebase to diya first)
+
+### 2026-07-01: Stage 1 Complete — Direct Pattern Optimization Succeeded (BOTH CRITERIA MET)
+- **Created `optimize_mcb_pattern.py`**: optimizes the 96x48 albedo pattern directly (no NN) through the coupled model; sigmoid-bounded parameterization (`max_amplitude * sigmoid(theta) * ocean_mask`); paired no-MCB baseline from the same initial state; loss = cooling + uniformity + reg + smoothness (no land terms on aquaplanet); memory-efficient trajectory-discarding scan with per-day `jax.checkpoint`
+- **Run on diya GPU**: 150 iters, 60-day rollouts, lr 0.05, target -0.1 K, max amplitude 0.15; 26.0 s/iter, ~65 min total
+- **Results**:
+  - Achieved dSST **-0.0972 K** vs target -0.1 K (criterion |diff| < 0.02 → **MET**)
+  - Pattern spatially **STRUCTURED**: std 0.0291 (criterion > 0.005 → MET); range 0.0045–0.132; zonal-mean peak 0.116 at ~50°N; ~0.02 background elsewhere; within-band longitudinal std up to 0.03
+  - Best loss **0.004497** — reference loss scale for Stage 3 policy training
+  - Residual loss dominated by uniformity (~0.05–0.07 raw), i.e. weather noise in the paired 60-day difference
+- **Artifacts**: `mcb_experiments_gpu/stage1/stage1_optimized_pattern.pkl` (best_theta for warm-start, best_pattern, history, baseline_sst) + `stage1.log`, retrieved from diya
+- **Conclusion**: the inverse problem is solvable through the coupled model; gradients are informative end-to-end over 60 days. Any Stage 3 failure is now attributable to features/loss/architecture, not the simulator
+- **Next**: Stage 2 (paired baseline trajectory features + loss rebalancing)
 
 ### 2026-07-01: Stage 0 Complete — Injection Plumbing Was Broken, Now Fixed (GATE OPEN)
 - **Created `run_stage0_plumbing_test.py`**: reuses the exact training path (`setup_coupled_model`, `create_coupled_step_fn`, `run_coupled_interval`, carry-based injection); 3 tests: forward plumbing, AD gradient (+ FD cross-check), loss breakdown
