@@ -29,6 +29,7 @@ import jax_datetime as jdt
 import jcm
 from jcm.physics.speedy.speedy_coords import get_speedy_coords
 from jcm.terrain import TerrainData
+from jcm.forcing import ForcingData
 
 # MCB imports
 from jcm.mcb import (
@@ -102,28 +103,88 @@ def warm_start_params(policy, feature_dim, stage1_path):
     return params
 
 
-def setup_coupled_model(start_datetime, coupling_timestep):
-    """Set up the coupled atmosphere-ocean model."""
-    print("Setting up coupled model...")
+# T30 climatology terrain (orography + land-sea mask) shared by the
+# atmosphere (Model.terrain) and the ocean land mask (SlabOceanModel.mask_file).
+TERRAIN_NC = "jcm/data/bc/t30/clim/terrain.nc"
+# T30 climatology surface forcing (land surface temperature, soil moisture,
+# snow, albedo, SST). Required for numerical stability over realistic terrain:
+# SPEEDY land-surface physics over steep orography needs real land boundary
+# conditions, otherwise the atmosphere blows up (NaN within ~1 day).
+FORCING_NC = "jcm/data/bc/t30/clim/forcing.nc"
+
+
+def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=False):
+    """Set up the coupled atmosphere-ocean model.
+
+    Args:
+        start_datetime: Simulation start datetime (jax_datetime.Datetime).
+        coupling_timestep: Coupler timestep (jax_datetime.Timedelta).
+        realistic_terrain: When True (Stage 5+), load T30 climatology terrain
+            (orography + land-sea mask) into BOTH the atmosphere (activating
+            orography and SPEEDY land-surface physics) and the slab ocean's
+            land mask (pinning land cells to a fixed temperature so only ocean
+            SST evolves). When False (default), the aquaplanet is used, keeping
+            all Stage 1-4 paths unchanged.
+
+    Returns:
+        Tuple of (coupler, coords, terrain, atm_model). `terrain.fmask` gives
+        the land-sea mask; `1.0 - terrain.fmask` is the ocean mask used for
+        MCB application and ocean-masked loss/features.
+
+    """
+    print("Setting up coupled model"
+          f" ({'realistic terrain' if realistic_terrain else 'aquaplanet'})...")
 
     # Get coordinates and terrain
     coords = get_speedy_coords()
-    terrain = TerrainData.aquaplanet(coords)
+    if realistic_terrain:
+        terrain = TerrainData.from_file(TERRAIN_NC, coords, lfluxland=True)
+    else:
+        terrain = TerrainData.aquaplanet(coords)
 
-    # Create atmosphere model (no static MCB - will be dynamic from policy)
+    # Create atmosphere model (no static MCB - will be dynamic from policy).
+    # Passing terrain= is the one wiring point that actually activates
+    # orography in the dynamics and land-surface physics in SPEEDY.
     atm_model = jcm.model.Model(
         start_date=start_datetime,
         coords=coords,
+        terrain=terrain if realistic_terrain else None,
     )
 
-    # Make JEM-compatible
-    atm_model = make_jem_compatible(atm_model, coupling_timestep)
+    # Surface forcing: over realistic terrain, supply real land-surface
+    # boundary conditions (land surface temperature, soil moisture, snow,
+    # albedo) so SPEEDY land physics is stable; the coupler still overrides
+    # SST every step from the ocean. On the aquaplanet, None keeps the JEM
+    # default forcing (Stage 1-4 behavior unchanged).
+    #
+    # ForcingData.from_file returns a 365-day annual cycle: land fields are
+    # 3D (ix, il, 365) and the model slices the current day internally each
+    # physics step (tree_index_3d). But the coupler writes a 2D (ix, il) SST
+    # into forcing.sea_surface_temperature every step; a 3D SST would break
+    # the lax.scan shape invariant (input 3D vs output 2D). So we collapse
+    # ONLY the SST field to 2D (day-0 climatology as a placeholder — the
+    # coupler overwrites it on the first coupling step) while keeping the 3D
+    # land annual cycle. tree_index_3d passes the 2D SST through unchanged.
+    atm_forcing = None
+    if realistic_terrain:
+        atm_forcing = ForcingData.from_file(FORCING_NC, coords)
+        atm_forcing = atm_forcing.copy(
+            sea_surface_temperature=atm_forcing.sea_surface_temperature[:, :, 0]
+        )
 
-    # Create slab ocean model (timestep needs to be in seconds as float)
+    # Make JEM-compatible
+    atm_model = make_jem_compatible(
+        atm_model, coupling_timestep, forcing=atm_forcing
+    )
+
+    # Create slab ocean model (timestep needs to be in seconds as float).
+    # On realistic terrain, mask_file pins land cells to a fixed temperature
+    # so only ocean SST evolves, consistent with the atmosphere land mask.
     timestep_seconds = 86400.0  # 1 day in seconds
     ocn_model = SlabOceanModel(
         start_datetime=start_datetime,
         timestep=timestep_seconds,
+        mask_file=TERRAIN_NC if realistic_terrain else None,
     )
 
     # Create mapper for atmosphere-ocean coupling

@@ -3,7 +3,7 @@
 import numpy as np
 
 from jcm.model import Model
-from jcm.forcing import default_forcing
+from jcm.forcing import ForcingData, default_forcing
 
 import jax
 import jax.numpy as jnp
@@ -29,14 +29,29 @@ def asfloat64(tree):
 def make_jem_compatible(
     model: Model,
     coupling_timestep: jdt.Timedelta,
+    forcing: ForcingData = None,
 ) -> Model:
     """Adapt the input jcm model to jem framework
-    
-    This function in-place injects `initialize`, `generate_step_function`, 
+
+    This function in-place injects `initialize`, `generate_step_function`,
     `predictions_to_xarray`, and `get_info` into jcm model object. Also, check
     if jcm's time step `dt_si` can perfectly divide `coupling_timestep`.
-    
-    """    
+
+    Args:
+        model: The jcm Model to adapt.
+        coupling_timestep: Coupler timestep (must be a multiple of model.dt_si).
+        forcing: Optional surface boundary conditions (ForcingData). When None
+            (default), aquaplanet `default_forcing` is used (prescribed SST,
+            zero land-surface fields) — the numerically stable configuration
+            over flat orography. Over REALISTIC terrain the land-surface fields
+            (stl_am, soilw_am, snowc_am, alb0) must be supplied via a
+            `ForcingData.from_file(...)`; without them SPEEDY land physics over
+            steep orography is unbalanced and the atmosphere blows up (NaN
+            within ~1 day). The coupler still overrides SST every step from the
+            ocean, so only the land-surface fields (and initial SST) come from
+            this argument.
+
+    """
    
     # Check if couopling_timestep is a multiple of jcm's native timestep
     timestep = jdt.to_timedelta(int(model.dt_si.to_timedelta().total_seconds()), "second")
@@ -48,12 +63,18 @@ def make_jem_compatible(
     _timestep_days = float((timestep / jdt.to_timedelta(1, "day")).item())
     _coupling_timestep_days = float((coupling_timestep / jdt.to_timedelta(1, "day")).item())
 
+    # Resolve surface forcing once: realistic land-surface boundary conditions
+    # if provided, else aquaplanet default (prescribed SST, zero land fields).
+    _forcing = forcing if forcing is not None else default_forcing(
+        model.coords.horizontal
+    )
+
     D2_nodal_shape = model.coords.nodal_shape[1:]
     def initialize():
 
         state=model._prepare_initial_modal_state()
-        forcing = default_forcing(model.coords.horizontal)
-        
+        forcing = _forcing
+
         # Predictions shape is still morphing in the development.
         # Use run_from_state to get the shape of predictions. This might
         # cost a few second extra but will be resilience to major code

@@ -142,5 +142,85 @@ class TestAbsoluteSSTFeatures(unittest.TestCase):
         self.assertFalse(jnp.allclose(fa[11:], fb[11:]))
 
 
+class TestOceanMaskedFeatures(unittest.TestCase):
+    """Stage 5 ocean-masking of area-weighted feature means."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.coords = get_speedy_coords()
+        cls.shape = cls.coords.horizontal.nodal_shape
+        cls.config = CoupledFeatureConfig(include_absolute_sst=True)
+        ix, il = cls.shape
+        land = jnp.zeros(cls.shape).at[: ix // 2, :].set(1.0)
+        cls.ocean_mask = 1.0 - land
+        cls.land = land
+
+    def _extract(self, carry, ocean_mask):
+        baseline = CoupledBaseline.from_coupled_carry(carry, self.coords)
+        return extract_coupled_features(
+            carry, baseline, self.coords, self.config,
+            time_fraction=0.3, ocean_mask=ocean_mask,
+        )
+
+    def test_invariant_to_land_sst_values(self):
+        """Ocean-masked features are unchanged by arbitrary land SST values."""
+        ocean_sst = jnp.full(self.shape, 289.0)
+        sst_a = jnp.where(self.ocean_mask > 0, ocean_sst, 350.0)
+        sst_b = jnp.where(self.ocean_mask > 0, ocean_sst, 150.0)
+
+        fa = self._extract(
+            make_fake_carry(self.coords, sst_field=sst_a), self.ocean_mask
+        )
+        fb = self._extract(
+            make_fake_carry(self.coords, sst_field=sst_b), self.ocean_mask
+        )
+        self.assertTrue(jnp.allclose(fa, fb, atol=1e-5))
+
+    def test_none_reproduces_unmasked(self):
+        """ocean_mask=None matches an all-ones mask (aquaplanet behavior).
+
+        The paths are mathematically identical but differ at float32
+        precision: an all-ones mask renormalizes the area weights (which sum
+        to 0.9999994, not exactly 1). atol=5e-4 covers the amplified
+        renormalization noise on the ~288 K absolute-SST features (float32
+        precision near 288 K is ~2e-4, consistent with the places=3 used in
+        test_global_mean_sst_offset above).
+        """
+        carry = make_fake_carry(self.coords, sst_value=288.5)
+        f_none = self._extract(carry, None)
+        f_ones = self._extract(carry, jnp.ones(self.shape))
+        self.assertTrue(jnp.allclose(f_none, f_ones, atol=5e-4))
+
+
+class TestTerrainActivation(unittest.TestCase):
+    """Smoke test that realistic terrain reaches the dynamics.
+
+    Aquaplanet orography is identically zero; loading the T30 climatology
+    terrain into the Model must produce a non-zero truncated_orography,
+    proving orography reaches the spectral dynamical core.
+    """
+
+    def test_realistic_orography_nonzero(self):
+        import jcm.model
+        from jcm.terrain import TerrainData
+
+        coords = get_speedy_coords()
+
+        aqua = jcm.model.Model(coords=coords)
+        self.assertAlmostEqual(
+            float(jnp.max(jnp.abs(aqua.truncated_orography))), 0.0, places=6
+        )
+
+        terrain = TerrainData.from_file(
+            "jcm/data/bc/t30/clim/terrain.nc", coords, lfluxland=True
+        )
+        realistic = jcm.model.Model(coords=coords, terrain=terrain)
+        self.assertGreater(
+            float(jnp.max(jnp.abs(realistic.truncated_orography))), 0.0
+        )
+        # And the land-sea mask marks some land.
+        self.assertGreater(float(jnp.sum(terrain.fmask)), 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -39,7 +39,8 @@ This plan outlines the implementation of a **neural network-based feedback contr
 - ✅ **Stage 2 complete** - paired no-MCB baseline **trajectory** features/loss implemented and verified (`run_stage2_verification.py`): bitwise drift cancellation, loss 100% cooling-dominated at zero MCB, finite non-zero BPTT gradients. **GATE OPEN**
 - ✅ **Stage 3 complete** - NN policy trained on diya (60-day horizon, warm-started from Stage 1): **-0.1015 K** paired cooling (target -0.1 K, beats static pattern's -0.0972 K), state-dependent output (interval forcing differs by up to 0.141), loss ≈ Stage 1 reference. 180-day horizon FAILED (exploding BPTT gradients 1e7–1e13) — 60 days is the proven trainable horizon
 - ⚠️ **Stage 4 complete (3/4 gates)** - varied-IC ensemble training on diya (4 train ICs @ spin-up days 0/45/90/135 + 2 held-out @ 180/225; 60-day/2×30-day BPTT; warm-started from Stage 3, input dim 11→13 via zero-padded `expand_policy_input` + 2 absolute-SST features). Early-stopped epoch 26 (best epoch 6, mean train loss 0.012925; ~122 s/epoch; no NaNs). Eval over 6 ICs × 3 policies: **Gate 2 PASS** (stage4 held-out loss 0.008416 ≤ stage1-static 0.009495, < stage3 0.009607); **Gate 3 PASS** (genuine state-dependence: cross-IC forcing std interval-0 = 6.6e-5, interval-1 = 4.2e-3, vs ~1e-9 structural zero for 11-feature policies — the absolute-SST features enable interval-0 state-dependence); **Gate 4 PASS** (stable, early-stopped ≪150 epochs). **Gate 1 FAIL**: held-out mean day-60 dSST −0.1285 K overshoots the [−0.12, −0.08] window (train dSST −0.1044 K is on-target; stage4's held-out cooling is nonetheless the closest-to-target of all three policies vs stage3 −0.1503, stage1 −0.1325). Artifacts in `mcb_experiments_gpu/stage4/`
-- ⏳ **NEXT**: Stage 4 follow-up (tune held-out cooling magnitude / target weighting to bring held-out dSST into the gate window) or Stage 5 (realistic terrain + teleconnection penalties)
+- ✅ **Stage 5 code-complete + local smoke verified** - realistic terrain (T30 orography + land-sea mask) + reinstated teleconnection penalties (amazon/sahel/tropics @ 0.05); ocean-masked loss/features (`ocean_mask=None` keeps Stages 1-4 bit-identical). Two verification-time correctness fixes: (a) realistic surface forcing (`ForcingData.from_file`) threaded into the JEM wrapper is REQUIRED for stability over terrain (atmosphere NaNs in ~1 day without it); (b) ocean mask sourced from the slab ocean model's own grid `bmask` (`ocean_mask_from_coupler`), not `terrain.fmask` (which disagrees at 56 T30 coastal cells). `pytest jcm/mcb/` 86 passed, ruff clean, IC-gen→training→eval smoke runs; Gate 1 (orography) + Gate 4 (stability) PASS. **Pending: full diya GPU run** (150-epoch warm-start from Stage 4, 6-IC eval, 4 gates)
+- ⏳ **NEXT**: Stage 5 diya GPU run (then check gates); Stage 4 follow-up (Option A seasonal bracketing) applies to the Stage 5 held-out Gate 2 as well
 
 ---
 
@@ -127,6 +128,82 @@ per MCB_CONTEXT.md):
 - [ ] Verify policy output actually depends on state (responds differently to different climates)
 - [ ] Later: switch to realistic terrain + seasonal boundary conditions → reinstate Amazon/Sahel teleconnection penalties (this is when the original research goal — cooling with minimized teleconnections — becomes fully testable)
 - [ ] Long-horizon stability evaluation (multi-year rollout with trained policy)
+
+### Stage 4 Follow-up (Option A) — TODO: Fix Gate-1 held-out overcooling via seasonal bracketing
+
+**Gate 1 FAILED in Stage 4**: held-out mean day-60 dSST −0.1285 K overshot the target band
+[−0.12, −0.08] K (train dSST −0.1044 K is on-target).
+
+**Root cause (from Stage 4 eval):** the held-out ICs (spin-up days 180, 225) lie *beyond* the
+training range {0, 45, 90, 135}, so the policy must **extrapolate**. The system's cooling
+sensitivity rises monotonically with spin-up day — the teleconnection-free stage1-static baseline
+dSST steepens −0.095 → −0.148 K across the spin-up axis — so extrapolating past day 135 makes the
+policy **overcool** the later (more sensitive) held-out states.
+
+**Fix — bracket held-out seasons with training seasons (interpolation, not extrapolation):**
+regenerate ICs so every held-out spin-up day is *inside* the convex hull of the training days.
+For example:
+
+- Train spin-up days: {0, 45, 90, 135, 180, 225}
+- Held out (interpolated): {70, 200}
+
+Both held-out points now fall *between* training points, converting extrapolation into
+interpolation. This is expected to bring held-out day-60 dSST into the [−0.12, −0.08] K gate window
+without changing any loss weights or the policy architecture — only the IC-generation schedule in
+`run_stage4_generate_ics.py` (`--spinup-interval`, `--num-train`, `--num-heldout`) changes.
+
+**Status:** deferred. Stage 5 (realistic terrain) proceeds first per the current roadmap; this
+bracketing fix is orthogonal and applies to both the aquaplanet Stage 4 and the realistic Stage 5
+held-out gates.
+
+### Stage 5: Realistic Terrain + Teleconnection Penalties ✅ CODE-COMPLETE + LOCAL SMOKE VERIFIED (GPU run pending)
+
+Moves the controller from the aquaplanet to **realistic Earth terrain** (T30 climatology: orography
++ land-sea mask) and **reinstates the teleconnection precipitation penalties** (amazon / sahel /
+tropics @ 0.05) that were structurally zero on the aquaplanet. Reuses the Stage 4 ensemble
+machinery (varied-IC BPTT, 13-feature state-dependent policy, paired baselines, host-side gradient
+averaging); the deltas are terrain wiring and ocean-masking of the objective/features.
+
+**Implemented (all `ocean_mask=None` defaults keep Stages 1–4 aquaplanet paths bit-identical):**
+- `jcm/mcb/coupled_loss.py`: `compute_coupled_loss` takes optional `ocean_mask`; renormalizes area
+  weights over ocean for `sst_cooling_loss` / `sst_uniformity_loss`.
+- `jcm/mcb/coupled_features.py`: `extract_coupled_features` takes optional `ocean_mask`;
+  ocean-renormalizes the area-weighted global means (SST, heat flux, precip, absolute-SST, NH-SH).
+- `jcm/mcb/coupled_controller.py`: threads `ocean_mask` into the per-interval loss/feature calls.
+- `run_coupled_training.py` `setup_coupled_model(realistic_terrain=)`: passes
+  `terrain=TerrainData.from_file(TERRAIN_NC)` into `Model(...)` and `mask_file=TERRAIN_NC` into the
+  slab ocean model.
+- Drivers `run_stage5_generate_ics.py`, `run_stage5_training.py`, `run_stage5_eval.py` (warm-start
+  from Stage 4 dim-13 policy, no expand).
+
+**Two correctness findings during verification (not in the original plan):**
+
+1. **Realistic surface forcing is REQUIRED for numerical stability over terrain.** The atmosphere
+   NaNs within ~1 day over steep orography without land-surface boundary conditions. The JEM wrapper
+   (`jax-esm/jem/components/JCM.py:make_jem_compatible`) previously hardcoded aquaplanet
+   `default_forcing()` (zero land fields). Fix: thread `ForcingData.from_file(FORCING_NC)` (stl_am /
+   soilw_am / snowc_am / alb0) into the wrapper. Verified decisive: 40 min + no forcing → NaN; 30 min
+   + forcing → stable. Only the SST field is collapsed to 2D (day-0; the coupler overwrites it each
+   step) to satisfy the `lax.scan` shape invariant while keeping the 3D land annual cycle.
+2. **The ocean mask must come from the slab ocean model's own grid `bmask`, not `terrain.fmask`.**
+   The ocean model pins land (SST ≡ 288.15 K) where its grid `bmask` = `fmask > 0.95`.
+   `TerrainData.from_file` interpolates `fmask` on an independent path that disagrees with the ocean
+   grid by up to ~0.1 at coastlines (**56 mismatched T30 cells**). Using `1 - terrain.fmask` would
+   drop genuine evolving-SST ocean cells and could weight pinned-land cells. Fix: new
+   `ocean_mask_from_coupler(coupler)` (= `1 - bmask`) and `ocean_fmask_from_coupler(coupler)` in
+   `jcm/mcb/coupled_train.py`; drivers source the mask from the coupler. Verified: mask matches the
+   ocean bmask cell-for-cell (1197 land cells), **zero ocean-weighted cells carry the pinned 288.15 K
+   temperature**, and the trainer/eval/pre-flight masks are identical.
+
+**Local CPU smoke (6-day / 2-epoch):** `pytest jcm/mcb/ -m "not slow"` 86 passed; `ruff` clean;
+full IC-gen → training → eval pipeline runs with finite decreasing losses, clean baselines, and
+populated per-region precip diagnostics. Gate 1 (orography 812.7, terrain reaches dynamics) PASS;
+Gate 4 (no NaNs, finite losses) PASS. Gate 2 (cooling band) and Gate 3 (teleconnection protection)
+are only meaningful at the 60-day / warm-start GPU scale.
+
+**Pending:** full diya GPU run (150-epoch training warm-started from `stage4_trained_policy.pkl`;
+6-IC eval); check the 4 gates; record results here. The Stage 4 Follow-up (Option A) seasonal
+bracketing applies to the Stage 5 held-out Gate 2 as well.
 
 ---
 

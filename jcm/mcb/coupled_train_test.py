@@ -23,6 +23,9 @@ from jcm.mcb.coupled_features import (
 from jcm.mcb.coupled_train import (
     create_coupled_eval_fn,
     create_coupled_grad_fn,
+    ocean_fmask_from_coupler,
+    ocean_mask_from_coupler,
+    ocean_mask_from_fmask,
     train_coupled_policy_ensemble,
 )
 from jcm.mcb.policy import MCBPolicyMLP
@@ -89,6 +92,108 @@ class FakeCoupler:
             }
             return new_carry, None
         return step_fn
+
+
+class TestOceanMaskFromFmask(unittest.TestCase):
+    """The ocean mask must match the slab ocean model's land-sea convention.
+
+    The slab ocean model (builtin_grid_generator.load_jcm_mask) treats a cell
+    as land (pins SST to 288.15 K) only when fmask > 0.95, and evolves SST
+    everywhere else. The MCB loss/features must weight exactly those
+    evolving-SST cells, so the mask is binary (1 - bmask), NOT fractional.
+    """
+
+    def test_aquaplanet_all_ocean(self):
+        """Zero land fraction -> all-ocean mask (aquaplanet unchanged)."""
+        fmask = jnp.zeros((4, 3))
+        self.assertTrue(jnp.array_equal(
+            ocean_mask_from_fmask(fmask), jnp.ones((4, 3))
+        ))
+
+    def test_binary_threshold_at_0p95(self):
+        """Cells are land iff fmask > 0.95; coastal cells stay ocean."""
+        fmask = jnp.array([0.0, 0.5, 0.9, 0.95, 0.96, 1.0])
+        # 0.95 is NOT > 0.95 -> ocean; only 0.96 and 1.0 are land.
+        expected = jnp.array([1.0, 1.0, 1.0, 1.0, 0.0, 0.0])
+        self.assertTrue(jnp.array_equal(
+            ocean_mask_from_fmask(fmask), expected
+        ))
+
+    def test_output_is_binary(self):
+        """Fractional inputs never produce fractional mask values."""
+        fmask = jnp.linspace(0.0, 1.0, 21)
+        mask = ocean_mask_from_fmask(fmask)
+        self.assertTrue(jnp.all((mask == 0.0) | (mask == 1.0)))
+
+    def test_coastal_cells_treated_as_ocean(self):
+        """A 90%-land coastal cell must be full-weight ocean, not 0.1.
+
+        This is the correctness fix: the ocean model evolves SST there, so the
+        loss must weight it fully rather than down-weighting to 1 - 0.9 = 0.1.
+        """
+        fmask = jnp.array([0.9])
+        self.assertEqual(float(ocean_mask_from_fmask(fmask)[0]), 1.0)
+
+
+class _FakeGrid:
+    def __init__(self, bmask, fmask):
+        self.bmask = bmask
+        self.fmask = fmask
+
+
+class _FakeOceanComponent:
+    def __init__(self, bmask, fmask):
+        self.raw_component = type(
+            "_Raw", (), {"horizontal_grids": {"T": _FakeGrid(bmask, fmask)}}
+        )()
+
+
+class _FakeCouplerWithGrid:
+    def __init__(self, bmask, fmask):
+        self.components = {"ocn": _FakeOceanComponent(bmask, fmask)}
+
+
+class TestOceanMaskFromCoupler(unittest.TestCase):
+    """The authoritative mask must come from the ocean model's own grid.
+
+    TerrainData.from_file's fmask is interpolated independently and disagrees
+    with the ocean grid at coastlines; the loss/features must use the ocean
+    grid's own bmask so masked cells match the SST-pinning cells exactly.
+    """
+
+    def test_uses_grid_bmask_not_terrain_fmask(self):
+        """Ocean mask is 1 - bmask, independent of any terrain interpolation."""
+        bmask = jnp.array([[0.0, 1.0], [1.0, 0.0]])
+        # fmask deliberately disagrees with bmask at the threshold to prove
+        # bmask (not a fmask>0.95 recompute) is the source of truth.
+        fmask = jnp.array([[0.96, 0.94], [0.5, 0.0]])
+        coupler = _FakeCouplerWithGrid(bmask, fmask)
+        mask = ocean_mask_from_coupler(coupler)
+        self.assertTrue(jnp.array_equal(mask, 1.0 - bmask))
+
+    def test_ocean_fmask_returns_grid_fmask(self):
+        """ocean_fmask_from_coupler returns the ocean grid's fractional mask."""
+        bmask = jnp.array([[0.0, 1.0]])
+        fmask = jnp.array([[0.3, 0.97]])
+        coupler = _FakeCouplerWithGrid(bmask, fmask)
+        self.assertTrue(
+            jnp.array_equal(ocean_fmask_from_coupler(coupler), fmask)
+        )
+
+    def test_grid_fmask_threshold_reproduces_bmask(self):
+        """Passing the grid fmask through ocean_mask_from_fmask == 1 - bmask.
+
+        This is the invariant the drivers rely on: feeding the trainer the
+        ocean grid's fmask makes its internal binarization agree with the
+        pinning bmask cell-for-cell.
+        """
+        bmask = jnp.array([[0.0, 1.0], [0.0, 1.0]])
+        fmask = jnp.array([[0.5, 0.99], [0.95, 1.0]])  # >0.95 iff bmask==1
+        coupler = _FakeCouplerWithGrid(bmask, fmask)
+        grid_fmask = ocean_fmask_from_coupler(coupler)
+        self.assertTrue(jnp.array_equal(
+            ocean_mask_from_fmask(grid_fmask), 1.0 - bmask
+        ))
 
 
 class TestEnsembleGradients(unittest.TestCase):

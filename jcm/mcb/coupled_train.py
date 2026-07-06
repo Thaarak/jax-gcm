@@ -52,6 +52,77 @@ from jcm.mcb.train import (
     load_checkpoint,
 )
 
+# Land-fraction threshold above which a cell is treated as land. This matches
+# the slab ocean model's binary land-sea convention (builtin_grid_generator.
+# load_jcm_mask: `bmask = fmask > 0.95`). The ocean model pins any cell with
+# fmask > 0.95 to default_land_surface_temperature (288.15 K) and evolves SST
+# everywhere else. The MCB loss/features must weight exactly those evolving-SST
+# cells, so the ocean mask is binary (1 - bmask), NOT the fractional 1 - fmask:
+# a fractional mask would down-weight coastal ocean cells whose SST is live.
+_LAND_FMASK_THRESHOLD = 0.95
+
+
+def ocean_mask_from_fmask(terrain_fmask: jnp.ndarray) -> jnp.ndarray:
+    """Binary ocean mask matching the slab ocean model's land-sea convention.
+
+    Args:
+        terrain_fmask: Fractional land mask in [0, 1] (1.0 = all land).
+
+    Returns:
+        1.0 for ocean cells (fmask <= 0.95, SST evolves), 0.0 for land cells
+        (fmask > 0.95, SST pinned to 288.15 K by the slab ocean model).
+
+    """
+    return jnp.where(terrain_fmask > _LAND_FMASK_THRESHOLD, 0.0, 1.0)
+
+
+def ocean_mask_from_coupler(coupler) -> jnp.ndarray:
+    """Authoritative ocean mask read from the slab ocean model's own bmask.
+
+    The slab ocean model pins land cells to 288.15 K using its grid's binary
+    `bmask` (1 = land, 0 = ocean), built via load_jcm_mask from the `lsm`
+    variable and thresholded at fmask > 0.95. `TerrainData.from_file` uses a
+    DIFFERENT interpolation path, so `terrain.fmask` and the ocean grid's fmask
+    can disagree by up to ~0.1 at coastlines (observed 56 T30 cells). Sourcing
+    the mask from the ocean grid guarantees the masked loss/features weight
+    EXACTLY the cells whose SST actually evolves — no pinned-land contamination
+    and no spuriously dropped ocean cells.
+
+    Args:
+        coupler: JEM Coupler with an "ocn" component (SlabOceanModel).
+
+    Returns:
+        1.0 for ocean cells (SST evolves), 0.0 for land cells (pinned to
+        288.15 K). On the aquaplanet the ocean grid has no land, so this is
+        all ones.
+
+    """
+    ocn = coupler.components["ocn"]
+    raw = getattr(ocn, "raw_component", ocn)
+    bmask = raw.horizontal_grids["T"].bmask
+    return 1.0 - bmask
+
+
+def ocean_fmask_from_coupler(coupler) -> jnp.ndarray:
+    """Fractional land mask from the ocean model's own grid.
+
+    Returns the ocean grid's `fmask` (fraction of cell that is land). Threshold
+    at > 0.95 reproduces the grid's binary `bmask` exactly, so passing this as
+    `terrain_fmask` into the trainer makes the internal ocean_mask_from_fmask
+    binarization agree cell-for-cell with the ocean model's SST pinning —
+    unlike TerrainData.from_file's independently-interpolated fmask.
+
+    Args:
+        coupler: JEM Coupler with an "ocn" component (SlabOceanModel).
+
+    Returns:
+        Fractional land mask (ix, il) from the ocean model's grid.
+
+    """
+    ocn = coupler.components["ocn"]
+    raw = getattr(ocn, "raw_component", ocn)
+    return raw.horizontal_grids["T"].fmask
+
 
 def create_coupled_train_step(
     coupler,
@@ -291,7 +362,7 @@ def train_coupled_policy(
         - history: Dictionary with training history and metrics
 
     """
-    ocean_mask = 1.0 - terrain_fmask
+    ocean_mask = ocean_mask_from_fmask(terrain_fmask)
 
     # Initialize
     params, opt_state, optimizer = initialize_coupled_training(
@@ -466,7 +537,7 @@ def train_coupled_policy_ensemble(
     assert len(heldout_carries) == len(heldout_baselines)
     num_train = len(train_carries)
 
-    ocean_mask = 1.0 - terrain_fmask
+    ocean_mask = ocean_mask_from_fmask(terrain_fmask)
 
     # Initialize
     params, opt_state, optimizer = initialize_coupled_training(
@@ -643,7 +714,7 @@ def validate_coupled_training_setup(
     """
     print("Validating coupled training setup...")
 
-    ocean_mask = 1.0 - terrain_fmask
+    ocean_mask = ocean_mask_from_fmask(terrain_fmask)
 
     # Initialize policy
     rng_key = jax.random.PRNGKey(0)
@@ -735,7 +806,7 @@ def resume_coupled_training(
 
     print(f"Resuming from epoch {start_epoch}")
 
-    ocean_mask = 1.0 - terrain_fmask
+    ocean_mask = ocean_mask_from_fmask(terrain_fmask)
 
     # Create optimizer (will need to reinitialize state)
     optimizer = create_optimizer(training_config, training_config.num_epochs)

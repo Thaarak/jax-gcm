@@ -239,6 +239,7 @@ def extract_coupled_features(
     coords,
     config: CoupledFeatureConfig = CoupledFeatureConfig(),
     time_fraction: float = 0.0,
+    ocean_mask: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Extract features from coupled simulation state.
 
@@ -256,6 +257,12 @@ def extract_coupled_features(
         config: Feature extraction configuration.
         time_fraction: Normalized time-of-rollout in [0, 1]; used when
             config.include_time is True.
+        ocean_mask: Optional ocean mask (1.0 ocean, 0.0 land) with shape
+            (ix, il). When provided (realistic terrain, Stage 5+), every
+            area-weighted global/regional mean is restricted to ocean cells,
+            so land points pinned to a fixed temperature do not corrupt the
+            state-dependent features that drive the policy. Default None
+            reproduces the aquaplanet behavior (all cells) bit-for-bit.
 
     Returns:
         1D array of scalar features for policy input.
@@ -265,19 +272,35 @@ def extract_coupled_features(
     features = []
     grid = coords.horizontal
 
+    # Ocean-weighted global average helper: over ocean cells when a mask is
+    # given, else identical to jnp.sum(field * area_weights). Combining the
+    # ocean mask with any region mask and renormalizing keeps every mean on
+    # the ocean-only support (via compute_regional_mean's renormalization).
+    if ocean_mask is not None:
+        ocean_weights = area_weights * ocean_mask
+        ocean_weights = ocean_weights / jnp.sum(ocean_weights)
+    else:
+        ocean_weights = area_weights
+
+    def _global_mean(field):
+        return jnp.sum(field * ocean_weights)
+
+    def _regional_mean(field, region_mask):
+        if ocean_mask is not None:
+            region_mask = region_mask * ocean_mask
+        return compute_regional_mean(field, region_mask, area_weights)
+
     # --- Ocean SST features ---
     if config.include_sst:
         sst = coupled_carry["ocn"]["state"].sea_surface_temperature
 
         # Global SST anomaly
-        global_sst = jnp.sum(sst * area_weights)
-        baseline_sst = jnp.sum(baseline.sst * area_weights)
-        features.append(global_sst - baseline_sst)
+        features.append(_global_mean(sst) - _global_mean(baseline.sst))
 
         # Tropical SST (important for MCB targeting)
         tropical_mask = create_latitude_band_mask(coords, -30.0, 30.0)
-        tropical_sst = compute_regional_mean(sst, tropical_mask, area_weights)
-        tropical_baseline = compute_regional_mean(baseline.sst, tropical_mask, area_weights)
+        tropical_sst = _regional_mean(sst, tropical_mask)
+        tropical_baseline = _regional_mean(baseline.sst, tropical_mask)
         features.append(tropical_sst - tropical_baseline)
 
     # --- Stratocumulus region SST features ---
@@ -286,8 +309,8 @@ def extract_coupled_features(
 
         for region_name, bounds in STRATOCUMULUS_SST_REGIONS.items():
             region_mask = create_region_mask(grid, bounds[:2], bounds[2:])
-            region_sst = compute_regional_mean(sst, region_mask, area_weights)
-            region_baseline = compute_regional_mean(baseline.sst, region_mask, area_weights)
+            region_sst = _regional_mean(sst, region_mask)
+            region_baseline = _regional_mean(baseline.sst, region_mask)
             features.append(region_sst - region_baseline)
 
     # --- Atmospheric temperature features ---
@@ -295,17 +318,16 @@ def extract_coupled_features(
         atm_physics = coupled_carry["atm"]["derived"]["physics"]
         surf_temp = atm_physics.surface_flux.tsfc
 
-        global_temp = jnp.sum(surf_temp * area_weights)
-        baseline_temp = jnp.sum(baseline.surface_temperature * area_weights)
-        features.append(global_temp - baseline_temp)
+        features.append(
+            _global_mean(surf_temp) - _global_mean(baseline.surface_temperature)
+        )
 
     # --- Heat flux features ---
     if config.include_heat_flux:
         heat_flux = coupled_carry["atm"]["derived"]["total_heat_flux"]
-        global_flux = jnp.sum(heat_flux * area_weights)
+        global_flux = _global_mean(heat_flux)
         if baseline.heat_flux is not None:
-            baseline_flux = jnp.sum(baseline.heat_flux * area_weights)
-            features.append(global_flux - baseline_flux)
+            features.append(global_flux - _global_mean(baseline.heat_flux))
         else:
             features.append(global_flux)
 
@@ -316,24 +338,24 @@ def extract_coupled_features(
 
         # Tropical precipitation
         tropical_mask = create_latitude_band_mask(coords, -30.0, 30.0)
-        tropical_precip = compute_regional_mean(precip, tropical_mask, area_weights)
-        tropical_precip_baseline = compute_regional_mean(
-            baseline.precipitation, tropical_mask, area_weights
+        tropical_precip = _regional_mean(precip, tropical_mask)
+        tropical_precip_baseline = _regional_mean(
+            baseline.precipitation, tropical_mask
         )
         features.append(tropical_precip - tropical_precip_baseline)
 
         # Amazon precipitation
         amazon_bounds = TELECONNECTION_REGIONS['amazon']
         amazon_mask = create_region_mask(grid, amazon_bounds[:2], amazon_bounds[2:])
-        amazon_precip = compute_regional_mean(precip, amazon_mask, area_weights)
-        amazon_baseline = compute_regional_mean(baseline.precipitation, amazon_mask, area_weights)
+        amazon_precip = _regional_mean(precip, amazon_mask)
+        amazon_baseline = _regional_mean(baseline.precipitation, amazon_mask)
         features.append(amazon_precip - amazon_baseline)
 
         # Sahel precipitation
         sahel_bounds = TELECONNECTION_REGIONS['sahel']
         sahel_mask = create_region_mask(grid, sahel_bounds[:2], sahel_bounds[2:])
-        sahel_precip = compute_regional_mean(precip, sahel_mask, area_weights)
-        sahel_baseline = compute_regional_mean(baseline.precipitation, sahel_mask, area_weights)
+        sahel_precip = _regional_mean(precip, sahel_mask)
+        sahel_baseline = _regional_mean(baseline.precipitation, sahel_mask)
         features.append(sahel_precip - sahel_baseline)
 
     # --- Time-of-rollout feature ---
@@ -346,13 +368,13 @@ def extract_coupled_features(
         sst = coupled_carry["ocn"]["state"].sea_surface_temperature
 
         # Global-mean SST offset from a 288 K reference
-        features.append(jnp.sum(sst * area_weights) - 288.0)
+        features.append(_global_mean(sst) - 288.0)
 
         # NH minus SH hemispheric mean SST (aquaplanet season signal)
         nh_mask = create_latitude_band_mask(coords, 0.0, 90.0)
         sh_mask = create_latitude_band_mask(coords, -90.0, 0.0)
-        nh_sst = compute_regional_mean(sst, nh_mask, area_weights)
-        sh_sst = compute_regional_mean(sst, sh_mask, area_weights)
+        nh_sst = _regional_mean(sst, nh_mask)
+        sh_sst = _regional_mean(sst, sh_mask)
         features.append(nh_sst - sh_sst)
 
     return jnp.array(features)
@@ -390,6 +412,7 @@ def create_coupled_feature_extractor(
     baseline: CoupledBaseline,
     coords,
     config: CoupledFeatureConfig = CoupledFeatureConfig(),
+    ocean_mask: jnp.ndarray | None = None,
 ):
     """Create a curried feature extraction function.
 
@@ -399,6 +422,8 @@ def create_coupled_feature_extractor(
         baseline: CoupledBaseline for anomaly computation.
         coords: Model coordinates.
         config: Feature extraction configuration.
+        ocean_mask: Optional ocean mask (1.0 ocean, 0.0 land); when provided
+            the area-weighted means are restricted to ocean cells.
 
     Returns:
         Function (coupled_carry) -> features array.
@@ -406,6 +431,7 @@ def create_coupled_feature_extractor(
     """
     def extractor(coupled_carry: dict, time_fraction: float = 0.0) -> jnp.ndarray:
         return extract_coupled_features(
-            coupled_carry, baseline, coords, config, time_fraction=time_fraction
+            coupled_carry, baseline, coords, config,
+            time_fraction=time_fraction, ocean_mask=ocean_mask,
         )
     return extractor

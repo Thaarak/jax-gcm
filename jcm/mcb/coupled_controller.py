@@ -221,13 +221,16 @@ def create_coupled_control_step(
         t_start = interval_idx * config.control_interval_steps
         t_end = t_start + config.control_interval_steps
 
-        # Extract features vs the paired baseline at the interval start
+        # Extract features vs the paired baseline at the interval start.
+        # ocean_mask restricts the area-weighted means to ocean cells on
+        # realistic terrain (aquaplanet mask is all ones -> no-op).
         features = extract_coupled_features(
             coupled_carry=carry,
             baseline=baseline_trajectory.at_step(t_start),
             coords=coords,
             config=config.feature_config,
             time_fraction=t_start / config.total_steps,
+            ocean_mask=ocean_mask,
         )
 
         # Get MCB perturbation from policy
@@ -249,7 +252,9 @@ def create_coupled_control_step(
             num_steps=config.control_interval_steps,
         )
 
-        # Compute loss vs the paired baseline at the interval end
+        # Compute loss vs the paired baseline at the interval end. The SST
+        # cooling / uniformity terms are ocean-masked on realistic terrain
+        # (aquaplanet mask is all ones -> identical to prior behavior).
         loss_baseline = baseline_trajectory.at_step(t_end)
         loss = compute_coupled_loss(
             coupled_carry=final_carry,
@@ -259,6 +264,7 @@ def create_coupled_control_step(
             mcb_forcing=mcb_perturbation,
             coords=coords,
             weights=config.loss_weights,
+            ocean_mask=ocean_mask,
         )
 
         return CoupledControlStep(
@@ -462,11 +468,16 @@ def evaluate_coupled_policy(
     num_intervals = config.total_steps // config.control_interval_steps
     area_weights = compute_area_weights(coords)
 
+    # Weight the reported dSST over ocean cells (identical to the plain
+    # area-weighted mean on the aquaplanet, where ocean_mask is all ones).
+    sst_weights = area_weights * ocean_mask
+    sst_weights = sst_weights / jnp.sum(sst_weights)
+
     # Compute SST change vs the paired baseline at the same final step
     final_sst = final_carry["ocn"]["state"].sea_surface_temperature
     baseline_sst = baseline_trajectory.at_step(config.total_steps).sst
-    global_final_sst = jnp.sum(final_sst * area_weights)
-    global_baseline_sst = jnp.sum(baseline_sst * area_weights)
+    global_final_sst = jnp.sum(final_sst * sst_weights)
+    global_baseline_sst = jnp.sum(baseline_sst * sst_weights)
     sst_change = global_final_sst - global_baseline_sst
 
     # Aggregate metrics

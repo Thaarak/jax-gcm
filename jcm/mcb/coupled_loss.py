@@ -275,6 +275,7 @@ def compute_coupled_loss(
     coords,
     weights: CoupledLossWeights = CoupledLossWeights(),
     return_components: bool = False,
+    ocean_mask: jnp.ndarray | None = None,
 ):
     """Compute total coupled loss for MCB optimization.
 
@@ -300,6 +301,12 @@ def compute_coupled_loss(
         coords: Model coordinates.
         weights: Loss component weights.
         return_components: If True, return CoupledLossComponents.
+        ocean_mask: Optional ocean mask (1.0 ocean, 0.0 land) with shape
+            (ix, il). When provided (realistic terrain, Stage 5+), the
+            SST cooling and uniformity losses are area-weighted over OCEAN
+            only, so land cells pinned at a fixed temperature do not corrupt
+            the global-mean SST or its variance. Default None reproduces the
+            aquaplanet behavior (all cells weighted) bit-for-bit.
 
     Returns:
         Total loss (scalar) or CoupledLossComponents if return_components=True.
@@ -308,13 +315,22 @@ def compute_coupled_loss(
     area_weights = compute_area_weights(coords)
     zero = jnp.array(0.0)
 
+    # For the SST objective/uniformity, weight over ocean only when a mask is
+    # given (realistic terrain): land cells are pinned to a fixed temperature
+    # and would otherwise corrupt the global-mean SST and its variance.
+    if ocean_mask is not None:
+        sst_weights = area_weights * ocean_mask
+        sst_weights = sst_weights / jnp.sum(sst_weights)
+    else:
+        sst_weights = area_weights
+
     # SST-based losses
     L_sst = (
-        sst_cooling_loss(coupled_carry, baseline_sst, target_cooling, area_weights)
+        sst_cooling_loss(coupled_carry, baseline_sst, target_cooling, sst_weights)
         if weights.sst_cooling != 0.0 else zero
     )
     L_uniform = (
-        sst_uniformity_loss(coupled_carry, baseline_sst, area_weights)
+        sst_uniformity_loss(coupled_carry, baseline_sst, sst_weights)
         if weights.sst_uniformity != 0.0 else zero
     )
 
