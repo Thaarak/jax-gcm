@@ -1,0 +1,52 @@
+{
+  "start_date": "2000-01-01",
+  "coupling_timestep_days": 1,
+  "spinup_interval": 45,
+  "horizon": 60,
+  "num_train": 4,
+  "num_heldout": 2,
+  "ics": [
+    {
+      "index": 0,
+      "spinup_days": 0,
+      "split": "train",
+      "carry_file": "ic_00_day000_carry.pkl",
+      "baseline_file": "ic_00_day000_baseline60d.pkl"
+    },
+    {
+      "index": 1,
+      "spinup_days": 45,
+      "split": "train",
+      "carry_file": "ic_01_day045_carry.pkl",
+      "baseline_file": "ic_01_day045_baseline60d.pkl"
+    },
+    {
+      "index": 2,
+      "spinup_days": 90,
+      "split": "train",
+      "carry_file": "ic_02_day090_carry.pkl",
+      "baseline_file": "ic_02_day090_baseline60d.pkl"
+    },
+    {
+      "index": 3,
+      "spinup_days": 135,
+      "split": "train",
+      "carry_file": "ic_03_day135_carry.pkl",
+      "baseline_file": "ic_03_day135_baseline60d.pkl"
+    },
+    {
+      "index": 4,
+      "spinup_days": 180,
+      "split": "heldout",
+      "carry_file": "ic_04_day180_carry.pkl",
+      "baseline_file": "ic_04_day180_baseline60d.pkl"
+    },
+    {
+      "index": 5,
+      "spinup_days": 225,
+      "split": "heldout",
+      "carry_file": "ic_05_day225_carry.pkl",
+      "baseline_file": "ic_05_day225_baseline60d.pkl"
+    }
+  ]
+}
