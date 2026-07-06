@@ -21,6 +21,7 @@ Example usage:
 
 import jax
 import jax.numpy as jnp
+import flax
 import flax.linen as nn
 from typing import Sequence, Tuple
 
@@ -398,6 +399,45 @@ def create_policy(
             max_perturbation=max_perturbation,
             **kwargs
         )
+
+
+def expand_policy_input(params: dict, old_dim: int, new_dim: int) -> dict:
+    """Expand an MLP policy's input dimension by zero-padding the first layer.
+
+    Pads `params['params']['hidden_0']['kernel']` with `new_dim - old_dim`
+    rows of zeros at the bottom, so that the expanded policy is bit-identical
+    to the original whenever the NEW features (appended at the END of the
+    feature vector) are zero — and, more importantly, produces identical
+    hidden activations at initialization regardless of the new features'
+    values times zero weights. Gradients to the new rows are nonzero, so the
+    policy can learn to use the new features.
+
+    Args:
+        params: MCBPolicyMLP parameter dict (FrozenDict or plain dict) with
+            input dimension `old_dim`.
+        old_dim: Current input feature dimension.
+        new_dim: Target input feature dimension (must be >= old_dim).
+
+    Returns:
+        New (plain dict) parameters accepting `new_dim` input features.
+
+    """
+    if new_dim < old_dim:
+        raise ValueError(f"new_dim ({new_dim}) must be >= old_dim ({old_dim})")
+
+    params = jax.tree_util.tree_map(lambda x: x, params)  # shallow-safe copy
+    if isinstance(params, flax.core.FrozenDict):
+        params = flax.core.unfreeze(params)
+
+    kernel = params['params']['hidden_0']['kernel']
+    hidden = kernel.shape[1]
+    assert kernel.shape == (old_dim, hidden), (
+        f"hidden_0 kernel shape {kernel.shape} != ({old_dim}, {hidden})"
+    )
+
+    pad = jnp.zeros((new_dim - old_dim, hidden), dtype=kernel.dtype)
+    params['params']['hidden_0']['kernel'] = jnp.concatenate([kernel, pad], axis=0)
+    return params
 
 
 def init_policy_params(

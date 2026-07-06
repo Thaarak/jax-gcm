@@ -54,6 +54,7 @@ from jcm.mcb.policy import (
     MCBPolicyResNet,
     MCBPolicyHybrid,
     create_policy,
+    expand_policy_input,
     init_policy_params,
 )
 
@@ -129,9 +130,17 @@ from jcm.mcb.coupled_controller import (
 )
 
 from jcm.mcb.coupled_train import (
+    create_coupled_eval_fn,
+    create_coupled_grad_fn,
     train_coupled_policy,
+    train_coupled_policy_ensemble,
     validate_coupled_training_setup,
     resume_coupled_training,
+)
+
+from jcm.mcb.carry_io import (
+    save_carry,
+    load_carry,
 )
 
 __all__ = [
@@ -153,6 +162,7 @@ __all__ = [
     'MCBPolicyResNet',
     'MCBPolicyHybrid',
     'create_policy',
+    'expand_policy_input',
     'init_policy_params',
     # State features
     'StateFeatureConfig',
@@ -207,7 +217,13 @@ __all__ = [
     'evaluate_coupled_policy',
     'verify_coupled_gradients',
     # Coupled training
+    'create_coupled_eval_fn',
+    'create_coupled_grad_fn',
     'train_coupled_policy',
+    'train_coupled_policy_ensemble',
     'validate_coupled_training_setup',
     'resume_coupled_training',
+    # Carry serialization
+    'save_carry',
+    'load_carry',
 ]

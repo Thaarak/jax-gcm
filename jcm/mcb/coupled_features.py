@@ -52,6 +52,13 @@ class CoupledFeatureConfig(NamedTuple):
             end). Gives the policy schedule-dependence, and guarantees a
             non-constant input even when paired anomalies are zero (e.g. at
             the very first control interval).
+        include_absolute_sst: Include absolute (non-paired) SST features:
+            global-mean SST minus 288 K, and NH-minus-SH hemispheric mean
+            SST difference. Unlike the paired anomalies (which are exactly
+            zero at interval 0), these distinguish different initial
+            conditions and seasons, enabling state-dependent behavior at
+            the very first control interval. Default False preserves the
+            11-feature layout of existing checkpoints.
 
     """
 
@@ -61,6 +68,7 @@ class CoupledFeatureConfig(NamedTuple):
     include_atm_temperature: bool = True
     include_precipitation: bool = True
     include_time: bool = True
+    include_absolute_sst: bool = False
 
 
 @tree_math.struct
@@ -332,6 +340,21 @@ def extract_coupled_features(
     if config.include_time:
         features.append(jnp.asarray(time_fraction, dtype=jnp.float64))
 
+    # --- Absolute SST features (IC/season signal; appended at END so that
+    # existing 11-feature checkpoints can be expanded by zero-padding) ---
+    if config.include_absolute_sst:
+        sst = coupled_carry["ocn"]["state"].sea_surface_temperature
+
+        # Global-mean SST offset from a 288 K reference
+        features.append(jnp.sum(sst * area_weights) - 288.0)
+
+        # NH minus SH hemispheric mean SST (aquaplanet season signal)
+        nh_mask = create_latitude_band_mask(coords, 0.0, 90.0)
+        sh_mask = create_latitude_band_mask(coords, -90.0, 0.0)
+        nh_sst = compute_regional_mean(sst, nh_mask, area_weights)
+        sh_sst = compute_regional_mean(sst, sh_mask, area_weights)
+        features.append(nh_sst - sh_sst)
+
     return jnp.array(features)
 
 
@@ -358,6 +381,8 @@ def get_coupled_feature_dim(config: CoupledFeatureConfig = CoupledFeatureConfig(
         dim += 3  # tropical + amazon + sahel
     if config.include_time:
         dim += 1  # normalized time-of-rollout
+    if config.include_absolute_sst:
+        dim += 2  # global-mean SST offset + NH-SH hemispheric difference
     return dim
 
 

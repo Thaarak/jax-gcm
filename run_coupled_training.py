@@ -20,7 +20,9 @@ import argparse
 import pickle
 from pathlib import Path
 
+import flax
 import jax
+import jax.numpy as jnp
 import jax_datetime as jdt
 
 # JCM imports
@@ -60,7 +62,44 @@ def parse_args():
     parser.add_argument("--total-days", type=int, default=180, help="Total simulation days per epoch")
     parser.add_argument("--output-dir", type=str, default="mcb_experiments", help="Output directory")
     parser.add_argument("--validate-only", action="store_true", help="Only validate setup, don't train")
+    parser.add_argument("--warm-start", type=str, default=None,
+                        help="Path to Stage 1 pickle (stage1_optimized_pattern.pkl); "
+                             "initializes the policy output bias to best_theta and "
+                             "zeros the output kernel so the initial policy output "
+                             "equals the Stage 1 optimized pattern")
     return parser.parse_args()
+
+
+def warm_start_params(policy, feature_dim, stage1_path):
+    """Build initial policy params warm-started from the Stage 1 pattern.
+
+    The MLP output layer produces logits that go through
+    max_perturbation * sigmoid(logits) — the same parameterization Stage 1
+    used (0.15 * sigmoid(theta)). Setting the output bias to theta and the
+    output kernel to zero makes the initial policy output exactly the
+    Stage 1 optimized pattern, regardless of input features. Gradients
+    still flow to the kernel (hidden activations are non-zero), so the
+    network can learn state-dependence from there.
+    """
+    with open(stage1_path, 'rb') as f:
+        stage1 = pickle.load(f)
+    theta = jnp.asarray(stage1['best_theta'])
+
+    params = policy.init(jax.random.PRNGKey(0), jnp.zeros(feature_dim))
+    params = jax.tree_util.tree_map(lambda x: x, params)  # ensure mutable copy
+    if isinstance(params, flax.core.FrozenDict):
+        params = flax.core.unfreeze(params)
+
+    out = params['params']['output']
+    assert out['bias'].shape == (theta.size,), (out['bias'].shape, theta.shape)
+    out['bias'] = theta.reshape(-1).astype(out['bias'].dtype)
+    out['kernel'] = jnp.zeros_like(out['kernel'])
+
+    print(f"  Warm-started output bias from {stage1_path}")
+    print(f"    theta range: [{float(theta.min()):.3f}, {float(theta.max()):.3f}]  "
+          f"(Stage 1 loss {stage1.get('best_loss', float('nan')):.6f}, "
+          f"cooling {stage1.get('achieved_cooling', float('nan')):+.4f} K)")
+    return params
 
 
 def setup_coupled_model(start_datetime, coupling_timestep):
@@ -169,6 +208,11 @@ def main():
     print(f"  Input features: {feature_dim}")
     print(f"  Output shape: {output_shape}")
 
+    # Optional warm-start from the Stage 1 optimized pattern
+    initial_params = None
+    if args.warm_start:
+        initial_params = warm_start_params(policy, feature_dim, args.warm_start)
+
     # Controller configuration. Loss weights are the Stage 2 aquaplanet set:
     # no land teleconnection terms (amazon/sahel/tropics = 0 — no land
     # exists), and the Stage 1-proven weights so sst_cooling dominates.
@@ -245,6 +289,7 @@ def main():
         baseline_trajectory=baseline_trajectory,
         training_config=training_config,
         controller_config=controller_config,
+        initial_params=initial_params,
     )
 
     # Save results
@@ -260,6 +305,7 @@ def main():
             'best_loss': history['best_loss'],
             'target_cooling': args.target_cooling,
             'mode': 'coupled',
+            'warm_start': args.warm_start,
         }
     )
 

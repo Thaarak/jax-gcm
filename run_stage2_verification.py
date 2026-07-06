@@ -61,6 +61,13 @@ def parse_args():
                         help="Days per control interval (must divide --days)")
     parser.add_argument("--target-cooling", type=float, default=-0.1)
     parser.add_argument("--skip-grad", action="store_true", help="Skip Test 3")
+    parser.add_argument("--tol", type=float, default=1e-6,
+                        help="Tolerance for Test 1 (paired cancellation). On CPU the "
+                             "cancellation is bitwise, so the default is strict. On GPU, "
+                             "the trajectory scan and the re-run are differently compiled "
+                             "XLA programs, so cross-program bitwise equality is not "
+                             "guaranteed; use e.g. --tol 1e-2 (K) there. The area-mean "
+                             "dSST noise must still be < tol/100.")
     return parser.parse_args()
 
 
@@ -153,7 +160,10 @@ def main():
     print(f"  features at t={mid} (paired baseline): "
           f"max |anomaly| = {max_feat:.3e}, time = {time_feat:.3f}")
 
-    passed = max_dsst < 1e-6 and max_feat < 1e-6 and abs(time_feat - mid / args.days) < 1e-9
+    passed = (max_dsst < args.tol
+              and abs(mean_dsst) < args.tol / 100
+              and max_feat < args.tol
+              and abs(time_feat - mid / args.days) < 1e-9)
     results["test1_paired_cancellation"] = passed
     print(f"\n  TEST 1 VERDICT: {'PASS - drift cancels exactly; features isolate MCB signal' if passed else 'FAIL - paired baseline does not cancel (nondeterminism or indexing bug)'}")
 

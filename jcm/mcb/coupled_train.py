@@ -125,6 +125,99 @@ def create_coupled_train_step(
     return train_step
 
 
+def create_coupled_grad_fn(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    coords,
+    ocean_mask: jnp.ndarray,
+    controller_config: CoupledControllerConfig,
+) -> Callable:
+    """Create a jitted (params, carry, baseline) -> (loss, grads) function.
+
+    Unlike create_coupled_train_step, the baseline trajectory is a traced
+    argument rather than a jit-closure constant, so a SINGLE compiled
+    function serves every initial condition in an ensemble (same shapes ->
+    one compile).
+
+    Args:
+        coupler: JEM Coupler instance.
+        workflow: Coupling workflow.
+        policy_fn: Policy apply function.
+        coords: Model coordinates.
+        ocean_mask: Ocean mask for MCB.
+        controller_config: Controller config.
+
+    Returns:
+        Jitted function (params, initial_carry, baseline_trajectory) ->
+        (loss, grads).
+
+    """
+    @jax.jit
+    def grad_fn(
+        params: dict,
+        initial_carry: dict,
+        baseline_trajectory: CoupledBaselineTrajectory,
+    ) -> Tuple[jnp.ndarray, dict]:
+        def loss_fn(p):
+            return unroll_coupled_simple(
+                coupler=coupler,
+                workflow=workflow,
+                policy_fn=policy_fn,
+                policy_params=p,
+                initial_carry=initial_carry,
+                baseline_trajectory=baseline_trajectory,
+                coords=coords,
+                ocean_mask=ocean_mask,
+                config=controller_config,
+            )
+
+        return jax.value_and_grad(loss_fn)(params)
+
+    return grad_fn
+
+
+def create_coupled_eval_fn(
+    coupler,
+    workflow: list,
+    policy_fn: Callable,
+    coords,
+    ocean_mask: jnp.ndarray,
+    controller_config: CoupledControllerConfig,
+) -> Callable:
+    """Create a jitted forward-only (params, carry, baseline) -> loss function.
+
+    Used for held-out IC evaluation during ensemble training (no gradients,
+    so much cheaper than the grad function).
+
+    Args:
+        Same as create_coupled_grad_fn.
+
+    Returns:
+        Jitted function (params, initial_carry, baseline_trajectory) -> loss.
+
+    """
+    @jax.jit
+    def eval_fn(
+        params: dict,
+        initial_carry: dict,
+        baseline_trajectory: CoupledBaselineTrajectory,
+    ) -> jnp.ndarray:
+        return unroll_coupled_simple(
+            coupler=coupler,
+            workflow=workflow,
+            policy_fn=policy_fn,
+            policy_params=params,
+            initial_carry=initial_carry,
+            baseline_trajectory=baseline_trajectory,
+            coords=coords,
+            ocean_mask=ocean_mask,
+            config=controller_config,
+        )
+
+    return eval_fn
+
+
 def initialize_coupled_training(
     policy,
     coords,
@@ -170,6 +263,7 @@ def train_coupled_policy(
     training_config: TrainingConfig = TrainingConfig(),
     controller_config: CoupledControllerConfig = CoupledControllerConfig(),
     callback: Optional[Callable[[TrainingState], None]] = None,
+    initial_params: Optional[dict] = None,
 ) -> Tuple[dict, Dict[str, Any]]:
     """Train MCB policy with coupled ocean feedback.
 
@@ -187,6 +281,9 @@ def train_coupled_policy(
         training_config: Training hyperparameters.
         controller_config: Controller configuration.
         callback: Optional epoch callback.
+        initial_params: Optional policy parameters to start from (e.g. a
+            warm-start from the Stage 1 optimized pattern). If None, the
+            policy is initialized from training_config.random_seed.
 
     Returns:
         Tuple of:
@@ -203,6 +300,9 @@ def train_coupled_policy(
         config=training_config,
         controller_config=controller_config,
     )
+    if initial_params is not None:
+        params = initial_params
+        opt_state = optimizer.init(params)
 
     # Create training step
     train_step = create_coupled_train_step(
@@ -309,6 +409,215 @@ def train_coupled_policy(
     }
 
     return state.best_params, history
+
+
+def train_coupled_policy_ensemble(
+    coupler,
+    workflow: list,
+    policy,  # Flax module
+    coords,
+    terrain_fmask: jnp.ndarray,
+    train_carries: list,
+    train_baselines: list,
+    heldout_carries: tuple = (),
+    heldout_baselines: tuple = (),
+    training_config: TrainingConfig = TrainingConfig(),
+    controller_config: CoupledControllerConfig = CoupledControllerConfig(),
+    callback: Optional[Callable[[TrainingState], None]] = None,
+    initial_params: Optional[dict] = None,
+    heldout_interval: int = 10,
+) -> Tuple[dict, Dict[str, Any]]:
+    """Train MCB policy across an ensemble of varied initial conditions.
+
+    Each epoch computes per-IC losses/gradients with a SINGLE jitted
+    (params, carry, baseline) -> (loss, grads) function (baseline is a traced
+    argument, so all ICs share one compile), averages the gradients on the
+    host, and applies one optimizer update. Gradient clipping (if configured)
+    acts on the AVERAGED gradient. Best-params tracking and early stopping
+    use the mean loss over training ICs. Held-out ICs are evaluated
+    forward-only every `heldout_interval` epochs — logged, never gated on.
+
+    Args:
+        coupler: JEM Coupler instance.
+        workflow: Coupling workflow (e.g., ["coupling", "atm", "ocn"]).
+        policy: Flax policy module.
+        coords: Model coordinates.
+        terrain_fmask: Land mask (1.0 = land, 0.0 = ocean).
+        train_carries: Initial coupled carries for training ICs.
+        train_baselines: Paired no-MCB baseline trajectories, one per
+            training IC (same order as train_carries).
+        heldout_carries: Initial carries for held-out ICs.
+        heldout_baselines: Paired baselines for held-out ICs.
+        training_config: Training hyperparameters.
+        controller_config: Controller configuration.
+        callback: Optional epoch callback.
+        initial_params: Optional policy parameters to start from (e.g. an
+            expanded Stage 3 checkpoint). If None, initialized from
+            training_config.random_seed.
+        heldout_interval: Epochs between held-out evaluations.
+
+    Returns:
+        Tuple of:
+        - best_params: Best policy parameters (lowest mean training loss)
+        - history: Dictionary with per-IC and held-out training history
+
+    """
+    assert len(train_carries) == len(train_baselines)
+    assert len(heldout_carries) == len(heldout_baselines)
+    num_train = len(train_carries)
+
+    ocean_mask = 1.0 - terrain_fmask
+
+    # Initialize
+    params, opt_state, optimizer = initialize_coupled_training(
+        policy=policy,
+        coords=coords,
+        config=training_config,
+        controller_config=controller_config,
+    )
+    if initial_params is not None:
+        params = initial_params
+        opt_state = optimizer.init(params)
+
+    grad_fn = create_coupled_grad_fn(
+        coupler=coupler,
+        workflow=workflow,
+        policy_fn=policy.apply,
+        coords=coords,
+        ocean_mask=ocean_mask,
+        controller_config=controller_config,
+    )
+    eval_fn = create_coupled_eval_fn(
+        coupler=coupler,
+        workflow=workflow,
+        policy_fn=policy.apply,
+        coords=coords,
+        ocean_mask=ocean_mask,
+        controller_config=controller_config,
+    )
+
+    @jax.jit
+    def apply_update(params, opt_state, grads):
+        updates, new_opt_state = optimizer.update(grads, opt_state, params)
+        new_params = optax.apply_updates(params, updates)
+        return new_params, new_opt_state
+
+    best_params = params
+    best_loss = float('inf')
+    patience_counter = 0
+
+    loss_history = []            # mean train loss per epoch
+    per_ic_loss_history = []     # list of per-IC loss lists per epoch
+    grad_norm_history = []       # norm of the AVERAGED gradient per epoch
+    heldout_loss_history = []    # (epoch, [per-IC held-out losses])
+
+    print("Starting coupled MCB policy ensemble training")
+    print(f"  Training ICs: {num_train}, held-out ICs: {len(heldout_carries)}")
+    print(f"  Epochs: {training_config.num_epochs}")
+    print(f"  Learning rate: {training_config.learning_rate}")
+    print(f"  Control interval: {controller_config.control_interval_steps} steps")
+    print(f"  Total steps: {controller_config.total_steps}")
+    print(f"  Target cooling: {controller_config.target_cooling} K")
+    print()
+
+    start_time = time.time()
+
+    for epoch in range(training_config.num_epochs):
+        epoch_start = time.time()
+
+        # Per-IC gradients, averaged on the host (memory stays at the
+        # single-IC level; dispatch overhead is negligible vs the unrolls)
+        ic_losses = []
+        grad_sum = None
+        for carry, baseline in zip(train_carries, train_baselines):
+            loss, grads = grad_fn(params, carry, baseline)
+            ic_losses.append(float(loss))
+            if grad_sum is None:
+                grad_sum = grads
+            else:
+                grad_sum = jax.tree_util.tree_map(jnp.add, grad_sum, grads)
+
+        avg_grads = jax.tree_util.tree_map(lambda g: g / num_train, grad_sum)
+
+        grad_leaves = jax.tree.leaves(avg_grads)
+        grad_flat = jnp.concatenate([g.ravel() for g in grad_leaves])
+        grad_norm_val = float(jnp.linalg.norm(grad_flat))
+
+        params, opt_state = apply_update(params, opt_state, avg_grads)
+
+        mean_loss = sum(ic_losses) / num_train
+
+        # Best-params / early-stopping bookkeeping on the mean train loss
+        if mean_loss < best_loss:
+            best_params = params
+            best_loss = mean_loss
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
+        loss_history.append(mean_loss)
+        per_ic_loss_history.append(ic_losses)
+        grad_norm_history.append(grad_norm_val)
+
+        # Held-out forward-only evaluation (logged, not gated)
+        heldout_msg = ""
+        if heldout_carries and epoch % heldout_interval == 0:
+            heldout_losses = [
+                float(eval_fn(params, carry, baseline))
+                for carry, baseline in zip(heldout_carries, heldout_baselines)
+            ]
+            heldout_loss_history.append((epoch, heldout_losses))
+            heldout_mean = sum(heldout_losses) / len(heldout_losses)
+            heldout_msg = f" | Held-out: {heldout_mean:.6f}"
+
+        # Logging
+        if epoch % training_config.log_interval == 0:
+            epoch_time = time.time() - epoch_start
+            per_ic_str = "/".join(f"{v:.4f}" for v in ic_losses)
+            print(f"Epoch {epoch:4d} | Mean loss: {mean_loss:.6f} "
+                  f"[{per_ic_str}] | Grad norm: {grad_norm_val:.4f} | "
+                  f"Best: {best_loss:.6f}{heldout_msg} | "
+                  f"Time: {epoch_time:.1f}s")
+
+        # Callback
+        if callback is not None:
+            callback(TrainingState(
+                epoch=epoch + 1,
+                params=params,
+                opt_state=opt_state,
+                best_params=best_params,
+                best_loss=best_loss,
+                loss_history=loss_history,
+                grad_norm_history=grad_norm_history,
+            ))
+
+        # Early stopping on mean train loss
+        if training_config.early_stopping_patience is not None:
+            if patience_counter >= training_config.early_stopping_patience:
+                print(f"\nEarly stopping at epoch {epoch} "
+                      f"(no improvement for {patience_counter} epochs)")
+                break
+
+    total_time = time.time() - start_time
+    print(f"\nTraining complete in {total_time:.1f}s")
+    print(f"Final mean loss: {loss_history[-1]:.6f}")
+    print(f"Best mean loss: {best_loss:.6f}")
+
+    history = {
+        'loss_history': loss_history,
+        'per_ic_loss_history': per_ic_loss_history,
+        'grad_norm_history': grad_norm_history,
+        'heldout_loss_history': heldout_loss_history,
+        'best_loss': best_loss,
+        'final_loss': loss_history[-1],
+        'total_time': total_time,
+        'epochs_completed': len(loss_history),
+        'num_train_ics': num_train,
+        'num_heldout_ics': len(heldout_carries),
+        'mode': 'coupled-ensemble',
+    }
+
+    return best_params, history
 
 
 def validate_coupled_training_setup(
