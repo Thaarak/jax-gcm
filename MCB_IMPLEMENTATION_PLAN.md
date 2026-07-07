@@ -36,10 +36,12 @@ where per-stage detail, numbers, and gate verdicts live. One-line status:
 | 2 — paired-baseline features & loss | ✅ complete, gate open |
 | 3 — NN policy training (60-day) | ✅ complete (−0.1015 K, beats static) |
 | 4 — varied-IC ensemble controller | ⚠️ complete, 3/4 gates (Gate 1: held-out overcooling) |
-| 5 — realistic terrain + teleconnections | ✅ code-complete + local smoke; GPU run pending |
+| 5 — realistic terrain + teleconnections | ⚠️ GPU run complete, 2/4 gates (G1/G2 pass; G3 precip, G4 held-out generalization fail) |
 
-**NEXT:** Stage 5 diya GPU run (150-epoch warm-start from Stage 4, 6-IC eval, 4 gates), then the
-Stage 4 Follow-up (Option A) seasonal-bracketing fix, which also applies to the Stage 5 held-out gate.
+**NEXT:** Stage 4 Follow-up (Option A) seasonal-bracketing fix — addresses Stage 5 Gate 2 edge-of-band
+overcooling and the Gate 4 held-out generalization gap. Separately, revisit teleconnection/held-out
+loss weighting for Gate 3. Stage 5 diya GPU run (150-epoch warm-start, 6-IC eval) is **done**
+(2026-07-06): early-stopped epoch 28, all losses finite; Gate 1 & 2 pass, Gate 3 & 4 fail marginally.
 
 ---
 
@@ -155,7 +157,7 @@ without changing any loss weights or the policy architecture — only the IC-gen
 bracketing fix is orthogonal and applies to both the aquaplanet Stage 4 and the realistic Stage 5
 held-out gates.
 
-### Stage 5: Realistic Terrain + Teleconnection Penalties ✅ CODE-COMPLETE + LOCAL SMOKE VERIFIED (GPU run pending)
+### Stage 5: Realistic Terrain + Teleconnection Penalties ⚠️ GPU RUN COMPLETE — 2/4 GATES (2026-07-06)
 
 Moves the controller from the aquaplanet to **realistic Earth terrain** (T30 climatology: orography
 + land-sea mask) and **reinstates the teleconnection precipitation penalties** (amazon / sahel /
@@ -200,9 +202,50 @@ populated per-region precip diagnostics. Gate 1 (orography 812.7, terrain reache
 Gate 4 (no NaNs, finite losses) PASS. Gate 2 (cooling band) and Gate 3 (teleconnection protection)
 are only meaningful at the 60-day / warm-start GPU scale.
 
-**Pending:** full diya GPU run (150-epoch training warm-started from `stage4_trained_policy.pkl`;
-6-IC eval); check the 4 gates; record results here. The Stage 4 Follow-up (Option A) seasonal
-bracketing applies to the Stage 5 held-out Gate 2 as well.
+**GPU run (diya GB10, 2026-07-06):** IC-gen (realistic terrain) → 150-epoch warm-start training →
+6-IC eval, all under tmux with the vLLM container stopped for the duration. Artifacts in
+`mcb_experiments_gpu/stage5/` (policy, history, eval_results.pkl, per-phase logs).
+
+- **IC generation:** 6 ICs written (train spin-up days {0,45,90,135}, held-out {180,225}); terrain
+  sanity `|truncated_orography|_max = 812.7`, land fraction 0.335. ~13–14 s per spin-up+baseline.
+- **Training:** warm-started dim-13 directly from Stage 4 (no expand); pre-flight grad check clean
+  (loss 0.0192, grad norm 0.0028, finite). Ensemble BPTT ~128 s/epoch post-compile; all epoch losses
+  finite (no NaN). Best mean train loss **0.024618 at epoch 8**; **early-stopped at epoch 28**
+  (patience 20) in 3816 s. Last held-out eval (epoch 20): mean 0.04453.
+
+**6-IC eval aggregates (stage5-realistic vs stage4-warmstart vs stage1-static):**
+
+| policy | train loss | held loss | train dSST | held dSST | region prec |
+|---|---|---|---|---|---|
+| stage5-realistic | 0.017259 | 0.023184 | −0.1338 | **−0.1191** | 0.000690 |
+| stage4-warmstart | 0.014965 | 0.020354 | −0.0896 | −0.0688 | 0.000686 |
+| stage1-static | 0.012996 | **0.018826** | −0.1105 | −0.0841 | 0.000676 |
+
+**4-gate verdict — 2 PASS / 2 FAIL:**
+
+1. **Gate 1 (terrain activation, |orography| > 0):** **PASS** — 812.7 (also confirmed at IC-gen).
+2. **Gate 2 (held-out ocean-masked day-60 dSST ∈ [−0.12, −0.08] K):** **PASS** — −0.1191 K, but at
+   the cold edge of the band. Consistent with the known held-out overcooling from season
+   extrapolation; the Stage 4 Follow-up (Option A) seasonal bracketing is the queued fix.
+3. **Gate 3 (stage5 region-precip loss ≤ stage4-warmstart):** **FAIL** — 6.9049e-04 vs 6.8630e-04
+   (stage5 marginally worse by ~0.6%). The reinstated teleconnection penalties did not measurably
+   reduce regional-rainfall disruption below the warm-start baseline on these realistic ICs; the
+   three policies are near-degenerate on this metric (stage1 6.876e-04), so the objective weighting
+   (amazon/sahel/tropics @ 0.05) is likely too weak relative to the SST terms to move it.
+4. **Gate 4 (stage5 held-out loss ≤ stage1-static AND finite):** **FAIL on the ≤ criterion; finite
+   PASS.** Held-out loss 0.023184 vs stage1 0.018826 — all losses finite (stability ✓, early-stop ≤
+   150 ✓), but the trained realistic policy generalizes worse than the static Stage 1 pattern on the
+   held-out ICs. The warm-start (0.020354) also beats stage5, i.e. 150 epochs of terrain training did
+   not improve held-out generalization over its own initialization.
+
+**Diagnosis (no code changed — follow-ups only):** training minimized the ensemble train objective
+(best 0.0247) but the eval held-out loss (0.0232) exceeds both stage1 and the stage4 warm-start,
+i.e. mild overfitting / distribution shift on terrain ICs rather than a stability failure. Gate 2's
+edge-of-band overcooling points at the same season-extrapolation issue Stage 4 hit. Candidate fixes
+(each a separate task): (a) Stage 4 Follow-up (Option A) seasonal bracketing to widen IC season
+coverage and pull dSST off the cold edge; (b) raise teleconnection weights or add explicit held-out
+regularization so Gate 3/4 have gradient signal; (c) longer patience / LR schedule. None block —
+report and queue.
 
 ---
 
@@ -889,6 +932,38 @@ When loading `.pkl` files that contain `jcm.mcb` objects, Python triggers the fu
 ---
 
 ## Change Log
+
+### 2026-07-06: Stage 5 GPU Run Complete — Realistic Terrain + Teleconnections, 2/4 Gates
+- **Ops/execution task, no code changed.** Drove the full pipeline on **diya (NVIDIA GB10)** over SSH:
+  synced code+data+checkpoints to `~/workspace/jax-gcm` (repo path resolved in Phase 0; jcm & jax-esm
+  are editable installs pointing at the repo, so the source rsync updates the coupler); ran IC-gen →
+  150-epoch warm-start training → 6-IC eval inside a detached **tmux** session with the vLLM container
+  `aeon-ultimate-xs` stopped for the duration and **auto-restarted via an EXIT trap** (verified up).
+  Env: `XLA_PYTHON_CLIENT_PREALLOCATE=false`, `MEM_FRACTION=0.8`, `PYTHONUNBUFFERED=1`.
+- **IC generation:** 6 realistic-terrain ICs (train spin-up days {0,45,90,135}, held-out {180,225});
+  terrain sanity `|truncated_orography|_max = 812.7`, land fraction 0.335; ~13–14 s per spin-up+baseline.
+- **Training:** warm-started dim-13 directly from `stage4_trained_policy.pkl` (no expand); pre-flight
+  grad check clean (loss 0.0192, grad norm 0.0028). Ensemble BPTT ~128 s/epoch post-compile; all epoch
+  losses finite. Best mean train loss **0.024618 @ epoch 8**; **early-stopped @ epoch 28** (patience 20)
+  in 3816 s. Last held-out eval (epoch 20): 0.04453.
+- **6-IC eval aggregates** — stage5-realistic / stage4-warmstart / stage1-static:
+  train loss 0.017259 / 0.014965 / 0.012996; held loss 0.023184 / 0.020354 / **0.018826**;
+  held dSST **−0.1191** / −0.0688 / −0.0841 K; region-precip loss 6.905e-04 / 6.863e-04 / 6.876e-04.
+- **Gate verdict — 2 PASS / 2 FAIL:**
+  - **Gate 1 (terrain activation):** PASS (812.7).
+  - **Gate 2 (held-out dSST ∈ [−0.12,−0.08] K):** PASS (−0.1191 K, cold edge → season-extrapolation
+    overcooling; Option A bracketing is the queued fix).
+  - **Gate 3 (region precip ≤ stage4-warmstart):** FAIL (6.905e-04 vs 6.863e-04, +0.6%); the three
+    policies are near-degenerate on precip, so the @0.05 teleconnection weights are likely too weak.
+  - **Gate 4 (held-out loss ≤ stage1 AND finite):** finite PASS, ≤ FAIL (0.023184 vs 0.018826); stage5
+    also loses to its own warm-start (0.020354) → mild overfit / terrain-IC distribution shift, not a
+    stability failure.
+- **Follow-ups (each a separate task, none blocking):** (a) Stage 4 Follow-up Option A seasonal
+  bracketing (targets Gate 2 edge + Gate 4 held-out gap); (b) reweight teleconnection/held-out loss for
+  Gate 3/4 signal; (c) longer patience / LR schedule.
+- **Artifacts:** local `mcb_experiments_gpu/stage5/` (+ diya `mcb_experiments/stage5/`):
+  `stage5_trained_policy.pkl`, `stage5_training_history.pkl`, `eval_results.pkl`, `ics/` (6 ICs +
+  manifest), `ics_gen.log`, `train.log`, `eval.log`, `pipeline.log`.
 
 ### 2026-07-06: Stage 3 Complete — NN Policy Trained (60-Day Horizon), Beats Static Pattern on Cooling
 - **Warm-start implemented** (`run_coupled_training.py`): new `--warm-start` flag + `warm_start_params()` — loads Stage 1 `best_theta`, sets the MLP output bias to `theta.reshape(-1)` and zeros the output kernel. Since the output layer is `0.15 * sigmoid(logits)` (identical to Stage 1's parameterization), the initial policy output equals the Stage 1 pattern **exactly** (verified to 2.2e-08) regardless of input features. Hidden-layer grads are 0 at step 0 (zero kernel) but unblock after the first update (observed: epoch-0 |grad| 1e-4 → epoch-1 |grad| 52). `jcm/mcb/coupled_train.py`: `train_coupled_policy` gained `initial_params` parameter
