@@ -36,12 +36,16 @@ where per-stage detail, numbers, and gate verdicts live. One-line status:
 | 2 — paired-baseline features & loss | ✅ complete, gate open |
 | 3 — NN policy training (60-day) | ✅ complete (−0.1015 K, beats static) |
 | 4 — varied-IC ensemble controller | ⚠️ complete, 3/4 gates (Gate 1: held-out overcooling) |
-| 5 — realistic terrain + teleconnections | ⚠️ GPU run complete, 2/4 gates (G1/G2 pass; G3 precip, G4 held-out generalization fail) |
+| 5 — realistic terrain + teleconnections | ⚠️ GPU run complete, 2/4 gates (G1/G2 pass; G3 precip, G4 held-out generalization fail). Option A bracketing follow-up ❌ tried (2026-07-09), did **not** fix G2/G4 |
 
-**NEXT:** Stage 4 Follow-up (Option A) seasonal-bracketing fix — addresses Stage 5 Gate 2 edge-of-band
-overcooling and the Gate 4 held-out generalization gap. Separately, revisit teleconnection/held-out
-loss weighting for Gate 3. Stage 5 diya GPU run (150-epoch warm-start, 6-IC eval) is **done**
-(2026-07-06): early-stopped epoch 28, all losses finite; Gate 1 & 2 pass, Gate 3 & 4 fail marginally.
+**NEXT:** Stage 4 Follow-up **Option A (seasonal bracketing) is DONE and refuted** (2026-07-09): the
+bracketed run (train {0,45,90,135,180,225}, held-out {70,200}) made held-out dSST *colder* (−0.1646 K
+vs −0.1191 K baseline), and an interior held-out IC (day 70) overcooled to −0.1852 K despite sitting
+between well-behaved train points — so the held-out failure is a **generalization gap, not season
+extrapolation**. Next: attack generalization directly (denser/more training ICs, IC-season
+regularization, or explicit held-out-loss weighting) and, separately, raise teleconnection weights for
+Gate 3. The `--train-days`/`--heldout-days` bracketing flags remain reusable infrastructure. Prior
+Stage 5 diya GPU run (150-epoch warm-start, 6-IC eval) done 2026-07-06.
 
 ---
 
@@ -130,7 +134,13 @@ per MCB_CONTEXT.md):
 - [ ] Later: switch to realistic terrain + seasonal boundary conditions → reinstate Amazon/Sahel teleconnection penalties (this is when the original research goal — cooling with minimized teleconnections — becomes fully testable)
 - [ ] Long-horizon stability evaluation (multi-year rollout with trained policy)
 
-### Stage 4 Follow-up (Option A) — TODO: Fix Gate-1 held-out overcooling via seasonal bracketing
+### Stage 4 Follow-up (Option A) — ❌ DONE (2026-07-09): seasonal bracketing did NOT fix the held-out gates
+
+**Result up front:** Option A was implemented and run end-to-end on diya (GB10). Bracketing the
+held-out ICs inside the training hull **did not** fix Gate 2 or Gate 4 — held-out overcooling got
+*worse*, not better. This **refutes** the season-extrapolation hypothesis as the dominant cause of the
+held-out overcooling; the real driver is a **generalization gap** to unseen ICs. See the
+"Option A GPU result" subsection below and the 2026-07-09 Change Log entry.
 
 **Gate 1 FAILED in Stage 4**: held-out mean day-60 dSST −0.1285 K overshot the target band
 [−0.12, −0.08] K (train dSST −0.1044 K is on-target).
@@ -153,9 +163,41 @@ interpolation. This is expected to bring held-out day-60 dSST into the [−0.12,
 without changing any loss weights or the policy architecture — only the IC-generation schedule in
 `run_stage4_generate_ics.py` (`--spinup-interval`, `--num-train`, `--num-heldout`) changes.
 
-**Status:** deferred. Stage 5 (realistic terrain) proceeds first per the current roadmap; this
-bracketing fix is orthogonal and applies to both the aquaplanet Stage 4 and the realistic Stage 5
-held-out gates.
+**Status:** ❌ done, hypothesis refuted (2026-07-09). Implemented as a backward-compatible
+`run_stage5_generate_ics.py` edit (new `--train-days`/`--heldout-days` flags + `build_schedule`
+with strict `min(train) < d < max(train)` bracketing validation and variable-increment spin-up), ran
+the full realistic-terrain Stage 5 pipeline against the bracketed schedule, and re-checked the 4
+gates. Bracketing did **not** move Gate 2/4 into passing; the held-out gap is a generalization
+problem, not extrapolation. Details below.
+
+#### Option A GPU result (diya GB10, output `mcb_experiments(_gpu)/stage5_optionA/`)
+
+- **Schedule:** train days {0,45,90,135,180,225} (6), held-out {70,200} (2), both strictly bracketed.
+  Manifest verified: held-out days interleaved (70 between 45/90; 200 between 180/225),
+  `spinup_interval: null` (explicit path). Early-stopped **epoch 48** (best mean loss 0.030585,
+  patience 20); ~191 s/epoch as estimated; all losses finite; vLLM container restored.
+- **Gate verdicts (vs the [`stage5/`] baseline):**
+
+  | Gate | Metric | Option A | Stage 5 baseline | Verdict |
+  |---|---|---|---|---|
+  | 1 terrain | \|orography\| > 0 | 812.7 | 812.7 | **PASS** |
+  | 2 held-out dSST ∈ [−0.12,−0.08] | K | **−0.1646** | −0.1191 | **FAIL (worse / colder)** |
+  | 3 region precip ≤ stage4 | loss | 6.773e-4 vs 6.296e-4 | — | **FAIL** (orthogonal, expected) |
+  | 4 held-out loss ≤ stage1 | loss | 0.020288 vs 0.019425 | 0.0232 vs 0.0188 | **FAIL** (loss dropped but still > stage1) |
+
+- **Why the hypothesis was wrong:** the plan predicted interpolation would pull held-out dSST off the
+  cold edge toward ~−0.10 K. Instead the **interior** held-out day-70 IC overcooled to **−0.1852 K** —
+  *colder* than its bracketing train neighbors (train day-45 dSST −0.0783, train day-90 −0.0961).
+  A held-out point sitting between two well-behaved training points still overcools sharply, so the
+  policy is **not** interpolating smoothly across the IC season axis; it has a genuine generalization
+  gap. Held-out day-200 overcooled to −0.1439 K. Aggregate held-out dSST −0.1646 K (mean of the two).
+  Held-out loss did improve marginally vs the stage5 baseline (0.0232 → 0.0203) but remains above
+  stage1 (0.0194), so Gate 4 still fails.
+- **Kept value:** the `--train-days`/`--heldout-days` machinery + strict bracketing validation are now
+  permanent, reusable infrastructure for any future IC-schedule experiment; the negative result rules
+  out "just bracket the seasons" and redirects the follow-up toward closing the generalization gap
+  (e.g. more/denser training ICs, IC-season regularization, or explicit held-out-loss weighting)
+  rather than merely repositioning held-out points.
 
 ### Stage 5: Realistic Terrain + Teleconnection Penalties ⚠️ GPU RUN COMPLETE — 2/4 GATES (2026-07-06)
 
@@ -226,7 +268,9 @@ are only meaningful at the 60-day / warm-start GPU scale.
 1. **Gate 1 (terrain activation, |orography| > 0):** **PASS** — 812.7 (also confirmed at IC-gen).
 2. **Gate 2 (held-out ocean-masked day-60 dSST ∈ [−0.12, −0.08] K):** **PASS** — −0.1191 K, but at
    the cold edge of the band. Consistent with the known held-out overcooling from season
-   extrapolation; the Stage 4 Follow-up (Option A) seasonal bracketing is the queued fix.
+   extrapolation; the Stage 4 Follow-up (Option A) seasonal bracketing was the queued fix. *(Update
+   2026-07-09: Option A was tried and refuted — bracketing made held-out dSST colder, not warmer; the
+   gap is generalization, not extrapolation. See the 2026-07-09 Change Log entry.)*
 3. **Gate 3 (stage5 region-precip loss ≤ stage4-warmstart):** **FAIL** — 6.9049e-04 vs 6.8630e-04
    (stage5 marginally worse by ~0.6%). The reinstated teleconnection penalties did not measurably
    reduce regional-rainfall disruption below the warm-start baseline on these realistic ICs; the
@@ -243,9 +287,10 @@ are only meaningful at the 60-day / warm-start GPU scale.
 i.e. mild overfitting / distribution shift on terrain ICs rather than a stability failure. Gate 2's
 edge-of-band overcooling points at the same season-extrapolation issue Stage 4 hit. Candidate fixes
 (each a separate task): (a) Stage 4 Follow-up (Option A) seasonal bracketing to widen IC season
-coverage and pull dSST off the cold edge; (b) raise teleconnection weights or add explicit held-out
-regularization so Gate 3/4 have gradient signal; (c) longer patience / LR schedule. None block —
-report and queue.
+coverage and pull dSST off the cold edge — *tried 2026-07-09, refuted: it did not help and the
+held-out failure is a generalization gap, not extrapolation; see Change Log*; (b) raise teleconnection
+weights or add explicit held-out regularization so Gate 3/4 have gradient signal; (c) longer patience
+/ LR schedule. None block — report and queue.
 
 ---
 
@@ -932,6 +977,42 @@ When loading `.pkl` files that contain `jcm.mcb` objects, Python triggers the fu
 ---
 
 ## Change Log
+
+### 2026-07-09: Stage 5 Option A (seasonal bracketing) — hypothesis REFUTED, held-out gap is generalization
+- **One-file code change + full GPU rerun.** Edited only `run_stage5_generate_ics.py`: added optional
+  `--train-days`/`--heldout-days` flags and a new `build_schedule(args)` helper that (explicit path)
+  parses comma-separated int day-sets, validates days ≥ 0, ≥ 2 distinct train days, unique + disjoint
+  sets, and **strict bracketing** `min(train) < d < max(train)` for every held-out day (errors,
+  never warns), then emits a `sorted [(day, split)]` schedule; the main loop switched to
+  variable-increment spin-up (`delta = day - prev_day`, `assert delta >= 0`, spin only when
+  `delta > 0`). The legacy `--spinup-interval/--num-train/--num-heldout` path is preserved as the
+  fallback and reproduced bit-for-bit. Consumers unchanged (training/eval split solely on the manifest
+  `split` field). `ruff` clean on the edited file; 86 `jcm/mcb` tests pass.
+- **Local CPU smoke (Mac):** bracketed IC-gen (train {0,4,8}, held-out {6}) produced schedule
+  [0,4,6,8] with splits [train,train,heldout,train], `spinup_interval: null`, all 8 carry+baseline
+  files, terrain sanity OK; negative test (held-out {8} outside hull [0,4]) errored at `build_schedule`
+  before any model load; 1-epoch train consumed the interleaved manifest (3 train + 1 held-out losses).
+- **GPU run (diya GB10, tmux `stage5oa`, output `mcb_experiments(_gpu)/stage5_optionA/`):** schedule
+  train {0,45,90,135,180,225}, held-out {70,200}; manifest verified interleaved at the early gate;
+  150-epoch warm-start from `stage4_trained_policy.pkl`, ~191 s/epoch, **early-stopped epoch 48**
+  (best 0.030585), all losses finite; vLLM `aeon-ultimate-xs` stopped for the run and restored (Up).
+- **8-IC eval aggregates** — stage5-realistic / stage4-warmstart / stage1-static:
+  train loss 0.016061 / 0.022545 / 0.016701; held loss **0.020288** / 0.018625 / **0.019425**;
+  held dSST **−0.1646** / −0.1203 / −0.1166 K; region-precip loss 6.773e-04 / 6.296e-04 / 7.12e-04.
+- **Gate verdict — 1 PASS / 3 FAIL (Option A did NOT work):**
+  - **Gate 1 (terrain):** PASS (812.7).
+  - **Gate 2 (held-out dSST ∈ [−0.12,−0.08]):** **FAIL, −0.1646 K — worse than the stage5 baseline
+    −0.1191 K.** Bracketing made held-out overcooling *colder*, the opposite of the prediction.
+  - **Gate 3 (region precip ≤ stage4):** FAIL (6.773e-04 vs 6.296e-04); orthogonal, expected.
+  - **Gate 4 (held-out loss ≤ stage1):** FAIL (0.020288 vs 0.019425), though it did drop from the
+    stage5 baseline 0.0232.
+- **Key finding:** the interior held-out day-70 IC (bracketed between train days 45 and 90) overcooled
+  to **−0.1852 K**, far colder than its neighbors (train-45 −0.0783 K, train-90 −0.0961 K). A held-out
+  point *inside* the training hull still overcools sharply → the policy does **not** interpolate along
+  the IC-season axis; the held-out failure is a **generalization gap**, not season extrapolation. The
+  extrapolation root-cause hypothesis (Stage 4 Follow-up Option A) is refuted. Next follow-up should
+  target generalization (denser/more training ICs, IC-season regularization, or explicit held-out-loss
+  weighting), not IC repositioning. The new bracketing flags remain as reusable infrastructure.
 
 ### 2026-07-06: Stage 5 GPU Run Complete — Realistic Terrain + Teleconnections, 2/4 Gates
 - **Ops/execution task, no code changed.** Drove the full pipeline on **diya (NVIDIA GB10)** over SSH:
