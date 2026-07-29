@@ -41,10 +41,13 @@ def set_forcing(
             mcb_albedo - parameters.mod_radcon.albsea
         )
 
-    # Dynamic MCB perturbation (traced forcing field; zeros when inactive).
-    # Applied over ocean only. Unlike the static mcb_config path above, this
-    # participates in JIT tracing and autodiff, so it can be optimized/controlled.
-    alb_s = alb_s + (1.0 - fmask) * forcing.mcb_perturbation
+    # NOTE: the dynamic MCB perturbation (forcing.mcb_perturbation) is applied to
+    # the CLOUD-TOP albedo in shortwave_radiation.py (shortwave_rad_fluxes), NOT
+    # to the surface albedo here. Marine Cloud Brightening brightens marine
+    # stratocumulus clouds (Twomey effect); a surface-albedo perturbation is
+    # attenuated by the very clouds MCB is meant to brighten and is anti-
+    # correlated with cloud cover — physically backwards. The static mcb_config
+    # path above remains surface-based for now (legacy Phase-7 scripts only).
 
     albsfc = alb_s + fmask * (alb_l - alb_s)
 

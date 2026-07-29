@@ -51,7 +51,11 @@ from jcm.mcb.coupled_train import (
 )
 from jcm.mcb.train import TrainingConfig, load_checkpoint, save_checkpoint
 
-from run_coupled_training import setup_coupled_model, warm_start_params
+from run_coupled_training import (
+    coupler_workflow,
+    setup_coupled_model,
+    warm_start_params,
+)
 
 WORKFLOW = ["coupling", "atm", "ocn"]
 START_DATE = "2000-01-01"
@@ -82,6 +86,15 @@ def parse_args():
                         help="Fallback: Stage 1 pattern pickle; sets the "
                              "output bias to the optimized pattern instead "
                              "of using --init-checkpoint")
+    parser.add_argument("--allow-random-init", action="store_true",
+                        default=False,
+                        help="Permit random initialization when neither "
+                             "--warm-start-stage1 nor an existing "
+                             "--init-checkpoint is provided. Without this "
+                             "flag a missing warm-start is a hard error, so a "
+                             "mistyped/misplaced checkpoint cannot silently "
+                             "train a cold-started policy and save it under a "
+                             "warm-start filename.")
     parser.add_argument("--no-realistic-terrain", dest="realistic_terrain",
                         action="store_false", default=True,
                         help="Fall back to the aquaplanet (debugging only).")
@@ -93,6 +106,30 @@ def parse_args():
     parser.add_argument("--tropics", type=float, default=0.05)
     parser.add_argument("--regularization", type=float, default=0.001)
     parser.add_argument("--smoothness", type=float, default=0.001)
+    parser.add_argument("--feature-mode", choices=["full", "time-only"],
+                        default="full",
+                        help="'full' = 13 climate-state features. 'time-only' "
+                             "= only the normalized-time feature (OPEN-LOOP "
+                             "ablation: a policy that cannot see the climate "
+                             "state, per PREREGISTRATION.md sec 6; use with "
+                             "--allow-random-init, no warm start).")
+    parser.add_argument("--max-perturbation", type=float, default=0.15,
+                        help="Max albedo perturbation (forcing cap); "
+                             "lower to reduce overcooling (G2).")
+    parser.add_argument("--loss-mode", choices=["summed", "terminal_dsst"],
+                        default="summed",
+                        help="'summed' = historical interval-sum loss "
+                             "(<0.2%% gate-relevant, rewards overcooling). "
+                             "'terminal_dsst' = gate-aligned final-step dSST "
+                             "error, the quantity the pre-registered gate "
+                             "scores.")
+    parser.add_argument("--forcing-reg-weight", type=float, default=0.001,
+                        help="Mean-square forcing penalty in terminal_dsst "
+                             "mode.")
+    parser.add_argument("--select-on-heldout", action="store_true",
+                        help="Gate model selection + early stopping on mean "
+                             "held-out loss (evaluated every epoch) instead of "
+                             "train loss (finishes P0.3).")
     return parser.parse_args()
 
 
@@ -174,6 +211,12 @@ def main():
     # binarization agrees cell-for-cell.
     ocean_mask = ocean_mask_from_coupler(coupler)
     train_ocean_fmask = ocean_fmask_from_coupler(coupler)
+    # Derive the workflow from the coupler so the slab LAND step is included
+    # over realistic terrain (["coupling","atm","ocn","lnd"]) — a hardcoded
+    # 3-element workflow would leave the land component present but never
+    # stepped, silently defeating prognostic land (R7a).
+    workflow = coupler_workflow(coupler)
+    print(f"  Coupler workflow: {workflow}")
     orog_max = float(jnp.max(jnp.abs(atm_model.truncated_orography)))
     print(f"  |truncated_orography|_max = {orog_max:.3e} "
           f"(land fraction {float(jnp.mean(terrain.fmask)):.3f})")
@@ -198,14 +241,23 @@ def main():
 
     # 13-feature config (same as Stage 4): absolute-SST features distinguish
     # ICs at interval 0. Warm start loads with the SAME dim -> no expand.
-    feature_config = CoupledFeatureConfig(include_absolute_sst=True)
+    # time-only = open-loop ablation (policy sees only the normalized time).
+    if args.feature_mode == "time-only":
+        feature_config = CoupledFeatureConfig(
+            include_sst=False, include_sst_regions=False,
+            include_heat_flux=False, include_atm_temperature=False,
+            include_precipitation=False, include_time=True,
+            include_absolute_sst=False)
+    else:
+        feature_config = CoupledFeatureConfig(include_absolute_sst=True)
     feature_dim = get_coupled_feature_dim(feature_config)
-    print(f"\nFeature dim: {feature_dim} (13, ocean-masked on realistic terrain)")
+    print(f"\nFeature dim: {feature_dim} (mode={args.feature_mode}, "
+          f"ocean-masked on realistic terrain)")
 
     policy = MCBPolicyMLP(
         output_shape=coords.horizontal.nodal_shape,
         hidden_dims=(256, 256),
-        max_perturbation=0.15,
+        max_perturbation=args.max_perturbation,
     )
 
     loss_weights = CoupledLossWeights(
@@ -225,9 +277,14 @@ def main():
         target_cooling=args.target_cooling,
         loss_weights=loss_weights,
         feature_config=feature_config,
-        max_perturbation=0.15,
+        max_perturbation=args.max_perturbation,
         use_checkpointing=True,
+        loss_mode=args.loss_mode,
+        forcing_reg_weight=args.forcing_reg_weight,
     )
+    print(f"  Loss mode: {args.loss_mode}"
+          + (f" (forcing_reg={args.forcing_reg_weight})"
+             if args.loss_mode == "terminal_dsst" else ""))
 
     training_config = TrainingConfig(
         num_epochs=args.epochs,
@@ -260,15 +317,25 @@ def main():
         init_source = f"stage4:{args.init_checkpoint}"
         print(f"  Warm-started directly from Stage 4 policy "
               f"(dim {feature_dim}, no expand)")
-    else:
+    elif args.allow_random_init:
         print(f"  WARNING: init checkpoint {args.init_checkpoint} not found; "
-              f"using random initialization")
+              f"using random initialization (--allow-random-init set)")
+    else:
+        raise SystemExit(
+            f"ERROR: no warm-start available: --warm-start-stage1 not given "
+            f"and --init-checkpoint '{args.init_checkpoint}' does not exist. "
+            f"Refusing to silently train a random-initialized policy and save "
+            f"it as a warm-started artifact. Pass a valid checkpoint, or "
+            f"--allow-random-init to run cold-start intentionally. "
+            f"(Note the GPU artifacts live under mcb_experiments_gpu/, not "
+            f"mcb_experiments/.)"
+        )
 
     # Pre-flight gradient sanity check on IC 0 (ocean-masked loss/features)
     print("\nPre-flight gradient check on IC 0...")
     grad_fn = create_coupled_grad_fn(
         coupler=coupler,
-        workflow=WORKFLOW,
+        workflow=workflow,
         policy_fn=policy.apply,
         coords=coords,
         ocean_mask=ocean_mask,
@@ -299,7 +366,7 @@ def main():
 
     best_params, history = train_coupled_policy_ensemble(
         coupler=coupler,
-        workflow=WORKFLOW,
+        workflow=workflow,
         policy=policy,
         coords=coords,
         terrain_fmask=train_ocean_fmask,
@@ -311,6 +378,7 @@ def main():
         controller_config=controller_config,
         initial_params=initial_params,
         heldout_interval=args.heldout_interval,
+        select_on_heldout=args.select_on_heldout,
     )
 
     print("\nSaving results...")

@@ -64,10 +64,22 @@ def shortwave_rad_fluxes(operand):
     # Start with tau2
     # Create arrays of i and j indices that will broadcast correctly alongside clamped_icltop
     i_idx, j_idx = jnp.meshgrid(jnp.arange(ix), jnp.arange(il), indexing='ij')
+    # Marine Cloud Brightening (Twomey effect): raise the cloud-top albedo over
+    # ocean by the traced, differentiable MCB perturbation. Because the cloud
+    # reflectivity term is (albcl * cloudc), the brightening enters as
+    # (mcb * cloudc) and therefore grows WITH cloud fraction — the physically
+    # correct direction. (Perturbing the SURFACE albedo instead, as the code did
+    # historically, was attenuated by the very clouds MCB is meant to brighten.)
+    # Ocean-only via (1 - fmask); clipped so cloud albedo stays a reflectance.
+    albcl_mcb = jnp.clip(
+        parameters.shortwave_radiation.albcl
+        + (1.0 - terrain.fmask) * forcing.mcb_perturbation,
+        0.0, 1.0,
+    )
     # Update values at cloud top
     tau2 = jnp.zeros((kx, ix, il, 4))
     tau2 = tau2.at[clamped_icltop-1, i_idx, j_idx, 2].set(
-        mask * parameters.shortwave_radiation.albcl * cloudc
+        mask * albcl_mcb * cloudc
     ) # equivalent to updating tau2 only where mask is true
     # Update the tau2 values for the second condition (kx index) across the entire array
     tau2 = tau2.at[kx - 1, :, :, 2].set(parameters.shortwave_radiation.albcls * clstr)

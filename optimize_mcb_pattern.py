@@ -39,12 +39,13 @@ import jax.numpy as jnp
 import jax_datetime as jdt
 import optax
 
-from jcm.mcb import create_ocean_mask
+from jcm.mcb import load_carry
 from jcm.mcb.coupled_controller import create_coupled_step_fn
+from jcm.mcb.coupled_train import ocean_mask_from_coupler
 from jcm.mcb.state_features import compute_area_weights
 
 # Reuse the EXACT model setup used in training
-from run_coupled_training import setup_coupled_model
+from run_coupled_training import coupler_workflow, setup_coupled_model
 
 WORKFLOW = ["coupling", "atm", "ocn"]
 
@@ -70,6 +71,12 @@ def parse_args():
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--log-interval", type=int, default=1)
     parser.add_argument("--output-dir", type=str, default="mcb_experiments/stage1")
+    parser.add_argument("--base-carry", type=str, default=None,
+                        help="Equilibrated/independent IC carry to optimize "
+                             "against (run_equilibrate.py). Default: cold-start "
+                             "coupler.initialize() (aquaplanet legacy).")
+    parser.add_argument("--no-realistic-terrain", dest="realistic_terrain",
+                        action="store_false", default=True)
     return parser.parse_args()
 
 
@@ -120,17 +127,25 @@ def main():
     start_datetime = jdt.to_datetime("2000-01-01")
     coupling_timestep = jdt.to_timedelta(1, "day")
     coupler, coords, terrain, atm_model = setup_coupled_model(
-        start_datetime, coupling_timestep
+        start_datetime, coupling_timestep,
+        realistic_terrain=args.realistic_terrain,
     )
+    workflow = coupler_workflow(coupler)  # include lnd step over terrain (R7a)
+    print(f"  Coupler workflow: {workflow}")
 
-    print("Initializing coupled carry...")
-    initial_carry = coupler.initialize()
+    template_carry = coupler.initialize()
+    if args.base_carry is not None:
+        print(f"Loading base IC carry: {args.base_carry}")
+        initial_carry = load_carry(args.base_carry, template_carry)
+    else:
+        print("Initializing coupled carry (cold start)...")
+        initial_carry = template_carry
 
-    ocean_mask = create_ocean_mask(coords.horizontal, terrain.fmask)
+    ocean_mask = ocean_mask_from_coupler(coupler)  # match training/eval mask
     area_weights = compute_area_weights(coords)
     nodal_shape = coords.horizontal.nodal_shape
 
-    step_fn = create_coupled_step_fn(coupler, WORKFLOW, jitted=True)
+    step_fn = create_coupled_step_fn(coupler, workflow, jitted=True)
 
     # --- Paired no-MCB baseline: same initial state, same length ---
     print(f"\nRunning paired no-MCB baseline ({args.days} days)...")
@@ -149,10 +164,14 @@ def main():
 
     # --- Parameterization ---
     def pattern_from_theta(theta):
-        return args.max_amplitude * jax.nn.sigmoid(theta) * ocean_mask
+        # Clipped-linear parameterization matching the policy head
+        # (jcm/mcb/policy.py): the perturbation is theta itself, clipped to
+        # [0, max_amplitude], over ocean. Optimizing theta directly (rather than
+        # a sigmoid logit) means best_theta ≈ the field, and warm_start_params
+        # can seed the policy output bias with best_pattern.
+        return jnp.clip(theta, 0.0, args.max_amplitude) * ocean_mask
 
-    init_frac = jnp.clip(args.init_amplitude / args.max_amplitude, 1e-4, 1 - 1e-4)
-    theta0 = jnp.full(nodal_shape, jnp.log(init_frac / (1.0 - init_frac)))
+    theta0 = jnp.full(nodal_shape, float(args.init_amplitude))
 
     # --- Loss ---
     def loss_fn(theta):
@@ -209,6 +228,10 @@ def main():
 
     for it in range(args.iters):
         t0 = time.time()
+        # `update` returns POST-update theta but `loss` measured at the input
+        # theta; snapshot the measured theta so best_theta is the params that
+        # actually produced best_loss (not a one-step perturbation of them).
+        measured_theta = theta
         theta, opt_state, loss, aux, grad_norm = update(theta, opt_state)
         loss = float(loss)
         history["loss"].append(loss)
@@ -219,7 +242,7 @@ def main():
 
         if loss < best_loss:
             best_loss = loss
-            best_theta = theta
+            best_theta = measured_theta
 
         if it % args.log_interval == 0:
             pattern = pattern_from_theta(theta)

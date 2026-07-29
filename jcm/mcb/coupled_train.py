@@ -415,7 +415,8 @@ def train_coupled_policy(
     for epoch in range(training_config.num_epochs):
         epoch_start = time.time()
 
-        # Training step
+        # Training step. `loss` is measured at state.params (pre-update);
+        # `new_params` are AFTER the optimizer step.
         new_params, new_opt_state, loss, grad_norm = train_step(
             state.params, state.opt_state, initial_carry
         )
@@ -423,9 +424,11 @@ def train_coupled_policy(
         loss_val = float(loss)
         grad_norm_val = float(grad_norm)
 
-        # Update best params
+        # Update best params. Save state.params — the params that produced
+        # loss_val — not new_params (whose loss is not measured until next
+        # epoch). See the off-by-one note in train_coupled_policy_ensemble.
         if loss_val < state.best_loss:
-            best_params = new_params
+            best_params = state.params
             best_loss = loss_val
             patience_counter = 0
         else:
@@ -497,6 +500,7 @@ def train_coupled_policy_ensemble(
     callback: Optional[Callable[[TrainingState], None]] = None,
     initial_params: Optional[dict] = None,
     heldout_interval: int = 10,
+    select_on_heldout: bool = False,
 ) -> Tuple[dict, Dict[str, Any]]:
     """Train MCB policy across an ensemble of varied initial conditions.
 
@@ -504,9 +508,16 @@ def train_coupled_policy_ensemble(
     (params, carry, baseline) -> (loss, grads) function (baseline is a traced
     argument, so all ICs share one compile), averages the gradients on the
     host, and applies one optimizer update. Gradient clipping (if configured)
-    acts on the AVERAGED gradient. Best-params tracking and early stopping
-    use the mean loss over training ICs. Held-out ICs are evaluated
-    forward-only every `heldout_interval` epochs — logged, never gated on.
+    acts on the AVERAGED gradient.
+
+    Model selection and early stopping use the mean HELD-OUT loss when
+    ``select_on_heldout`` is True (held-out is then evaluated every epoch on
+    the pre-update params, i.e. exactly the params that would be shipped),
+    and fall back to the mean TRAIN loss otherwise (the historical behavior).
+    Per-IC gradient norms and the gradient-coherence ratio
+    C = ||mean_i g_i|| / mean_i ||g_i|| are recorded every epoch: C near 1
+    means the ICs agree on a descent direction; C near 0 means large per-IC
+    gradients are destructively cancelling in the ensemble mean.
 
     Args:
         coupler: JEM Coupler instance.
@@ -525,7 +536,10 @@ def train_coupled_policy_ensemble(
         initial_params: Optional policy parameters to start from (e.g. an
             expanded Stage 3 checkpoint). If None, initialized from
             training_config.random_seed.
-        heldout_interval: Epochs between held-out evaluations.
+        heldout_interval: Epochs between held-out evaluations when
+            ``select_on_heldout`` is False (logging only).
+        select_on_heldout: Gate model selection and early stopping on the
+            mean held-out loss (evaluated every epoch) instead of train loss.
 
     Returns:
         Tuple of:
@@ -535,6 +549,10 @@ def train_coupled_policy_ensemble(
     """
     assert len(train_carries) == len(train_baselines)
     assert len(heldout_carries) == len(heldout_baselines)
+    if select_on_heldout and not heldout_carries:
+        raise ValueError(
+            "select_on_heldout=True requires held-out ICs to gate on."
+        )
     num_train = len(train_carries)
 
     ocean_mask = ocean_mask_from_fmask(terrain_fmask)
@@ -580,6 +598,8 @@ def train_coupled_policy_ensemble(
     loss_history = []            # mean train loss per epoch
     per_ic_loss_history = []     # list of per-IC loss lists per epoch
     grad_norm_history = []       # norm of the AVERAGED gradient per epoch
+    per_ic_grad_norm_history = []  # list of per-IC ||g_i|| per epoch
+    coherence_history = []       # ||mean g|| / mean ||g_i|| per epoch
     heldout_loss_history = []    # (epoch, [per-IC held-out losses])
 
     print("Starting coupled MCB policy ensemble training")
@@ -600,9 +620,14 @@ def train_coupled_policy_ensemble(
         # single-IC level; dispatch overhead is negligible vs the unrolls)
         ic_losses = []
         grad_sum = None
+        per_ic_grad_norms = []
         for carry, baseline in zip(train_carries, train_baselines):
             loss, grads = grad_fn(params, carry, baseline)
             ic_losses.append(float(loss))
+            g_flat = jnp.concatenate(
+                [g.ravel() for g in jax.tree.leaves(grads)]
+            )
+            per_ic_grad_norms.append(float(jnp.linalg.norm(g_flat)))
             if grad_sum is None:
                 grad_sum = grads
             else:
@@ -614,14 +639,49 @@ def train_coupled_policy_ensemble(
         grad_flat = jnp.concatenate([g.ravel() for g in grad_leaves])
         grad_norm_val = float(jnp.linalg.norm(grad_flat))
 
+        # Gradient coherence: ||mean g|| / mean ||g_i||. Near 1 => the ICs
+        # agree; near 0 => large per-IC gradients cancel in the mean (the
+        # naive ensemble average cannot learn a per-IC-conflicting signal).
+        mean_ic_norm = sum(per_ic_grad_norms) / num_train
+        coherence_val = grad_norm_val / (mean_ic_norm + 1e-12)
+
+        # Capture the params that PRODUCED this epoch's measured mean_loss
+        # before the optimizer step overwrites them. Selecting best_params on
+        # the post-update params (as the original code did) ships a checkpoint
+        # whose loss was never measured — a silent off-by-one that, in this
+        # noisy loss landscape, saves a one-Adam-step perturbation of the
+        # actual best-measured params.
+        measured_params = params
         params, opt_state = apply_update(params, opt_state, avg_grads)
 
         mean_loss = sum(ic_losses) / num_train
 
-        # Best-params / early-stopping bookkeeping on the mean train loss
-        if mean_loss < best_loss:
-            best_params = params
-            best_loss = mean_loss
+        # Held-out evaluation. When gating on held-out we evaluate EVERY epoch
+        # on the pre-update params (measured_params) — the exact params that
+        # would be shipped as best — so selection and the shipped checkpoint
+        # agree. Otherwise it is a periodic forward-only log on the post-update
+        # params (historical behavior).
+        heldout_mean = None
+        heldout_msg = ""
+        do_heldout = bool(heldout_carries) and (
+            select_on_heldout or epoch % heldout_interval == 0
+        )
+        if do_heldout:
+            eval_params = measured_params if select_on_heldout else params
+            heldout_losses = [
+                float(eval_fn(eval_params, carry, baseline))
+                for carry, baseline in zip(heldout_carries, heldout_baselines)
+            ]
+            heldout_loss_history.append((epoch, heldout_losses))
+            heldout_mean = sum(heldout_losses) / len(heldout_losses)
+            heldout_msg = f" | Held-out: {heldout_mean:.6f}"
+
+        # Best-params / early-stopping on the selection metric (held-out when
+        # requested, else train mean loss).
+        selection_metric = heldout_mean if select_on_heldout else mean_loss
+        if selection_metric < best_loss:
+            best_params = measured_params
+            best_loss = selection_metric
             patience_counter = 0
         else:
             patience_counter += 1
@@ -629,24 +689,16 @@ def train_coupled_policy_ensemble(
         loss_history.append(mean_loss)
         per_ic_loss_history.append(ic_losses)
         grad_norm_history.append(grad_norm_val)
-
-        # Held-out forward-only evaluation (logged, not gated)
-        heldout_msg = ""
-        if heldout_carries and epoch % heldout_interval == 0:
-            heldout_losses = [
-                float(eval_fn(params, carry, baseline))
-                for carry, baseline in zip(heldout_carries, heldout_baselines)
-            ]
-            heldout_loss_history.append((epoch, heldout_losses))
-            heldout_mean = sum(heldout_losses) / len(heldout_losses)
-            heldout_msg = f" | Held-out: {heldout_mean:.6f}"
+        per_ic_grad_norm_history.append(per_ic_grad_norms)
+        coherence_history.append(coherence_val)
 
         # Logging
         if epoch % training_config.log_interval == 0:
             epoch_time = time.time() - epoch_start
             per_ic_str = "/".join(f"{v:.4f}" for v in ic_losses)
             print(f"Epoch {epoch:4d} | Mean loss: {mean_loss:.6f} "
-                  f"[{per_ic_str}] | Grad norm: {grad_norm_val:.4f} | "
+                  f"[{per_ic_str}] | Grad norm: {grad_norm_val:.4f} "
+                  f"| Coh: {coherence_val:.3f} | "
                   f"Best: {best_loss:.6f}{heldout_msg} | "
                   f"Time: {epoch_time:.1f}s")
 
@@ -678,8 +730,11 @@ def train_coupled_policy_ensemble(
         'loss_history': loss_history,
         'per_ic_loss_history': per_ic_loss_history,
         'grad_norm_history': grad_norm_history,
+        'per_ic_grad_norm_history': per_ic_grad_norm_history,
+        'coherence_history': coherence_history,
         'heldout_loss_history': heldout_loss_history,
         'best_loss': best_loss,
+        'selection_metric': 'heldout' if select_on_heldout else 'train',
         'final_loss': loss_history[-1],
         'total_time': total_time,
         'epochs_completed': len(loss_history),

@@ -332,7 +332,8 @@ def train_policy(
     for epoch in range(training_config.num_epochs):
         epoch_start = time.time()
 
-        # Training step
+        # Training step. `loss` is measured at state.params (pre-update);
+        # `new_params` are AFTER the optimizer step.
         new_params, new_opt_state, loss, grad_norm = train_step(
             state.params, state.opt_state, initial_state
         )
@@ -340,9 +341,10 @@ def train_policy(
         loss_val = float(loss)
         grad_norm_val = float(grad_norm)
 
-        # Update best params
+        # Update best params. Save state.params — the params that produced
+        # loss_val — not the post-update new_params (unmeasured this epoch).
         if loss_val < state.best_loss:
-            best_params = new_params
+            best_params = state.params
             best_loss = loss_val
             patience_counter = 0
         else:

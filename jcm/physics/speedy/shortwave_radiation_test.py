@@ -252,6 +252,110 @@ class TestShortWaveRadiation(unittest.TestCase):
             7.87542248, 10.84506035, 8.45241356, 5.18130398
         ], atol=1e-4))
 
+    def test_mcb_cloud_brightening_reduces_ocean_sw(self):
+        """R6 regression: dynamic MCB brightens CLOUDS, not the surface.
+
+        The distinguishing signature of cloud brightening (vs the old
+        surface-albedo path) is that the effect appears ONLY where there are
+        clouds. This test builds three regions at identical latitudes:
+          - CLOUDY ocean (high RH + precip -> cloudc > 0),
+          - CLEAR  ocean (low RH, no precip -> cloudc ~ 0),
+          - LAND (fmask = 1).
+        and asserts a positive mcb_perturbation reduces the net surface SW in
+        the cloudy ocean, but has ~zero effect in the clear ocean and over
+        land. The surface-albedo path would (wrongly) change the clear ocean
+        too, so this specifically guards the Twomey-direction rewire.
+        """
+        xy = (ix, il)
+        zxy = (kx, ix, il)
+        qsat = 1000. * jnp.array([0., 0.00037303, 0.00366268, 0.00787228,
+                                   0.01167024, 0.01490992, 0.01876534, 0.02279])
+        qa_cloudy = 0.5 * 1000. * jnp.array(
+            [0., 0.00035438, 0.00347954, 0.00472337, 0.00700214,
+             0.01416442, 0.01782708, 0.0216505])
+        geopotential = 20000. * jnp.arange(7, -1, -1, dtype=float)
+        se = .1 * geopotential
+        col = lambda a: jnp.tile(a[:, jnp.newaxis, jnp.newaxis], (1,) + xy)
+        qsat3, geopotential, se = col(qsat), col(geopotential), col(se)
+
+        # Column longitudes: [0, a) cloudy ocean, [a, b) clear ocean, [b, ix) land.
+        a, b = ix // 3, 2 * ix // 3
+        # Per-column specific humidity: near-saturated (cloudy) vs very dry (clear).
+        qa = np.tile(np.asarray(qa_cloudy)[:, None, None], (1,) + xy).astype(float)
+        qa[:, a:b, :] = 0.02 * np.asarray(qa_cloudy)[:, None, None]  # dry -> no cloud
+        qa = jnp.asarray(qa)
+        rh = qa / qsat3
+
+        precnv = np.zeros(xy)   # precip only in cloudy ocean
+        precnv[:a, :] = 1.0
+        precls = np.zeros(xy)
+        precls[:a, :] = 4.0
+        iptop = (np.ones(xy, dtype=int)
+                 * jnp.linspace(0, kx, il).astype(int)[jnp.newaxis, :] + 1)
+
+        fmask = np.zeros(xy)    # land in the last third
+        fmask[b:, :] = 1.0
+        cloudy_ocean = np.zeros(xy, bool)
+        cloudy_ocean[:a, :] = True
+        clear_ocean = np.zeros(xy, bool)
+        clear_ocean[a:b, :] = True
+        land = np.zeros(xy, bool)
+        land[b:, :] = True
+        ocean = (1.0 - fmask)
+
+        terrain_new = terrain.copy(fmask=jnp.asarray(fmask))
+        terrain_new, speedy_c = convert_to_speedy_latitudes(
+            terrain_new, speedy_coords)
+
+        def run(mcb_field):
+            surface_flux = SurfaceFluxData.zeros(xy)
+            humidity = HumidityData.zeros(xy, kx, rh=rh, qsat=qsat3)
+            convection = ConvectionData.zeros(
+                xy, kx, iptop=iptop, precnv=jnp.asarray(precnv), se=se)
+            condensation = CondensationData.zeros(
+                xy, kx, precls=jnp.asarray(precls))
+            sw_data = SWRadiationData.zeros(xy, kx, compute_shortwave=True)
+            date_data = DateData.zeros()
+            date_data.tyear = 0.6
+            physics_data = PhysicsData.zeros(
+                xy, kx, surface_flux=surface_flux, humidity=humidity,
+                convection=convection, condensation=condensation,
+                shortwave_rad=sw_data, date=date_data, speedy_coords=speedy_c)
+            state = PhysicsState.zeros(
+                zxy, specific_humidity=qa, geopotential=geopotential,
+                normalized_surface_pressure=jnp.ones(xy))
+            f = ForcingData.zeros(xy).copy(
+                mcb_perturbation=jnp.asarray(mcb_field))
+            physics_data = get_zonal_average_fields(
+                state, physics_data, f, terrain_new)
+            _, physics_data = get_clouds(
+                state, physics_data, parameters, f, terrain_new)
+            _, physics_data = get_shortwave_rad_fluxes(
+                state, physics_data, parameters, f, terrain_new)
+            return physics_data.shortwave_rad
+
+        base = run(np.zeros(xy))
+        mcb = run(0.1 * ocean)  # +0.1 cloud-top albedo over ALL ocean
+
+        cloudc = np.asarray(base.cloudc)
+        rsds = np.asarray(base.rsds)
+        rsns_base = np.asarray(base.rsns)
+        rsns_mcb = np.asarray(mcb.rsns)
+
+        # Non-vacuous: cloudy ocean actually has cloud + sun; clear ocean is clear.
+        self.assertGreater(float(cloudc[cloudy_ocean].sum()), 0.0)
+        self.assertGreater(float(rsds[cloudy_ocean].sum()), 0.0)
+        self.assertLess(float(cloudc[clear_ocean].mean()),
+                        0.1 * float(cloudc[cloudy_ocean].mean()))
+        # (a) MCB reduces absorbed SW in the CLOUDY ocean (brighter cloud tops).
+        self.assertLess(float(rsns_mcb[cloudy_ocean].sum()),
+                        float(rsns_base[cloudy_ocean].sum()))
+        # (b) CLEAR ocean is ~untouched — the surface-albedo path would fail this.
+        self.assertTrue(np.allclose(rsns_mcb[clear_ocean],
+                                    rsns_base[clear_ocean], atol=1e-4))
+        # (c) LAND is untouched (MCB is ocean-masked).
+        self.assertTrue(np.allclose(rsns_mcb[land], rsns_base[land], atol=1e-4))
+
     def test_output_shapes(self):
         # Ensure that the output shapes are correct
         xy = (ix, il)

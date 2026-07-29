@@ -56,7 +56,11 @@ from jcm.mcb.coupled_loss import (
 from jcm.mcb.state_features import compute_area_weights
 from jcm.mcb.train import load_checkpoint
 
-from run_coupled_training import setup_coupled_model, warm_start_params
+from run_coupled_training import (
+    coupler_workflow,
+    setup_coupled_model,
+    warm_start_params,
+)
 from run_stage5_training import START_DATE, load_ics
 
 WORKFLOW = ["coupling", "atm", "ocn"]
@@ -88,6 +92,8 @@ def parse_args():
     parser.add_argument("--tropics", type=float, default=0.05)
     parser.add_argument("--output", type=str, default=None,
                         help="Output pickle (default: <ic-dir>/../eval_results.pkl)")
+    parser.add_argument("--max-perturbation", type=float, default=0.15,
+                        help="Max albedo perturbation (forcing cap).")
     return parser.parse_args()
 
 
@@ -98,7 +104,7 @@ def make_config(args, feature_config, loss_weights):
         target_cooling=args.target_cooling,
         loss_weights=loss_weights,
         feature_config=feature_config,
-        max_perturbation=0.15,
+        max_perturbation=args.max_perturbation,
         use_checkpointing=True,
     )
 
@@ -154,6 +160,8 @@ def main():
     # run_stage5_training. Sourced from the coupler, not terrain.fmask, so eval
     # metrics are computed over exactly the cells whose SST evolves.
     ocean_mask = ocean_mask_from_coupler(coupler)
+    workflow = coupler_workflow(coupler)  # include lnd step over terrain (R7a)
+    print(f"  Coupler workflow: {workflow}")
     area_weights = compute_area_weights(coords)
 
     # Gate 1: terrain activation.
@@ -175,7 +183,7 @@ def main():
     policy = MCBPolicyMLP(
         output_shape=output_shape,
         hidden_dims=(256, 256),
-        max_perturbation=0.15,
+        max_perturbation=args.max_perturbation,
     )
 
     fc13 = CoupledFeatureConfig(include_absolute_sst=True)
@@ -223,7 +231,7 @@ def main():
             t0 = time.time()
             result = evaluate_coupled_policy(
                 coupler=coupler,
-                workflow=WORKFLOW,
+                workflow=workflow,
                 policy_fn=policy.apply,
                 policy_params=params,
                 initial_carry=carry,
@@ -314,7 +322,9 @@ def main():
 
     # --- Gates ---
     print("\n" + "=" * 70)
-    print("SUCCESS GATES")
+    print("SUCCESS GATES (LEGACY — bare-band/aggregate gates the 2026-07-12 audit")
+    print("  found to be coin flips inside the noise floor; SUPERSEDED by the")
+    print("  pre-registered control-relative gates below. Kept for continuity.)")
     print("=" * 70)
     s5 = agg["stage5-realistic"]
     gates = {}
@@ -364,6 +374,46 @@ def main():
               f"(generalization SKIPPED — missing stage1 or held-out)")
 
     results["gates"] = gates
+
+    # --- Pre-registered control-relative gates (PREREGISTRATION.md sec 4) ---
+    # Paired per-IC (policy - stage1-static) on identical held-out ICs, with a
+    # 2-s.e. significance rule. A margin within 2 s.e. reports "underpowered" —
+    # the honest verdict the legacy bare-band gates hid. With n=2 held-out ICs
+    # most gates will read "underpowered" (correct); the campaign uses N>=10.
+    from jcm.mcb.gates import cooling_gate, improvement_gate, no_worse_gate
+    print("\n" + "=" * 70)
+    print("PRE-REGISTERED CONTROL-RELATIVE GATES (paired per-IC vs stage1-static)")
+    print("=" * 70)
+    held_idx = [e["index"] for e, _, _ in all_ics if e["split"] == "heldout"]
+    preg = {}
+    if held_idx and "stage1-static" in policies:
+        def cell(name, i, key):
+            return results["cells"][(name, i)][key]
+        pol_dsst = [cell("stage5-realistic", i, "final_sst_change") for i in held_idx]
+        sta_dsst = [cell("stage1-static", i, "final_sst_change") for i in held_idx]
+        pol_loss = [cell("stage5-realistic", i, "mean_loss") for i in held_idx]
+        sta_loss = [cell("stage1-static", i, "mean_loss") for i in held_idx]
+        tgt = args.target_cooling
+        pol_err = [abs(d - tgt) for d in pol_dsst]
+        sta_err = [abs(d - tgt) for d in sta_dsst]
+
+        g2 = cooling_gate(pol_dsst)
+        g3 = improvement_gate(pol_err, sta_err)
+        g4 = no_worse_gate(pol_loss, sta_loss)
+        preg = {"n_heldout": len(held_idx), "G2_cooling": g2,
+                "G3_improvement": g3, "G4_no_worse": g4}
+        print(f"  n held-out ICs = {len(held_idx)}  (powered gates need N>=10)")
+        print(f"  G2 cooling:            mean dSST {g2['mean']:+.4f} +/- {g2['se']:.4f} K "
+              f"in {g2['band']} -> {g2['verdict']}")
+        print(f"  G3 controller-vs-static: cooling-error improvement "
+              f"{g3['improvement']:+.4f} +/- {g3['se']:.4f} K -> {g3['verdict']}")
+        print(f"  G4 held-out loss vs static: diff {g4['mean']:+.6f} +/- {g4['se']:.6f} "
+              f"-> {g4['verdict']}")
+        print("  ('underpowered' = margin within 2 s.e.; not a PASS or FAIL. "
+              "See PREREGISTRATION.md)")
+    else:
+        print("  SKIPPED (need the stage1-static comparator AND held-out ICs)")
+    results["pregistered_gates"] = preg
 
     with open(output_path, "wb") as f:
         pickle.dump(results, f)

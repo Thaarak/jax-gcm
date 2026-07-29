@@ -52,7 +52,6 @@ def make_jem_compatible(
             this argument.
 
     """
-   
     # Check if couopling_timestep is a multiple of jcm's native timestep
     timestep = jdt.to_timedelta(int(model.dt_si.to_timedelta().total_seconds()), "second")
     if timestep * np.floor(coupling_timestep / timestep) != coupling_timestep:
@@ -92,7 +91,8 @@ def make_jem_compatible(
             state=state,
             derived={ # Derived
                 "physics" : physics_no_time_dimension,
-                "total_heat_flux" : jnp.zeros(D2_nodal_shape),
+                "total_heat_flux" : jnp.zeros(D2_nodal_shape),   # SEA slab -> ocean
+                "land_heat_flux" : jnp.zeros(D2_nodal_shape),    # LAND slab -> slab land model
                 "total_freshwater_flux" : jnp.zeros(D2_nodal_shape),
                 "mcb_perturbation" : jnp.zeros(D2_nodal_shape),  # For coupled MCB training
             },
@@ -122,8 +122,15 @@ def make_jem_compatible(
                 output_averages=True,
             )
             physics_no_time_dimension = jax.tree.map(lambda x: x[0], predictions.physics)
-            total_heat_flux = - jnp.sum(physics_no_time_dimension.surface_flux.hfluxn, axis=2) # convert to upward positive
-            evaporation = jnp.sum(physics_no_time_dimension.surface_flux.evap, axis=2) # upward positive
+            # hfluxn/evap have a trailing slab axis: [..., 0] = LAND slab,
+            # [..., 1] = SEA slab (see surface_flux.py:187 vs :260). The ocean
+            # mixed layer receives the SEA-surface flux only. Summing over axis=2
+            # adds the land slab (computed from a ~272 K land skin temp over ocean
+            # cells) and injects ~100 W/m^2 RMS of spurious flux — silent on the
+            # aquaplanet (land slab ≈ 0), but corrupts every realistic-terrain run.
+            total_heat_flux = - physics_no_time_dimension.surface_flux.hfluxn[..., 1] # SEA slab, upward positive -> ocean
+            land_heat_flux = - physics_no_time_dimension.surface_flux.hfluxn[..., 0]  # LAND slab, upward positive -> slab land model
+            evaporation = physics_no_time_dimension.surface_flux.evap[..., 1] # upward positive, sea slab
 
             total_freshwater_flux = (
                 evaporation
@@ -137,6 +144,7 @@ def make_jem_compatible(
                     derived={
                         "physics" : physics_no_time_dimension,
                         "total_heat_flux" : total_heat_flux,
+                        "land_heat_flux" : land_heat_flux,
                         "total_freshwater_flux" : total_freshwater_flux,
                         "mcb_perturbation" : mcb_perturbation,  # Preserve for JAX scan
                     },

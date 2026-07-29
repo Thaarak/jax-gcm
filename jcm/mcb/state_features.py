@@ -134,11 +134,15 @@ def compute_area_weights(coords) -> jnp.ndarray:
         Area weights array (ix, il) normalized to sum to 1.
 
     """
-    # Get latitude values
-    lats = coords.horizontal.latitudes  # (il,)
+    # Get latitude values. NOTE: coords.horizontal.latitudes are in RADIANS
+    # (SPEEDY/dinosaur convention; verified min/max = ∓π/2). Do NOT apply
+    # jnp.radians() here — that double-converts and collapses the weights to
+    # near-uniform (pole/equator ratio ~1 instead of ~20), silently turning
+    # every "area-weighted" global mean into a cell-count mean.
+    lats = coords.horizontal.latitudes  # (il,) radians
 
-    # Area weight proportional to cos(latitude)
-    weights = jnp.cos(jnp.radians(lats))
+    # Area weight proportional to cos(latitude).
+    weights = jnp.cos(lats)
 
     # Broadcast to full grid
     weights_2d = jnp.broadcast_to(weights[None, :], coords.horizontal.nodal_shape)

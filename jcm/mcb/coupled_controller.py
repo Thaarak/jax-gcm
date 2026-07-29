@@ -66,6 +66,17 @@ class CoupledControllerConfig(NamedTuple):
         feature_config: Configuration for feature extraction.
         max_perturbation: Maximum MCB albedo perturbation.
         use_checkpointing: Enable gradient checkpointing for memory.
+        loss_mode: Training objective. "summed" (default) sums
+            compute_coupled_loss over every control interval — the historical
+            behavior, dominated by early-interval transients and the spatial
+            uniformity penalty (<0.2% of its magnitude is the gated quantity).
+            "terminal_dsst" trains on exactly what the pre-registered gate
+            scores: the squared error of the final-step global-mean ocean
+            dSST vs the paired baseline, target_cooling, area x ocean weighted
+            (plus a small forcing-magnitude regularizer). This is gate-aligned.
+        forcing_reg_weight: Weight of the mean-square MCB forcing penalty
+            added in "terminal_dsst" mode (keeps the pattern from wandering
+            without materially shifting the gated dSST).
 
     """
 
@@ -76,6 +87,8 @@ class CoupledControllerConfig(NamedTuple):
     feature_config: CoupledFeatureConfig = CoupledFeatureConfig()
     max_perturbation: float = 0.15
     use_checkpointing: bool = True
+    loss_mode: str = "summed"
+    forcing_reg_weight: float = 0.001
 
 
 class CoupledControlStep(NamedTuple):
@@ -340,6 +353,25 @@ def unroll_coupled_with_policy(
         (initial_carry, jnp.array(0.0)),
         jnp.arange(num_intervals),
     )
+
+    if config.loss_mode == "terminal_dsst":
+        # Gate-aligned objective: score exactly what the pre-registered gate
+        # scores (evaluate_coupled_policy below) — the final-step global-mean
+        # ocean dSST vs the paired baseline — instead of the interval sum,
+        # whose gradient is dominated by early-interval "not cooled yet" terms
+        # and the uniformity penalty and which rewards overcooling.
+        from jcm.mcb.state_features import compute_area_weights
+        area_weights = compute_area_weights(coords)
+        sst_weights = area_weights * ocean_mask
+        sst_weights = sst_weights / jnp.sum(sst_weights)
+        final_sst = final_carry["ocn"]["state"].sea_surface_temperature
+        baseline_sst = baseline_trajectory.at_step(config.total_steps).sst
+        dsst = jnp.sum((final_sst - baseline_sst) * sst_weights)
+        terminal = (dsst - config.target_cooling) ** 2
+        forcing_reg = config.forcing_reg_weight * jnp.mean(
+            trajectory.mcb_forcing ** 2
+        )
+        total_loss = terminal + forcing_reg
 
     return total_loss, final_carry, trajectory
 

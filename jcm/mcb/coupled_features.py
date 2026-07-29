@@ -367,8 +367,13 @@ def extract_coupled_features(
     if config.include_absolute_sst:
         sst = coupled_carry["ocn"]["state"].sea_surface_temperature
 
-        # Global-mean SST offset from a 288 K reference
-        features.append(_global_mean(sst) - 288.0)
+        # Global-mean SST offset from a 288 K reference. Subtract the reference
+        # BEFORE the area-weighted sum: summing ~288 K values and then
+        # subtracting 288 is catastrophic float32 cancellation (the ~0.5 K
+        # result inherits the ~2e-4 rounding of a 288 K sum), which the
+        # non-uniform area weights amplify. Summing the ~O(1 K) anomaly is
+        # mathematically identical (weights sum to 1) and float32-stable.
+        features.append(_global_mean(sst - 288.0))
 
         # NH minus SH hemispheric mean SST (aquaplanet season signal)
         nh_mask = create_latitude_band_mask(coords, 0.0, 90.0)

@@ -81,7 +81,11 @@ class MCBPolicyMLP(nn.Module):
         x = x.reshape((-1,) + self.output_shape)
 
         # Constrain to valid range [0, max_perturbation]
-        x = self.max_perturbation * nn.sigmoid(x)
+        # Clipped-linear head: reaches EXACTLY 0 ("MCB off", unreachable under a
+        # sigmoid) and exactly max_perturbation, with unit gradient in between
+        # (a sigmoid vanishes toward both rails — the audit found ~81% of ocean
+        # cells stuck in saturated tails, spraying half-max where "off" was meant).
+        x = jnp.clip(x, 0.0, self.max_perturbation)
 
         # Remove batch dim if input was unbatched
         if not is_batched:
@@ -157,7 +161,11 @@ class MCBPolicyCNN(nn.Module):
         x = x.squeeze(-1)
 
         # Constrain to valid range
-        x = self.max_perturbation * nn.sigmoid(x)
+        # Clipped-linear head: reaches EXACTLY 0 ("MCB off", unreachable under a
+        # sigmoid) and exactly max_perturbation, with unit gradient in between
+        # (a sigmoid vanishes toward both rails — the audit found ~81% of ocean
+        # cells stuck in saturated tails, spraying half-max where "off" was meant).
+        x = jnp.clip(x, 0.0, self.max_perturbation)
 
         # Remove batch dim if input was unbatched
         if not is_batched:
@@ -248,7 +256,11 @@ class MCBPolicyResNet(nn.Module):
         x = x.squeeze(-1)
 
         # Constrain output
-        x = self.max_perturbation * nn.sigmoid(x)
+        # Clipped-linear head: reaches EXACTLY 0 ("MCB off", unreachable under a
+        # sigmoid) and exactly max_perturbation, with unit gradient in between
+        # (a sigmoid vanishes toward both rails — the audit found ~81% of ocean
+        # cells stuck in saturated tails, spraying half-max where "off" was meant).
+        x = jnp.clip(x, 0.0, self.max_perturbation)
 
         if not is_batched:
             x = x[0]
@@ -338,7 +350,11 @@ class MCBPolicyHybrid(nn.Module):
         x = x.squeeze(-1)
 
         # Constrain output
-        x = self.max_perturbation * nn.sigmoid(x)
+        # Clipped-linear head: reaches EXACTLY 0 ("MCB off", unreachable under a
+        # sigmoid) and exactly max_perturbation, with unit gradient in between
+        # (a sigmoid vanishes toward both rails — the audit found ~81% of ocean
+        # cells stuck in saturated tails, spraying half-max where "off" was meant).
+        x = jnp.clip(x, 0.0, self.max_perturbation)
 
         if global_unbatched and spatial_unbatched:
             x = x[0]

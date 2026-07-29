@@ -67,6 +67,13 @@ def parse_args():
                         default="mcb_experiments/stage3_60d/coupled_trained_policy.pkl",
                         help="Stage 3 checkpoint (11 features) to warm-start "
                              "from; expanded to 13 features with zero rows")
+    parser.add_argument("--allow-random-init", action="store_true",
+                        default=False,
+                        help="Permit random initialization when no warm-start "
+                             "is available. Without this flag a missing "
+                             "checkpoint is a hard error (prevents silently "
+                             "training a cold-started policy under a "
+                             "warm-start filename).")
     parser.add_argument("--warm-start-stage1", type=str, default=None,
                         help="Fallback: Stage 1 pattern pickle; sets the "
                              "output bias to the optimized pattern instead "
@@ -202,9 +209,19 @@ def main():
         print(f"  Expanding checkpoint input dim {old_dim} -> {feature_dim}")
         initial_params = expand_policy_input(ckpt_params, old_dim, feature_dim)
         init_source = f"stage3:{args.init_checkpoint}"
-    else:
+    elif args.allow_random_init:
         print(f"  WARNING: init checkpoint {args.init_checkpoint} not found; "
-              f"using random initialization")
+              f"using random initialization (--allow-random-init set)")
+    else:
+        raise SystemExit(
+            f"ERROR: no warm-start available: --warm-start-stage1 not given "
+            f"and --init-checkpoint '{args.init_checkpoint}' does not exist. "
+            f"Refusing to silently train a random-initialized policy and save "
+            f"it as a warm-started artifact. Pass a valid checkpoint, or "
+            f"--allow-random-init to run cold-start intentionally. "
+            f"(Note the GPU artifacts live under mcb_experiments_gpu/, not "
+            f"mcb_experiments/.)"
+        )
 
     # Pre-flight gradient sanity check on IC 0
     print("\nPre-flight gradient check on IC 0...")

@@ -29,14 +29,19 @@ Foundational phases 1–8 are complete (table above). The project now follows th
 [Revised Roadmap](#-revised-roadmap-current-strategy---supersedes-previous-retrain-plan) below,
 where per-stage detail, numbers, and gate verdicts live. One-line status:
 
-| Stage | Status |
+| Stage | Status (revised by the 2026-07-12 audit) |
 |-------|--------|
-| 0 — verify plumbing / diagnose loss | ✅ complete, gate open |
-| 1 — static pattern optimization | ✅ complete (−0.097 K, spatially structured) |
-| 2 — paired-baseline features & loss | ✅ complete, gate open |
-| 3 — NN policy training (60-day) | ✅ complete (−0.1015 K, beats static) |
-| 4 — varied-IC ensemble controller | ⚠️ complete, 3/4 gates (Gate 1: held-out overcooling) |
-| 5 — realistic terrain + teleconnections | ⚠️ GPU run complete, 2/4 gates (G1/G2 pass; G3 precip, G4 held-out generalization fail). Option A bracketing follow-up ❌ tried (2026-07-09), did **not** fix G2/G4 |
+| 0 — verify plumbing / diagnose loss | ✅ **SURVIVES** — AD-vs-FD gradient check (1.6% rel. err) is the project's one solid result |
+| 1 — static pattern optimization | ❌ **INVALID** — loss curve flat (p=0.45); "optimal" pattern peaks at +68.7°N (Arctic), an artifact of the broken area weights (R1) |
+| 2 — paired-baseline features & loss | ⚠️ **PARTIALLY INVALID** — "Issue #3 fixed" was verified at *zero MCB*; `sst_uniformity` is 83–97% of the realized loss |
+| 3 — NN policy training (60-day) | ❌ **UNSUPPORTED** — static *wins* the actual objective; dSST margin 0.14σ; no convergence |
+| 4 — varied-IC ensemble controller | ❌ **UNSUPPORTED** — gates are n=2 coin flips; "state-dependence" gate is an auto-pass |
+| 5 — realistic terrain + teleconnections | ❌ **UNSUPPORTED** — no learning (p=0.80); Gate 3 measures a constant; Gate 4 margin < per-IC σ |
+| 5 Option A (seasonal bracketing) | ❌ **CONCLUSION INVALID** — 72% of the "worsening" is reproduced by the *unchanged* control pattern |
+
+> **⛔ All GPU training is frozen pending P0 + P1 of the
+> [Independent Audit](#-independent-audit-2026-07-12--blocking).** The two cheapest actions —
+> fixing `compute_area_weights` and measuring the noise floor — will change every number below.
 
 **NEXT:** Stage 4 Follow-up **Option A (seasonal bracketing) is DONE and refuted** (2026-07-09): the
 bracketed run (train {0,45,90,135,180,225}, held-out {70,200}) made held-out dSST *colder* (−0.1646 K
@@ -46,6 +51,651 @@ extrapolation**. Next: attack generalization directly (denser/more training ICs,
 regularization, or explicit held-out-loss weighting) and, separately, raise teleconnection weights for
 Gate 3. The `--train-days`/`--heldout-days` bracketing flags remain reusable infrastructure. Prior
 Stage 5 diya GPU run (150-epoch warm-start, 6-IC eval) done 2026-07-06.
+
+> ### ⛔ SUPERSEDED BY THE 2026-07-12 AUDIT — DO NOT ACT ON THE "NEXT" PARAGRAPH ABOVE
+>
+> The conclusion "the held-out failure is a **generalization gap, not season extrapolation**" is
+> **not supported by the data**, and the queued follow-ups it implies (denser ICs, IC-season
+> regularization, held-out-loss weighting, raising teleconnection weights) would burn GPU time on
+> symptoms of five upstream defects. See
+> [🔴 Independent Audit](#-independent-audit-2026-07-12--blocking) immediately below.
+
+---
+
+## 🔴 Independent Audit (2026-07-12) — BLOCKING
+
+**Bottom line: no training run in this project has ever converged; the primary metric is computed with
+broken area weights; the forcing is not actually MCB; and the coupler cannot form the teleconnections
+it gates on (with a flux bug that corrupts every Stage-5 number).** Seven root causes, five of them
+verified by running the actual code. Every stage-level conclusion from Stage 1 onward is drawn from
+noise, at least one headline "scientific result" (the Stage-1 optimal pattern) is a direct artifact of
+a units bug, and the object being optimized is anti-MCB physics through a broken coupled model. Freeze
+GPU spend until P0 below is done.
+
+This audit ran 8 lenses total: 5 completed in an automated multi-agent pass (statistics, training loop,
+protocol, loss, policy) before it hit a usage limit, and 3 more (radiative physics, coupler/slab ocean,
+security/reproducibility) ran afterward. The remaining originally-planned lenses (a dedicated JAX-numerics
+sweep beyond the x64 finding, and a full climate-science-validity pass) were **not** run to completion —
+treat those areas as under-audited.
+
+### The seven root causes
+
+R1–R5 are why the *numbers* mean nothing; **R6 is why the object being optimized is not MCB**; **R7 is
+why the model cannot represent the harm it claims to minimize, plus a live coupling bug that corrupts
+Stage 5's cooling signal.** R6 and R7 sit underneath all of R1–R5: even a perfectly-converged,
+perfectly-measured run would be optimizing the wrong physics through a broken coupler.
+
+#### R1 — `compute_area_weights` is broken: the "global mean" is not area-weighted (CRITICAL)
+
+`jcm/mcb/state_features.py:141`:
+```python
+lats = coords.horizontal.latitudes      # these are in RADIANS (verified: min/max = ∓1.5212 ≈ ∓π/2)
+weights = jnp.cos(jnp.radians(lats))    # ← applies radians() to values ALREADY in radians
+```
+`jcm/mcb/mcb_regions.py:61` gets this right (`jnp.rad2deg(grid.latitudes)`), which proves the units.
+
+Measured consequence:
+
+| weighting | min | max | pole/equator ratio |
+|---|---|---|---|
+| **as shipped** | 2.170e-04 | 2.170e-04 | **1.0004 — i.e. UNIFORM** |
+| correct `cos(lat)` | 1.672e-05 | 3.371e-04 | 20.17 |
+
+The shipped "area weights" are a **cell-count mean**, over-weighting polar cells by up to **20×**.
+This function feeds `sst_cooling_loss` (the −0.1 K target — *the* optimization objective),
+`sst_uniformity_loss`, and every policy input feature.
+
+**It also explains the project's strangest result.** The Stage-1 "optimized" pattern's zonal-mean
+peak is at **+68.7°N** (subpolar/Arctic) — the plan records it as "~50°N" (line 94), which is itself
+wrong. MCB physically targets **subtropical stratocumulus decks (~15–35°: SE Pacific, SE Atlantic,
+NE Pacific)**. The optimizer put the brightening near the Arctic because, under uniform weights, a
+tiny polar cell moves the "global mean" as much as an equatorial one. **The celebrated "spatially
+structured pattern" is the optimizer exploiting a units bug.** Every later stage warm-starts from it.
+
+#### R2 — No training run has ever converged (CRITICAL)
+
+Fitted trend on the actual history pickles:
+
+| run | epochs | loss[0] | loss[−1] | "best" | trend p | verdict |
+|---|---|---|---|---|---|---|
+| Stage 1 (direct pattern opt) | 150 | 0.006786 | 0.004954 | 0.004497 @85 | **0.45** | flat |
+| Stage 5 (GPU) | 29 | 0.031281 | 0.030858 | 0.024618 @8 | **0.80** | flat |
+| Stage 5 Option A (GPU) | 48 | 0.038450 | 0.036400 | 0.030585 @27 | **0.39** | flat |
+
+Every "best loss" is a ~2.2σ outlier in a **stationary** series — the *minimum of noise*, matching
+the expected min of N iid draws. Stage 5's epoch-to-epoch loss σ is **11.5%**, which is exactly the
+project's own documented "~15% variation across XLA compilations." **The per-epoch loss variation IS
+the chaos noise; parameter updates move the loss by less than the noise.**
+
+Three compounding defects:
+- **Model selection on TRAIN loss.** `coupled_train.py:509`: held-out ICs are *"forward-only … logged,
+  **never gated on**"*; `:622` `if mean_loss < best_loss` (training loss). The shipped checkpoint is
+  the luckiest *training* noise draw. Textbook selection error — and Gates 2/4 then punish it.
+- **Off-by-one in `best_params`.** `coupled_train.py:604` measures loss at pre-update params, `:617`
+  applies the update, `:622-624` stores the **post-update** params. Same bug in `train.py:344` and
+  `optimize_mcb_pattern.py`. **No saved checkpoint is the params that achieved its recorded
+  best_loss** (Stage 5's saved policy actually measures 0.0345, not the recorded 0.0246).
+- **float32 throughout.** `jax-esm/jem/components/JCM.py:26` defines `asfloat64()` and calls it every
+  coupled step — but `jax_enable_x64` is **never set anywhere**, so `.astype(jnp.float64)` is a
+  **silent no-op** (verified: returns float32 + UserWarning). BPTT runs in float32 through a chaotic
+  60-day rollout resolving a 0.1 K signal in a 288 K field.
+
+#### R3 — The 2026-07-09 "Option A REFUTED" conclusion is a statistical artifact (CRITICAL)
+
+`stage1-static` is an **unchanged** pattern present in both runs — a free control arm the eval already
+ran and the analysis ignored:
+
+| policy | stage5 held-out (d180,225) | optionA held-out (d70,200) | shift |
+|---|---|---|---|
+| stage5-realistic (trained) | −0.1191 | −0.1646 | **−0.0455** |
+| **stage1-static (UNCHANGED CONTROL)** | −0.0841 | −0.1166 | **−0.0326** |
+
+**72% of the shift attributed to Option A is reproduced by a pattern that did not change.** The two
+runs also use **different held-out IC sets**, so it was never a valid comparison. Option-A-specific
+effect after control: **−0.0129 K**, against a per-held-out-mean s.e. of ~0.015–0.026 K (n=2). **Not
+significant.** The day-70 IC that "refuted" the hypothesis overcools under the *static* pattern too
+(−0.1257 vs neighbours −0.0824/−0.0837) — it is simply an intrinsically MCB-sensitive IC.
+
+Worse, the trained policy's per-IC dSST correlates **+0.79 / +0.87** with the static pattern's across
+ICs, at a near-constant ratio of **~1.2×**. The "generalization gap" is just *IC sensitivity × a
+policy that applies ~20% more forcing everywhere* — because it has **railed into the sigmoid cap**
+(`max_mcb_forcing = 0.14999955` on every trained policy, every IC; stage1-static maxes at 0.1315).
+And Stage 5's train mean dSST (−0.1338) is **colder** than its held-out mean (−0.1191): the
+"held-out overcooling" narrative contradicts its own numbers.
+
+#### R4 — Gate 3 measures a mathematical constant (CRITICAL)
+
+`coupled_loss.py:195`: `loss = jax.nn.softplus(-precip_change * 100) / 100`. At zero change this is
+**ln(2)/100 = 0.0069315**. The gate metric's zero-effect value is `0.05 × 2 × 0.0069315 =` **6.9315e-4**.
+
+Reported Gate 3 numbers: **6.905e-4, 6.863e-4, 6.876e-4** — all within **1%** of the do-nothing
+constant. Gate 3's FAIL was decided by a 0.6% wobble around a constant (paired t = 0.09, n=6).
+
+Three further reasons it could never have worked:
+- `precnv` is in **g/(m²·s)**, so a realistic ~0.1 mm/day regional signal gives `|100Δ| ≈ 0.12` —
+  deep in softplus's **linear regime**, where it is *symmetric*, not the intended asymmetric hinge.
+- It scores a **single instantaneous day-60 precip snapshot** between two chaotically diverged runs.
+- The **tropics term is numerically dead** (~1e-6 vs ~7e-3 for amazon/sahel).
+- Precip is only **3.6–4.5%** of the objective, and **no feature normalization** exists — precip
+  features enter at O(1e-3) alongside O(1) SST features, so the policy is ~0.4% sensitive to them.
+
+Raising teleconnection weights (the queued fix) would amplify **noise**, not signal.
+
+#### R5 — The ICs are not a distribution, and the model is not in equilibrium (CRITICAL)
+
+`run_stage{4,5}_generate_ics.py` builds every IC by continuing **one deterministic spin-up run** and
+snapshotting it at days {0,45,90,…}. Consequences:
+- "Held-out" ICs are **later points on the same trajectory**, not independent draws. With
+  `spinup_interval=45 < horizon=60`, held-out 60-day evaluation windows **temporally overlap**
+  training windows. This is not a generalization test.
+- The model is **nowhere near equilibrium**: baseline global-mean SST drifts **+1.4–1.5 K per 60
+  days** (284.4 K at day 0 → 290.9 K at day 225, **+6.5 K** across the IC window, still accelerating).
+  The −0.1 K target signal is **~14× smaller than the drift**. "Season" is perfectly confounded with
+  secular drift — so "bracketing seasons" was never a meaningful operation.
+- **IC 0 is the raw `isothermal_rest_atmosphere` cold start** (no weather, no circulation, uniform
+  288.15 K SST) — used as 1 of only 4 training samples.
+
+Also: **`sst_uniformity` is 83–97% of the realized loss** under nonzero forcing. The post-mortem
+"Issue #3 fixed" check was run **at zero MCB**, the one point where uniformity is identically zero.
+The dominant training gradient is `d(chaotic paired-SST variance)/d(params)` — i.e. **noise fitting**.
+
+#### R6 — The "MCB" forcing is not MCB: surface albedo is anti-correlated with the real mechanism (CRITICAL)
+
+MCB is the **Twomey effect** — sea-salt aerosol brightens marine stratocumulus *clouds*. This code
+raises **sea-surface albedo** (`forcing.py:47`) and never touches any cloud property (`albcl`,
+`cloudc`, `qcloud`). Running the actual SPEEDY shortwave code with a subtropical marine profile and
+the policy-cap +0.15 perturbation:
+
+| cloud cover | coded (surface-albedo) MCB, ΔTOA | real (cloud-albedo) Twomey, ΔTOA |
+|---|---|---|
+| clear (0.0) | **−35.7 W/m²** | ~small |
+| 0.8 (Sc deck) | −21.8 W/m² | −33.8 W/m² |
+| overcast (1.0) | **−18.6 W/m²** | **−42.3 W/m²** |
+
+The coded effect **shrinks** as cloud cover rises (thick cloud reflects sunlight before it reaches the
+brightened surface); the real effect **grows**. So the model *suppresses* MCB exactly in the
+persistent stratocumulus decks the whole study targets, and would preferentially "deploy" into
+clear-sky subtropics — the opposite of real MCB siting. This dovetails with **R1**: the units bug
+pushed the optimizer to the Arctic, and the albedo proxy independently makes clear-sky regions look
+most effective. Neither has anything to do with brightening clouds.
+
+**Magnitude is also ~5–7× too strong.** Base ocean albedo is 0.07; +0.15 more than triples it and
+yields −18 to −36 W/m² per cell, versus the literature's ~−1 to −5 W/m² for regional MCB. A realistic
+Sc-deck forcing needs only **+0.02** surface albedo. The oversized cap gives the optimizer an
+exaggerated cooling lever it happily exploits (the same `alb_s` also directly cuts ocean heat flux in
+`surface_flux.py:260`).
+
+Plus four correctness bugs on the forcing path (all masked on the aquaplanet, live on terrain):
+- **No clipping on the dynamic path** (`forcing.py:47-49`): `albsfc` can exceed 1.0 (the static
+  `mcb_forcing.py:55` path *does* clip — inconsistent). Over sea ice the base is already 0.60.
+- **Coastal multi-masking**: the policy multiplies by `(1−fmask)` and `forcing.py:47` multiplies by
+  `(1−fmask)` **again** → `(1−fmask)²`; the static path compounds to `(1−fmask)³`. Worst measured
+  coastal cell receives 5–21% of intended forcing — precisely the near-shore upwelling zones MCB
+  targets (603 fractional-fmask cells on T30, 16 inside the Sc mask).
+- **MCB applied over sea ice** (masked only by land, not by `sice_am`).
+- **Double-application hazard**: static `mcb_config` and traced `mcb_perturbation` both add into
+  `alb_s` unconditionally; no current driver triggers it, but nothing guards it.
+
+**Consequence:** any conclusion about *where* or *how much* to deploy MCB is meaningless in this
+model until the perturbation is moved onto cloud optical properties and recalibrated. This is a
+**scientific-framing** defect, not just a bug — it sits underneath all of R1–R5.
+
+#### R7 — The coupler cannot form the teleconnections it gates on, and a flux bug corrupts Stage 5 (CRITICAL)
+
+Two findings, both verified by running the actual Stage-5 coupled model for one day and inspecting the
+arrays:
+
+**(a) Land temperature is prescribed climatology; the slab-land model is dead code.** Every MCB run
+uses the workflow `["coupling", "atm", "ocn"]` — atmosphere + slab **ocean** only. `SlabLandModel`
+(which *does* implement an evolving land temperature) is **never instantiated by any driver**. Over
+land the atmosphere reads `tsfc → stl_am` (`surface_flux.py:273`), and `stl_am` is the fixed 365-day
+climatology from `forcing.nc` — it never responds to the coupled state. So MCB cannot change
+land–sea thermal contrast or shift a monsoon via the land surface. **The only MCB→Amazon/Sahel
+pathway is a local ocean-cell SST anomaly through the atmospheric bridge — weak and spatially
+incoherent.** This is the *physical* reason Gate 3 is degenerate: **combined with R4 (the metric is a
+constant), Gate 3 is measuring a teleconnection the model structurally cannot form.** Raising
+teleconnection weights cannot create signal that the model has no mechanism to produce.
+
+Relatedly, the slab ocean has **no dynamics** — no advection, currents, upwelling, thermocline, or
+q-flux. So AMOC spin-up/collapse, ocean-heat-transport redistribution, and ENSO/Bjerknes feedback —
+the *"key risks"* named in `MCB_CONTEXT.md` — are all **structurally impossible**. The model can
+represent fast atmospheric-bridge teleconnections from a *locally* forced SST anomaly and nothing
+slower. The study cannot adjudicate ocean-mediated teleconnection risk at all; that must be stated.
+
+**(b) Heat-flux bug: the ocean receives land + sea slab flux summed together.** `hfluxn` is
+`(ix, il, 2)` = [land slab, sea slab], and the coupler does
+`total_heat_flux = -jnp.sum(hfluxn, axis=2)` (`JCM.py:125`) — **land + sea**. An ocean cell should
+receive the sea slab only (`-hfluxn[...,1]`); instead it also gets the land slab, computed from a
+nonsense ~272 K land skin temperature over ocean. Measured on the real Stage-5 grid (3411 ocean
+cells): spurious contamination **RMS 100 W/m²**, biasing the implied ocean cooling tendency from a
+correct −0.092 K/day to −0.061 K/day — a **~35% error in the SST cooling signal** that the −0.1 K
+target and every gate depend on, plus a corrupted spatial pattern. **This is silent on the aquaplanet
+(Stages 1–4, land slab ≈ 0) and switches on only at Stage 5 with realistic terrain** — so every
+Stage-5 number is computed against a corrupted flux. One-line fix: `-physics.surface_flux.hfluxn[..., 1]`.
+(The same axis-sum mistake triple-counts the freshwater `evap` at `JCM.py:126`, currently dead code.)
+
+**Verified clean (hypotheses refuted):** the daily coupling flux is a true **time-average**, not an
+instantaneous snapshot — no diurnal aliasing. And the `ocean_mask_from_coupler` fix is used
+consistently in train and eval. The heat-flux **sign** convention is correct.
+
+### What this invalidates
+
+| Claim (as recorded) | Status |
+|---|---|
+| Stage 1 "pattern is spatially structured… peak at ~50°N" — a scientific result | **INVALID** — peak is +68.7°N; artifact of R1 |
+| Stage 1 "the inverse problem is solvable; gradients informative end-to-end" | **UNSUPPORTED** — loss curve is flat (p=0.45) |
+| Stage 3 "−0.1015 K, **beats static**" | **UNSUPPORTED** — static *wins* the actual objective (0.004227 vs 0.004461); dSST margin is 0.14σ |
+| Stage 3 "non-constant, state-dependent output → MET" | **UNSUPPORTED** — confounded with the time feature; never ablated |
+| Stage 5 Gate 2 PASS (−0.1191 K) | **COIN FLIP** — sits 0.036 s.e. from FAIL, n=2 |
+| Stage 5 / Option A Gate 3 FAIL | **INVALID** — metric is 99% a constant (R4) |
+| Stage 5 Gate 4 FAIL | **UNSUPPORTED** — margin (0.0044) < per-IC σ (0.0055), n=2 |
+| Option A "REFUTED → generalization gap, not extrapolation" | **INVALID** — 72% explained by the unchanged control (R3) |
+| Post-mortem "Issue #3 (loss dominated by uncontrollable terms) FIXED" | **INVALID** — verified only at zero MCB; uniformity is 83–97% of realized loss |
+| "This models Marine Cloud Brightening" (the Twomey effect) | **INVALID** — surface-albedo proxy is anti-correlated with cloud cover (R6); never touches cloud properties |
+| Reported cooling magnitudes / dSST values | **NEEDS CAVEAT** — the +0.15 albedo cap is ~5–7× over-scaled; and Stage 5's flux is corrupted ~35% by the R7(b) heat-flux bug |
+| "Reinstated teleconnection penalties test regional protection" (Stage 5) | **INVALID** — the model cannot form a land-driven teleconnection (R7a); land T is prescribed climatology |
+| "The study addresses ocean-mediated / AMOC teleconnection risk" | **INVALID** — slab ocean has no dynamics; those mechanisms are structurally impossible (R7a) |
+| "The framework works… the issue is hyperparameter tuning, not fundamental problems" | **INVALID and actively misleading the roadmap** |
+| Phase 7 "MCB achieves −0.328 K cooling" | **NEEDS CAVEAT** — used the *static `MCBConfig`* path, not the path now trained |
+| "86 unit tests passing" as a quality signal | **NEEDS CAVEAT** — 68 `assertTrue` + 44 `assertEqual` vs only 9 `assertAlmostEqual`; no test asserts a nonzero end-to-end MCB effect, gradient correctness, or albedo bounds |
+
+### What survives (keep this)
+
+- **The differentiable plumbing is real.** Stage 0's AD-vs-finite-difference check (−0.752 vs −0.740
+  K per unit albedo, 1.6% rel. error) genuinely validates that gradients flow through the coupled
+  model. That is the project's core enabling claim and it holds.
+- **The coupled atmosphere↔slab-ocean setup produces physically sensible cooling** from an albedo
+  perturbation, via the right mechanism.
+- **Host-side ensemble gradient averaging is correct** (unit-tested against grad-of-mean-loss).
+- **Gradient clipping is direction-preserving global-norm**, and binds only once across all runs.
+- The `--train-days`/`--heldout-days` IC-schedule machinery is reusable infrastructure.
+
+### The plan
+
+**P0 — Fix the objective and the selection, then re-measure. No GPU training until this is green.**
+
+> **Progress (2026-07-13):** the pure-correctness items (0.1, 0.2, 0.9, 0.10, and the 0.8 safety
+> clip) are **done, tested, and green** — `jcm/mcb` suite 86 → **89 passing** (2 new area-weight
+> tests + 1 off-by-one regression test, the latter verified to fail on the bug). The objective/feature
+> reshaping items (0.3, 0.5, 0.6, 0.7) are **not yet done** — they carry design choices and interact
+> with each other and with P1. 0.4 (x64) is deliberately deferred to be **decided by the P1
+> measurement**, not guessed. See the ✅/⏳ column.
+
+| # | Action | File | Status |
+|---|---|---|---|
+| 0.1 | ✅ `weights = jnp.cos(lats)` (dropped the double `radians`). Verified pole/equator ratio 20.17 (was 1.0004). Two regression tests added (`TestAreaWeights`). Also fixed a downstream float32 cancellation the correct weights exposed: the absolute-SST feature now subtracts 288 K **before** the weighted sum. | `state_features.py:141`, `coupled_features.py:371` | **DONE** |
+| 0.2 | ✅ Snapshot `measured_params` before `apply_update`; save those as `best_params`. Fixed all **4** sites (ensemble + single-IC trainers, `train.py`, `optimize_mcb_pattern.py`). Regression test re-evaluates `best_params` and asserts it reproduces `best_loss`; confirmed the test **fails on the bug**. | `coupled_train.py:604-624,415-434`, `train.py:344`, `optimize_mcb_pattern.py:210` | **DONE** |
+| 0.3 | Select checkpoints + early-stop on **held-out** loss, evaluated **every** epoch (forward-only, ~4× cheaper than the grad pass). Also evaluate held-out at the warm start. | `coupled_train.py:621-642` | ⏳ pending |
+| 0.4 | **Decide via P1, don't guess.** Enable x64 (`jax_enable_x64`) *iff* the noise-floor harness shows it shrinks σ_compile; else delete the no-op `asfloat64()`. Harness supports `--x64` for exactly this A/B. | `JCM.py:26`, drivers | ⏳ blocked on P1 |
+| 0.5 | Subtract the `softplus(0)` offset; penalize **interval-mean** (not day-60 snapshot) regional precip; rescale the hinge to physical units; drop the dead tropics term. | `coupled_loss.py:180-196` | ⏳ pending |
+| 0.6 | **Standardize features** (fixed physical scales, stored with the checkpoint). | `coupled_features.py:380` | ⏳ pending |
+| 0.7 | Re-verify "Issue #3 fixed" **at the warm-start point, not at zero MCB**. Log per-component losses every epoch (`return_components` exists and is never used). | `coupled_train.py` | ⏳ pending |
+| 0.8 | ✅ **Safety clip done** — `alb_s`/`albsfc` clipped to `[0,1]` on the dynamic path. ⏳ The coastal mask-once (`(1−fmask)²`), sea-ice gate, and cap recalibration (0.15→0.02) are **deferred to P2**, where the same forcing block is reworked onto cloud albedo — doing them now would be a throwaway half-measure on a path P2 replaces. | `forcing.py:50-58` | **PARTIAL** (clip done; rest → P2) |
+| 0.9 | ✅ Missing warm-start is now a hard error (`SystemExit`) unless `--allow-random-init` is passed, in both training drivers. The error names the `mcb_experiments_gpu/` tree. (Eval-baseline fail-loud and tree-collapse: ⏳ pending.) | `run_stage{4,5}_training.py` | **DONE** (training side) |
+| 0.10 | ✅ **Feed the ocean the sea slab only**: `total_heat_flux = -hfluxn[..., 1]` (was `jnp.sum(..., axis=2)`); `evap[..., 1]` likewise. Sea-slab index (1) confirmed from `surface_flux.py:187/260`. | `JCM.py:125-126` | **DONE** |
+
+**P1 — Measure the noise floor. This is the single most important experiment and it is cheap.**
+
+> **Progress (2026-07-13): harness built, validated, and run — `run_noise_floor.py`.** It runs a
+> FIXED Stage-1 pattern (which cannot learn) repeatedly (fresh XLA compile each rep → σ_compile) and
+> across ICs (→ σ_IC), prints the decision rules, and supports `--x64` (P0.4 A/B) and
+> `--regen-baseline`. Findings on the post-fix code:
+>
+> **1. σ_compile = 0.0 exactly (6-day, 30-day, and 60-day CPU).** Recompilation is bitwise
+> deterministic on CPU, so the documented "~15% across compilations" is a **GPU** phenomenon
+> (reduction-order non-determinism). **The dominant noise source is GPU σ_compile, not per-IC
+> scatter** — which makes the P0.4 x64 A/B (does float64 shrink σ_compile?) the single most valuable
+> GPU experiment, and it must run on diya.
+>
+> **2. The cached ICs/baselines/checkpoints are STALE and must be regenerated.** Running the fixed
+> forward code against the *saved* (pre-fix) paired baselines gave dSST ≈ **−2.9 K** — ~20× the target
+> — because R1/R7b change the trajectories by far more than the −0.1 K signal; the paired difference
+> then measures *fixed-code vs buggy-code*, not MCB. With `--regen-baseline` (paired baseline
+> recomputed in-process on the fixed code) dSST returns to a sane **−0.048…−0.061 K**. **Every cached
+> carry, baseline, and warm-start checkpoint (Stage-1 pattern, all stageN policies) must be
+> regenerated before any post-fix measurement or retrain** — nothing pre-2026-07-13 is comparable.
+>
+> **3. Clean σ_IC is small at 30-day — smaller than the from-pickle estimate.** With correctly-paired
+> baselines, 30-day, n=6 ICs: **σ_IC(dSST) = 0.0048 K** (12% of the 0.04 K Gate-2 band; 2·s.e. over
+> n=6 = 0.004 K). This is *below* the audit's 0.03–0.04 K figure taken from the old eval pickles —
+> because that figure conflated true per-IC sensitivity with (a) baseline-pairing mismatch, (b) the
+> 60-day horizon (chaos grows with horizon), and (c) the buggy flux. **Honest correction:** at a short
+> horizon with clean pairing, per-IC scatter is modest; the audit's "n=2 gates are coin flips" claim
+> holds for the **60-day GPU** regime (where σ_compile ~15% dominates), *not* because σ_IC is huge at
+> 30-day CPU. The gate-viability verdict therefore depends on the 60-day + GPU + regenerated-IC
+> measurement, which is the authoritative run still to do.
+>
+> **Authoritative run (on diya):** regenerate ICs/baselines/checkpoints first, then
+> `--days 60 --reps 10` over ≥10 independent ICs, once with `--x64` and once without. Decide P0.4 and
+> final gate design from σ_compile and σ_IC there.
+
+The project had never measured how much of its loss is noise. The harness does exactly this:
+- Evaluate the **same fixed params** (stage1-static) on the same IC **K≥10 times** across fresh
+  compilations, and across ≥10 ICs. Reports σ_compile and σ_IC for day-60 dSST and mean loss.
+- **Decision rule (printed by the harness):** a run has *learned* only if its loss improvement
+  exceeds **2σ_compile**; a gate verdict is only reportable if the margin exceeds **2·s.e.**
+- Prediction was σ_IC(dSST) ≈ 0.03 K vs a 0.04 K band; the 6-day CPU smoke already shows 0.021 K.
+  **The current fixed-band gate design is confirmed unusable; redesign gates as control-relative
+  (paired per-IC vs static) before any retrain.**
+
+**P2 — Rebuild the experimental design (this is what actually blocks the science).**
+
+> **Progress (2026-07-13). Decisions taken with the user:** R6 → **cloud-top albedo × cloud cover**;
+> R7a → **wire up the slab land model** (make land temperature prognostic); execution → **drive diya
+> directly** (remote confirmed: `pradeephome@diya`, NVIDIA GB10, rsync-synced repo, editable jcm/jem,
+> `~/mcb-env`). ⚠️ The vLLM container `aeon-ultimate-xs` is UP and **must be stopped before any GPU
+> JAX job** (documented hard-wedge risk) — will confirm before touching it.
+>
+> **Done + tested (jcm/mcb + jcm/physics 159 passing, ruff clean):**
+> - ✅ **R6 cloud-albedo rewire.** MCB now brightens **cloud-top albedo** scaled by cloud cover, over
+>   ocean, in `shortwave_radiation.py` (`albcl_eff = albcl + (1−fmask)·mcb`, clipped); the
+>   surface-albedo path was removed from `forcing.py`. Coupled smoke: cools and stays finite.
+>   Regression test `test_mcb_cloud_brightening_reduces_ocean_sw` asserts MCB reduces SW **only where
+>   clouds exist** (cloudy ocean yes; clear ocean and land untouched) — verified to **fail without the
+>   mechanism** (fills the audit's "no end-to-end MCB test" gap). Caps still need recalibration
+>   (cloud-albedo +0.15 is still ~7× strong vs published −1…−5 W/m²) — folded into the artifact
+>   regeneration.
+> - ✅ **R7a slab-land model wired in (prognostic land temperature).** `setup_coupled_model(realistic_
+>   terrain=True)` now adds a `SlabLandModel` (mask = T30 terrain, climatology = `forcing.nc`'s
+>   `stl`/`snowc`/`soilw_am`) as an `"lnd"` component, with mappings **atm land-slab flux →
+>   `lnd.forcing.total_heat_flux`** and **`lnd.state.land_surface_temperature` → `atm.forcing.stl_am`**;
+>   `stl_am` is collapsed to 2D like SST for the scan invariant. This required **completing the R7b
+>   flux split**: `JCM.py` now exposes `total_heat_flux = −hfluxn[...,1]` (sea → ocean) **and**
+>   `land_heat_flux = −hfluxn[...,0]` (land → land model), both in `derived`. New `coupler_workflow()`
+>   helper derives `["coupling","atm","ocn"(,"lnd")]` from the components so drivers run the land step
+>   exactly when land exists. **Verified:** the previously-dead land model initializes with real T30
+>   data (1857 land cells, land T 227–310 K) and the terrain coupler steps finitely with land T
+>   prognostic; the **aquaplanet path is byte-for-byte unchanged** (2 components, 3-step workflow) so
+>   Stages 1–4 and all 159 tests are unaffected.
+>   - ⚠️ **Stability caveat (drives the next step):** during spin-up the land heat flux settles toward
+>     balance (−28 → +7 W/m² over 8 days, crossing zero) and land T stays physical, but per-cell land-T
+>     swings reach ~6–21 K/day. That is a cold-start transient; it must be settled by the equilibration
+>     + ocean-climatology-init step (next) and checked over 30–60 days before training. A formal slow
+>     regression test for the land wiring is a tracked follow-up.
+> - ✅ **R5 ocean-climatology init (10× drift reduction).** `setup_coupled_model` now passes
+>   `SST_clim_file=forcing.nc` to the slab ocean over realistic terrain, so SST initializes from the
+>   real T30 climatology instead of the idealized `273.15 + 27·cos²(1.5·lat)` field (~6 K too cold —
+>   the confirmed drift driver). `forcing_method` stays `"None"` (a **free** slab: no relaxation, which
+>   would damp the MCB cooling signal). **Measured net ocean drift dropped from ~1.4 K/60d to
+>   ~0.14 K/60d** and now oscillates around climatology rather than running away. Aquaplanet keeps the
+>   idealized init (`SST_clim_file=None`) — unchanged.
+> - ✅ **Equilibration script `run_equilibrate.py`.** Spins the coupled terrain model, logs the 60-day
+>   ocean drift + land-T range every N days, and saves the equilibrated carry (base state for IC
+>   branching). CPU-smoke-validated (30 days, runs + saves). The full spin-up to `|drift| < 0.02 K/60d`
+>   is a **multi-year GPU run on diya** (still-oscillating short-window drift at 30 days ⇒ needs
+>   months–years). **q-flux deferred** — the init fix + equilibration should suffice, and the paired
+>   baseline cancels residual drift; a prescribed q-flux is a later refinement only if equilibration
+>   leaves > 0.02 K/60d.
+>   - ⚠️ **Open:** the R7a land-T swings persist after the ocean-init fix (they are driven by the
+>     atmosphere spin-up, not the ocean). The GPU equilibration run is the test of whether they settle;
+>     if not, raising the slab-land heat capacity (`depth_soil`, currently 1 m) is the candidate knob —
+>     a physical-parameter change to decide with data, not pre-emptively.
+>
+> - ✅ **Sigmoid-head reparam → clipped-linear.** All 4 policy heads in `policy.py` now use
+>   `clip(logits, 0, max_perturbation)` instead of `max_p·sigmoid`: "MCB off" is now **exactly
+>   reachable** (was unreachable — a fresh sigmoid sprayed half-max everywhere) and the interior
+>   gradient is a healthy 1 instead of the vanishing tails the audit found (81% of cells stuck in
+>   saturation). Kept consistent across the three coupled sites — `optimize_mcb_pattern.py` Stage-1
+>   parameterization (`clip(theta,0,max)`) and `warm_start_params` (seeds the output **bias with
+>   best_pattern**, not the sigmoid logit). Verified: 89 tests pass; warm-start reproduces the Stage-1
+>   pattern **exactly** (max diff 0.0) under the new head.
+> - ✅ **Pre-registration protocol frozen — `PREREGISTRATION.md`.** Locks the post-fix campaign before
+>   any GPU run: N≥10 independent held-out **trajectories** (no temporal overlap), ≥3 seeds, **all
+>   gates control-relative** (paired per-IC vs regenerated static, significance-tested at 2·s.e.),
+>   decision rules tied to the measured noise floor, checkpoint selection on **held-out** loss, and the
+>   two ablations (open-loop, no-warm-start) that gate the central claim. Closes the audit's
+>   coin-flip-gate and garden-of-forking-paths findings.
+>
+> - ✅ **Control-relative gates — `jcm/mcb/gates.py` (+ 14 unit tests) wired into `run_stage5_eval.py`.**
+>   Paired per-IC (policy − stage1-static) with a 2·s.e. significance rule; a margin within 2·s.e.
+>   reports **"underpowered"** (neither PASS nor FAIL). Validated on the real old eval data: it
+>   correctly recasts the legacy Gate-2 "PASS (−0.1191 K)" as **underpowered** (n=2, s.e. 0.025) while
+>   confirming Gate-4 as a **genuine significant FAIL** — exactly the audit's point. Legacy gates kept
+>   but marked superseded.
+> - ✅ **Independent-IC generation — `run_generate_ics_independent.py`.** Branches the equilibrated
+>   carry into N independent trajectories (distinct seeded SST perturbation + independent decorrelation
+>   spin); held-out ICs are entire trajectories with no temporal overlap. Verified branches diverge
+>   (~0.25 K SST from a 0.05 K seed after 3 days; 30-day spin fully decorrelates). Replaces the old
+>   snapshot-one-trajectory scheme.
+>
+> **✅ ALL LOCAL P2 CODE IS COMPLETE** (173 tests + 14 new gate tests passing, ruff clean throughout;
+> every aquaplanet/Stage-1–4 path byte-for-byte unchanged). What remains is the **GPU compute campaign
+> on diya**, run strictly per `PREREGISTRATION.md`:
+>
+> 1. ✅ **Stop the vLLM container** `aeon-ultimate-xs` (restart-trap on any exit) — done; code synced
+>    to diya and verified there (14 gate tests pass, imports OK); vLLM auto-restarted after the run.
+> 2. ✅ **`run_equilibrate.py` (10-year GPU spin) — SUCCESS.** The GPU path runs the full new physics
+>    (R6/R7a/R5) clean — no NaN. Ocean cooled from the 283.9 K climatology init to a quasi-equilibrium
+>    **~280.1 K**; drift decayed from −0.33 K/60d (day 180) to oscillating about zero by year 4. **Secular
+>    drift over the last ~4 yr = −0.007 K/60d; last ~5.5 yr = −0.018 K/60d — within the 0.02 K target**
+>    (the per-window "NOT met" is 180-day weather noise, not secular drift). **The R7a land-T transient
+>    settled on its own** — land T stayed bounded [211–318 K] for the full 10 years, no blow-up, so no
+>    heat-capacity tuning needed. Equilibrated carry saved → `mcb_experiments_gpu/equilibrated/base_carry.pkl`.
+> **🎯 HEADLINE RESULT (2026-07-14): the R1+R6 fixes are validated.** The fresh Stage-1 pattern, on
+> the corrected physics (cloud-albedo MCB + fixed cos-lat area weights + clipped head), now peaks in
+> the **subtropical stratocumulus belt** — zonal-mean peak at **−35.3°S**, top latitudes all in
+> ±13–35°, pattern mass 15–40° = 0.668 vs >55° (subpolar/Arctic) = 0.385. **The old broken pattern
+> peaked at +68.7°N (Arctic)**; the corrected optimizer places brightening where MCB physically
+> belongs (SE Pacific/Atlantic decks). It hit the target (−0.1086 K), and **76% of ocean cells are at
+> exactly 0** — the clipped head turns MCB *off* over most of the ocean and concentrates it, vs the old
+> sigmoid spraying ~0.005 everywhere. Noise floor (f32, 10 ICs): σ_IC(dSST) = 0.0142 K → 2·s.e. ≈
+> 0.009 K < the 0.04 K band, so the gates are now **powered** (unlike the old n=2 coin flips).
+>
+> **✅✅✅ CAMPAIGN v3 COMPLETE (2026-07-27). VALIDATES THE v2 NEGATIVE — AND CORRECTS IT.** Adversarial
+> review (4-lens workflow) plus a gradient-coherence/headroom probe found that v2's "controller
+> significantly WORSE than static / overcools" was itself a **TRAINING ARTIFACT**, not a property of
+> feedback: v2 trained on a *summed* objective that is **<0.2% gate-relevant and whose dominant gradient
+> rewards overcooling** (empirically, the v2 policy moved held-out dSST −0.084→−0.119 while total loss
+> barely moved 0.0188→0.0232), and selected `best_params` on **train** noise (held-out never gated). The
+> probe confirmed a **gate-improving, GENERALIZING** direction exists (held-out step 0.01531→0.01439),
+> i.e. NOT a flat optimum; per-IC ‖gᵢ‖≈1–3 with coherence C≈0.5 for both objectives, so the primary
+> fault was the OBJECTIVE, not gradient conflict (no PCGrad needed).
+>
+> **Fixes (landed + tested, 35 mcb tests):** `loss_mode="terminal_dsst"` (train on exactly the gate
+> metric — final-step global-mean ocean dSST error), `select_on_heldout=True` (gate selection + early-stop
+> on held-out every epoch, finishing P0.3), per-epoch gradient-coherence logging, and `run_gradient_probe.py`.
+>
+> **v3 pre-registered gates (retrain vs cap-0.09 static, n=10 paired held-out):**
+> - **G2 cooling: PASS** — −0.097 ± 0.0077 K, **ON TARGET** (v2 was FAIL, overcool −0.121). The gate-aligned
+>   objective removed the overcooling.
+> - **G3 controller-vs-static: UNDERPOWERED** — improvement −0.0048 ± 0.0063 K, a **statistical TIE, no
+>   longer worse** (v2 was FAIL / significantly worse). The "worse-than-static" artifact is gone.
+> - **G4 held-out loss vs static: PASS** (+0.00054 ± 0.00044, not sig. worse).
+> - **Feedback gate (retrain vs open-loop time-only schedule): UNDERPOWERED** (−0.0054 ± 0.0039) — feedback
+>   **indistinguishable from a schedule.** Held-out dSST: retrain −0.1043 / open-loop −0.0974 / no-warmstart
+>   −0.1051.
+> - **NN-vs-random-init: UNDERPOWERED** (+0.0033 ± 0.0041) — warm-start **indistinguishable from random init**.
+>
+> At the *loss* level the retrain genuinely halved held-out RMS dSST error (0.020→0.011 K, best held-out
+> loss 0.000120 vs static 0.000394), but that gain is **below the 2·s.e. bar** on the pre-registered
+> |dSST−target| gate at n=10 — real but not significant.
+>
+> **FINAL HONEST CONCLUSION (v3 supersedes v2):** differentiable optimization through the corrected coupled
+> model yields a **good, on-target MCB solution** (G2 PASS, no longer worse than static), but the neural
+> **FEEDBACK adds nothing DEMONSTRABLE** over either the static pattern (G3 underpowered) or an open-loop
+> schedule (feedback gate underpowered). This is a *cleaner, corrected* restatement of v2's substantive
+> point — with v2's "worse-than-static/overcooling" artifact removed. Resolving the underpowered G3/feedback
+> edge (effect ~0.005 K vs s.e. ~0.004–0.006) would require more ICs/seeds, not a code fix. Artifacts:
+> `mcb_experiments_gpu/{gradient_probe_v3.pkl,retrain_v3,ablation_openloop_v3,ablation_nowarmstart_v3,
+> eval_v3.pkl,ablation_compare_v3.pkl}`. Loose end unchanged: x64/P0.4 (dtype).
+>
+> ---
+> **(Superseded by v3 — its "controller worse than static / overcools" verdicts were an objective artifact,
+> corrected above) CAMPAIGN v2 COMPLETE (2026-07-20, cap recalibrated 0.15→0.09 + ablations fixed). Bottom
+> line as reported at the time:** at the *correct* forcing magnitude, with powered gates
+> and valid ablations, **the NN feedback controller does NOT add value over the directly-optimized
+> static pattern, and its "feedback" is statistically indistinguishable from an open-loop schedule.**
+> - **Stage-1 (cap 0.09) is the real result:** the directly-optimized static pattern hits the target
+>   (−0.096 K), sits in the stratocumulus belt (R1+R6), and — from the noise floor — cools to −0.108 K
+>   (in band) on held-out ICs. Differentiable optimization of a *static* MCB pattern works.
+> - **G2 cooling: FAIL (marginal)** — the retrained policy overcools to −0.1212 ± 0.0056 K (just past
+>   the −0.12 edge); training pushed the in-band static pattern slightly over.
+> - **G3 controller-vs-static: FAIL** — the trained controller is **significantly WORSE** than static
+>   (−0.0093 ± 0.0034 K). This **reverses v1's G3 PASS**: v1 was run at cap 0.15 (deep overcooling,
+>   −0.14 K), where the controller's apparent "improvement" was just pulling back from severe
+>   overcooling. At the correct cap there is no room to beat the already-good static pattern, and the
+>   noise-dominated BPTT (retrain best was at epoch ~1, never converged) makes it slightly worse.
+> - **G4: PASS** (held-out loss not significantly worse, +0.00037 ± 0.00038).
+> - **Feedback gate (state-dependent vs open-loop time-only): UNDERPOWERED / no difference**
+>   (−0.0041 ± 0.0046) — the "controller" is indistinguishable from a schedule. The novel contribution
+>   (adaptive feedback) is **not supported**.
+> - **NN-vs-random-init: FAIL** — the warm-started retrain is significantly worse than random-init
+>   training (both overcool; random lands closer to target), further confirming BPTT here is
+>   noise-fitting, not learning.
+>
+> **What survives / the defensible result:** differentiable simulation through the corrected coupled
+> model produces a physically-sensible, on-target *static* MCB pattern (Stage-1). What does NOT survive
+> rigorous, powered testing: the claim that an NN *feedback controller* beats that static pattern or
+> that state-dependence adds anything over an open-loop schedule. The audit + rebuild did exactly what
+> they should — replaced noise-level "successes" with an honest negative result on the central claim.
+> Artifacts: `mcb_experiments_gpu/{stage1_v2,noise_floor_v2_f32.pkl,retrain_v2,ablation_*_v2,eval_v2.pkl,
+> ablation_compare_v2.pkl}`. Remaining loose end: x64/P0.4 (dtype fix).
+>
+> ---
+> **(Superseded) CAMPAIGN v1 (2026-07-14). Pre-registered gate verdicts (retrain vs fresh Stage-1 static,
+> 10 independent held-out ICs — powered for the first time):**
+> - **G3 controller-vs-static: PASS** — trained controller beats the static pattern by
+>   **+0.0149 ± 0.0070 K** (> 2·s.e., significant). The *first supportable* "controller adds value"
+>   result; the old Stage-3 "beats static" was a 0.14σ in-sample coin flip.
+> - **G4 held-out loss ≤ static: PASS** (−0.00079 ± 0.00052 — marginally better, not sig. worse).
+> - **G2 absolute cooling band: FAIL** — policy overcools to **−0.1422 ± 0.0029 K** (band [−0.12,−0.08]),
+>   and *powered* (s.e. 0.003), so a **real FAIL, not a coin flip**. The corrected forcing is too strong
+>   (static pattern also overcools, −0.157 K): confirms the **R6 cap-recalibration** caveat empirically
+>   → concrete next step is lowering `max_perturbation` (cloud-albedo +0.15 ≈ 7× the published −1…−5
+>   W/m² MCB forcing). The controller correctly pulls the overcooling *toward* the target (hence G3).
+>
+> **Two secondary steps failed (understood, fixable, re-run pending):**
+> - **x64 noise floor**: `lax.scan` float32/float64 carry mismatch — with x64 on, `asfloat64()` now
+>   casts the atm carry but ocean/land components stay float32. P0.4 (does x64 shrink σ_compile?)
+>   deferred until the coupled carry is made dtype-consistent under x64.
+> - **Both ablations INVALID**: they picked up a leftover default `--init-checkpoint` on diya and
+>   warm-started instead of random-init (open-loop crashed loading dim-13 into a dim-1 policy). Trivial
+>   fix — pass a nonexistent `--init-checkpoint`. The central-claim tests (open-loop vs feedback;
+>   NN-over-static) still need a clean re-run. The main result (retrain + gates) is unaffected — the
+>   retrain explicitly warm-started from the fresh Stage-1.
+>
+> vLLM `aeon-ultimate-xs` restored (trap fired). Artifacts on diya under `mcb_experiments_gpu/`:
+> `stage1_new/`, `ics_independent/`, `noise_floor_f32.pkl`, `retrain/`, `eval_final.pkl`.
+>
+> 3.–8. **`run_campaign.sh` on diya (detached, vLLM stopped w/ trap).** Full
+>    pre-registered pipeline: independent-IC gen (10+10 trajectories) → fresh Stage-1
+>    (`optimize_mcb_pattern.py` on corrected physics + clipped head) → noise floor ±x64 (settles P0.4)
+>    → retrain (warm-start, 4 control intervals) → open-loop + no-warm-start ablations → pre-registered
+>    control-relative gate eval. **All 4 campaign drivers were adapted to derive the workflow from the
+>    coupler** (so the R7a land step runs — a hardcoded 3-element workflow would silently skip it), and
+>    the whole chain (Stage-1 → train → eval) was CPU-smoke-validated first: it runs with
+>    `['coupling','atm','ocn','lnd']`, the clipped head reaches exactly 0.0, and the pre-registered
+>    gates correctly report "underpowered" at small n. Monitoring for the Stage-1 pattern location (the
+>    R1+R6 acid test: stratocumulus regions, not the old Arctic artifact) and the final gate verdicts.
+
+- **Equilibrate.** Spin the coupled model until 60-day drift ≪ signal (target < 0.02 K/60 d, vs the
+  current **1.4 K**). Initialize the slab ocean from the SST **climatology in `forcing.nc`**, not the
+  idealized `273.15 + 27·cos²(1.5·lat)` field (~6 K too cold — the confirmed drift driver), and add a
+  q-flux/relaxation term so the coupled mean state is stationary. Nothing measured on a +6.5 K
+  transient means anything.
+- **Decide the teleconnection scope (R7a).** Either instantiate `SlabLandModel` and wire
+  `atm.total_heat_flux → land`, `land.land_surface_temperature → atm.stl_am` so land temperature is a
+  live prognostic that MCB can perturb — **or** stop gating on land precipitation and state in the
+  writeup that land-driven and ocean-dynamics teleconnections are out of scope for a slab model.
+  Gate 3 cannot be salvaged by reweighting; the mechanism has to exist first.
+- **Regenerate ALL artifacts first (hard prerequisite).** The R1/R7b fixes change the trajectories by
+  ~20× the target signal, so every cached IC, paired baseline, and warm-start checkpoint (the Stage-1
+  pattern, all stageN policies) is on the wrong scale and must be regenerated with the fixed code
+  before anything downstream is measured or trained. Nothing pre-2026-07-13 is comparable to
+  post-fix output.
+- **Independent ICs.** Generate ICs from *perturbed/branched* trajectories, not snapshots of one run.
+  Hold out **entire trajectories**. Ensure no held-out window shares simulated days with a train
+  window. Target **N ≥ 10** held-out.
+- **Control-relative gates.** Gate on the **paired per-IC difference** `(policy − stage1-static)`,
+  which cancels IC-intrinsic sensitivity, with a paired test. Never gate on a bare n=2 mean.
+- **Fix the sigmoid head** so "MCB off" is reachable and the cap is not a gradient sink
+  (`0.15·sigmoid(0) = 0.075` sprays half-max everywhere at init; 81% of ocean cells sit in saturated
+  tails; 13% are pinned at the 0.1499996 ceiling).
+- **Move the forcing onto cloud albedo (R6).** Wire `mcb_perturbation` into the cloud-top
+  reflectivity term (`shortwave_radiation.py:69-70`, `tau2[...,2] = albcl·cloudc`) so brightening
+  scales *with* cloud presence, and recalibrate the cap to a defensible cloud-albedo change validated
+  against published TOA forcing (~−1 to −5 W/m²). Until this is done, every "where to deploy" result
+  is optimizing anti-MCB physics. This is the fix that decides whether the study is about MCB at all.
+- **Report per-IC distributions, not aggregate means.** The aggregate −0.1338 hides train ICs at
+  −0.185 and −0.190.
+- **Pre-register** gates, bands, metrics, IC schedule, seed count, and decision rules *before* the run.
+
+**P3 — Only then, the two ablations that decide whether this project has a thesis.**
+
+1. **Open-loop control.** Train a time-only policy (no state features). The trained policy *is*
+   state-sensitive (heat flux dominates its Jacobian; time is only 5%) — but with
+   `control_interval=30, total_steps=60` there are **2 intervals**, and interval 1's anomaly features
+   are **bitwise zero by construction**. So feedback is exercised **exactly once per rollout**. If an
+   open-loop schedule matches the "controller," the novel contribution is void. *Run this before
+   spending another GPU-week.* Increase the number of control intervals regardless.
+2. **No warm start.** Train from random init. Every "successful" policy is warm-started to output the
+   Stage-1 pattern *exactly*, and no experiment isolates the NN's contribution above that
+   initialization at more than noise level.
+
+### Security & reproducibility (separate track — the security items are independently urgent)
+
+Two of these are worse than anything in the science because they can produce a **dishonest result** or
+a **host compromise** with no warning:
+
+- **[CRITICAL, repro] The default checkpoint paths point at a tree that doesn't exist, and a missing
+  checkpoint silently trains from RANDOM INIT.** Every driver defaults `--init-checkpoint` /
+  comparison baselines to `mcb_experiments/…` (the CPU tree), but the stage dirs
+  (`stage1/`, `stage4/`, `stage5/`, …) exist **only** under `mcb_experiments_gpu/`. A missing init
+  checkpoint hits `run_stage5_training.py:263-265` → `print("WARNING… using random initialization")`
+  and **continues**, saving a cold-started policy as `stage5_trained_policy.pkl`. Eval scripts
+  likewise **silently skip** missing gate baselines and still print a verdict. Provenance *is* in
+  metadata (`init_source`), but nothing gates on it. **Make missing init a hard error** (unless
+  `--allow-random-init`); make eval fail loudly on a missing baseline; collapse the two artifact
+  trees or thread a single `--experiment-dir`.
+- **[HIGH, security] Auth-less `privileged` Jupyter in `docker-compose.yml:20-31`**:
+  `--NotebookApp.token='' --NotebookApp.password=''`, `--ip=0.0.0.0`, port-published, `privileged: true`,
+  repo bind-mounted. On the shared "diya" box or over Tailscale, anyone who reaches `:8888` gets an
+  unauthenticated **root shell with host-device access**. Delete the service or restore token auth,
+  bind to `127.0.0.1`, drop `privileged`.
+- **[HIGH, security] `pickle.load` on rsync'd artifacts = RCE-by-design** (11 sites incl.
+  `train.py:524`, `carry_io.py:52`). The 68 committed pickles are currently opcode-clean (verified:
+  numpy/jax reconstructors only) — so this is *latent*, not exploited — but any write to the shared
+  GPU box lands code on the laptop at next eval. Move params to safetensors/orbax; checksum car/IC
+  artifacts against a signed manifest before load.
+- **[MEDIUM, security] Scrub hardcoded infra** from the repo and history: Tailscale IP
+  `100.76.85.47` (plan + commit history), hostname `diya`, vLLM container `aeon-ultimate-xs`, and
+  `~/mcb-env` paths in the pipeline shells. Parameterize via env vars.
+- **[MEDIUM, repro] No git-SHA provenance**; `*.nc` result datasets are **gitignored**
+  (`.gitignore:167`) — several headline coupled-run outputs are not in version control. Stamp
+  `git rev-parse HEAD` into every checkpoint/history/eval metadata dict.
+- CI actions are pinned to mutable major tags, not SHAs (low).
+
+### Also fix (non-blocking)
+
+- **MCB double-application hazard.** `jcm/physics/speedy/forcing.py:32-47` applies the static
+  `mcb_config` path **and** the traced `forcing.mcb_perturbation` path **additively and
+  unconditionally**. Nothing prevents both being active. There is also **no clipping** on `alb_s`
+  (base ocean albedo ≈0.07; adding 0.15 more than triples it, and nothing bounds albedo ≤ 1).
+  See R6 for the coastal multi-masking and sea-ice variants.
+- **Seeds**: `random_seed=42` is the only seed ever used, and `warm_start_params` hardcodes
+  `PRNGKey(0)` regardless. No driver exposes `--seed`. Run ≥3 seeds before any train-vs-static claim.
+- **`resume_coupled_training` silently drops Adam state** (`coupled_train.py:811-813`).
+- **Zero dependency pins** in `requirements.txt` — including `dinosaur`, the differentiable dynamical
+  core. `jax` is not even listed. Results are not reproducible across installs.
+- **11 `pickle.load` sites**; checkpoints/ICs are rsync'd from a shared GPU box. Pickle load is
+  arbitrary code execution. Move to safetensors/orbax or checksum the artifacts.
+- **Stage 4's "state-dependence" gate is an auto-pass**: `tol=1e-6` against an observed cross-IC
+  forcing std of 6.6e-5 (0.18% of mean forcing). It cannot fail after epoch 1.
+- **Dead code documented as delivered features**: `MCBPolicyCNN/ResNet/Hybrid` were never used by any
+  experiment; dropout is mis-wired and would crash if enabled.
+- **Pre-flight grad check uses a different ocean mask than training** (`run_stage4_training.py:216`
+  fractional vs `coupled_train.py:540` binarized).
+
+### Regression tests that must exist and don't
+
+- Area weights: pole/equator ratio ≈ 20 (would have caught R1).
+- End-to-end: a large MCB perturbation produces a **nonzero** dSST (would have caught the original
+  silent-injection bug — there is *still* no such test).
+- Paired baseline cancels **bitwise** under zero MCB (Stage 2 checked this in a throwaway script).
+- `best_params` round-trip: saved checkpoint's measured loss == recorded `best_loss` (would have
+  caught R2's off-by-one).
+- Zero-MCB precip loss == 0.0 exactly (would have caught R4's softplus offset).
+- Albedo bounds: `0 ≤ alb_s ≤ 1` under max forcing.
 
 ---
 
@@ -978,7 +1628,73 @@ When loading `.pkl` files that contain `jcm.mcb` objects, Python triggers the fu
 
 ## Change Log
 
+### 2026-07-12: Independent audit — five critical defects; all post-Stage-0 conclusions withdrawn
+- **No code changed. Analysis only.** Full findings in
+  [🔴 Independent Audit](#-independent-audit-2026-07-12--blocking).
+- **R1 `compute_area_weights` is broken** (`state_features.py:141`): applies `jnp.radians()` to
+  latitudes that are *already in radians* (verified min/max = ∓1.5212 ≈ ∓π/2; `mcb_regions.py:61`
+  correctly uses `rad2deg`). Shipped weights are **uniform** (pole/equator ratio 1.0004 vs the
+  correct 20.17) — so the "global-mean SST" that the whole project optimizes and gates on is a
+  cell-count mean over-weighting poles by up to 20×. This **explains the Stage-1 pattern**: its
+  zonal-mean peak is at **+68.7°N** (Arctic), not the "~50°N" recorded, and nowhere near the
+  subtropical stratocumulus decks MCB targets. The optimizer was exploiting the bug.
+- **R2 Nothing has ever converged.** Fitted trends on the history pickles: Stage 1 p=0.45, Stage 5
+  p=0.80, Option A p=0.39 — all **statistically flat**. Every "best loss" is a ~2.2σ outlier in a
+  stationary series (the minimum of noise). Stage 5's epoch-to-epoch σ is 11.5%, matching the
+  project's own documented ~15% recompilation noise. Compounded by: checkpoint selection on **train**
+  loss (held-out is *"logged, never gated on"*, `coupled_train.py:509`); an **off-by-one** that saves
+  post-update params against pre-update losses (`:604/:617/:622`); and **float32 everywhere** —
+  `asfloat64()` (`jax-esm/jem/components/JCM.py:26`) is a **silent no-op** because `jax_enable_x64`
+  is never set.
+- **R3 The 2026-07-09 "Option A refuted" conclusion is a statistical artifact.** Using the
+  `stage1-static` **unchanged control** the eval already ran: it absorbs **72%** of the shift
+  attributed to Option A (−0.0326 K of −0.0455 K), and the two runs used **different held-out IC
+  sets**. Residual effect −0.0129 K vs s.e. ~0.015–0.026 K (n=2) → **not significant**. Trained-policy
+  per-IC dSST correlates **+0.79/+0.87** with the static pattern's at a ~1.2× ratio; the policy is
+  simply railed into the sigmoid cap (`max_mcb = 0.14999955` everywhere). The "generalization gap"
+  is IC sensitivity, not generalization.
+- **R4 Gate 3 measures a constant.** `softplus(0)/100 = ln(2)/100`; the gate's zero-effect value is
+  **6.9315e-4**, and all three reported policies (6.905/6.863/6.876e-4) sit within **1%** of it.
+  Paired t = 0.09. The tropics term is numerically dead; precip is 3.6–4.5% of the objective; and
+  un-normalized features give precip ~0.4% of the policy's input influence. **Raising teleconnection
+  weights would amplify noise.**
+- **R5 The ICs are one trajectory on a huge transient.** All ICs are snapshots of a *single*
+  deterministic spin-up (held-out windows even **overlap** train windows, since interval 45 < horizon
+  60). Baseline drift is **+1.4–1.5 K / 60 days** (284.4 → 290.9 K across the IC window) — **14× the
+  −0.1 K target**. "Season" is confounded with secular drift, so bracketing was never meaningful.
+  IC 0 is the raw isothermal-rest cold start.
+- **R6 (added 2026-07-13, ran real SW code): the forcing is not MCB.** Perturbing sea-surface albedo
+  is **anti-correlated** with cloud cover — coded ΔTOA is −35.7 W/m² in clear sky but −18.6 W/m²
+  overcast, while the real Twomey effect does the opposite (−42.3 W/m² overcast). It never touches any
+  cloud property. And +0.15 albedo is ~5–7× over-scaled (−22 W/m² vs the literature's −1 to −5).
+  Fix: wire the perturbation into cloud-top reflectivity and recalibrate. Underlies R1–R5.
+- **R7 (added 2026-07-13, ran the coupled model): the coupler can't form the harm it gates on, plus a
+  Stage-5 flux bug.** (a) Land temperature is **prescribed climatology** and the slab-land model is
+  **never instantiated** — so an Amazon/Sahel land-driven teleconnection is *structurally impossible*
+  (the physical reason Gate 3 is degenerate; with R4 the metric is a constant AND the mechanism is
+  absent). The slab ocean has no dynamics → AMOC/ENSO/ocean-transport risks (the `MCB_CONTEXT.md` key
+  risks) are impossible. (b) `JCM.py:125` does `-jnp.sum(hfluxn, axis=2)` = **land + sea slab**,
+  injecting ~100 W/m² RMS spurious flux into ocean cells — a ~35% error in the SST cooling signal,
+  **silent on the aquaplanet, live at Stage 5**. Fix: `-hfluxn[...,1]`. Verified clean: daily flux is
+  time-averaged (no aliasing); mask fix consistent; flux sign correct.
+- **Security/repro (added 2026-07-13):** default checkpoint paths point at a non-existent CPU tree and
+  a missing checkpoint **silently trains from random init** (dishonest-result risk); an **auth-less
+  `privileged` Jupyter** service is committed in docker-compose; 11 `pickle.load` sites load rsync'd
+  artifacts (latent RCE — the 68 committed pickles verified benign). Details in the audit's
+  Security & reproducibility subsection.
+- **Withdrawn:** Stage 1 "structured pattern" as a result; Stage 3 "beats static"; Stage 4/5 gate
+  verdicts; the Option A refutation; "Issue #3 fixed"; the claim this models MCB; and the
+  Lessons-Learned claim *"the issue is hyperparameter tuning, not fundamental problems."*
+- **Survives:** Stage 0's AD-vs-finite-difference gradient validation (1.6% rel. err), the coupled
+  cooling mechanism (as an albedo experiment, not MCB), and correct host-side ensemble gradient
+  averaging.
+- **Next:** P0 (fix area weights, checkpoint selection, off-by-one, x64, precip loss, feature
+  scaling) → P1 (**measure the noise floor** — never done) → P2 (equilibrate; independent ICs;
+  control-relative gates) → P3 (open-loop and no-warm-start ablations).
+
 ### 2026-07-09: Stage 5 Option A (seasonal bracketing) — hypothesis REFUTED, held-out gap is generalization
+> **⚠️ 2026-07-12: THIS ENTRY'S CONCLUSION IS INVALID.** The "refutation" is 72% reproduced by the
+> unchanged `stage1-static` control arm, over a *different* held-out IC set, at n=2. See R3 above.
 - **One-file code change + full GPU rerun.** Edited only `run_stage5_generate_ics.py`: added optional
   `--train-days`/`--heldout-days` flags and a new `build_schedule(args)` helper that (explicit path)
   parses comma-separated int day-sets, validates days ≥ 0, ≥ 2 distinct train days, unique + disjoint
@@ -1296,9 +2012,23 @@ When loading `.pkl` files that contain `jcm.mcb` objects, Python triggers the fu
 - **Key lesson**: Data pipeline (features) is as important as model architecture
 
 ### Key Insight
-**The framework works. Gradients flow. Training converges (slowly).**
-The issue is hyperparameter tuning, not fundamental problems.
-With GPU + tuned hyperparameters, achieving cooling is feasible.
+
+> **⚠️ WITHDRAWN 2026-07-12.** The claim below is **false** and was the single most damaging sentence
+> in this document — it steered three GPU campaigns toward hyperparameter tuning when the actual
+> defects were a broken area-weighting function, checkpoint selection on training loss, and a loss
+> whose epoch-to-epoch noise exceeds any learning signal. **Training never converged in any run**
+> (Stage 1 p=0.45, Stage 5 p=0.80, Option A p=0.39 — all statistically flat).
+
+~~**The framework works. Gradients flow. Training converges (slowly).**~~
+~~The issue is hyperparameter tuning, not fundamental problems.~~
+~~With GPU + tuned hyperparameters, achieving cooling is feasible.~~
+
+**Corrected:** Gradients *do* flow — Stage 0's AD-vs-finite-difference check (1.6% rel. err) is
+solid, and that is a real enabling result. But **flowing gradients are not a learning signal.** The
+objective is dominated by chaotic weather noise (σ ≈ 11–15% per epoch) that exceeds the improvement
+per step, so BPTT is descending a landscape it cannot see. The fix is not more epochs or a better
+learning rate — it is a correct objective, an equilibrated model, an ensemble large enough to average
+out weather, and gates that are measured against a noise floor that nobody has ever measured.
 
 ### Critical Finding: Coupled Modeling Required
 **Atmosphere-only simulations cannot capture global mean temperature changes from MCB.**

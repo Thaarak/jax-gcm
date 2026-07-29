@@ -14,6 +14,7 @@ import jax.numpy as jnp
 from jcm.mcb.coupled_controller import (
     CoupledControllerConfig,
     create_coupled_step_fn,
+    evaluate_coupled_policy,
     unroll_coupled_simple,
 )
 from jcm.mcb.coupled_features import (
@@ -360,6 +361,251 @@ class TestEnsembleTraining(unittest.TestCase):
                 policy.init(jax.random.PRNGKey(0), jnp.zeros(13))
             ),
         )
+
+    def test_best_params_reproduces_best_loss(self):
+        """Off-by-one regression: re-evaluating best_params must reproduce
+        history['best_loss'].
+
+        The trainer measures each epoch's loss at the PRE-update params, so
+        best_params must be those pre-update params. The original code saved
+        the POST-update params, whose loss was never measured — re-evaluating
+        them would NOT match best_loss. On the deterministic fake coupler the
+        match is exact to numerical precision.
+        """
+        coords = get_speedy_coords()
+        coupler = FakeCoupler()
+        config = CoupledControllerConfig(
+            control_interval_steps=2,
+            total_steps=4,
+            target_cooling=-0.1,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15,
+        )
+        policy = MCBPolicyMLP(
+            output_shape=coords.horizontal.nodal_shape,
+            hidden_dims=(8,),
+            max_perturbation=0.15,
+        )
+        step_fn = create_coupled_step_fn(coupler, WORKFLOW)
+        carries = [make_fake_carry(coords, v) for v in (288.0, 289.5)]
+        baselines = [
+            compute_baseline_trajectory(c, step_fn, num_steps=4, coords=coords)
+            for c in carries
+        ]
+        ocean_mask = jnp.ones(coords.horizontal.nodal_shape)
+        # A learning rate large enough that the optimizer step visibly moves
+        # the params, so a post-update checkpoint would differ from the
+        # measured one — i.e. the off-by-one would be detectable.
+        training_config = TrainingConfig(
+            num_epochs=4, learning_rate=1e-2, log_interval=1,
+            early_stopping_patience=None,
+        )
+        best_params, history = train_coupled_policy_ensemble(
+            coupler=coupler, workflow=WORKFLOW, policy=policy, coords=coords,
+            terrain_fmask=jnp.zeros(coords.horizontal.nodal_shape),
+            train_carries=carries, train_baselines=baselines,
+            heldout_carries=(), heldout_baselines=(),
+            training_config=training_config, controller_config=config,
+        )
+
+        eval_fn = create_coupled_eval_fn(
+            coupler=coupler, workflow=WORKFLOW, policy_fn=policy.apply,
+            coords=coords, ocean_mask=ocean_mask, controller_config=config,
+        )
+        remeasured = sum(
+            float(eval_fn(best_params, c, b))
+            for c, b in zip(carries, baselines)
+        ) / len(carries)
+        self.assertAlmostEqual(remeasured, history['best_loss'], places=5)
+
+    def test_select_on_heldout_gates_and_logs_coherence(self):
+        """select_on_heldout must gate selection/early-stop on held-out loss,
+        evaluate held-out every epoch, and record per-IC gradient coherence.
+        """
+        coords = get_speedy_coords()
+        coupler = FakeCoupler()
+        config = CoupledControllerConfig(
+            control_interval_steps=2, total_steps=4, target_cooling=-0.1,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15,
+        )
+        policy = MCBPolicyMLP(
+            output_shape=coords.horizontal.nodal_shape, hidden_dims=(8,),
+            max_perturbation=0.15,
+        )
+        step_fn = create_coupled_step_fn(coupler, WORKFLOW)
+        carries = [make_fake_carry(coords, v) for v in (288.0, 289.0, 290.0)]
+        baselines = [
+            compute_baseline_trajectory(c, step_fn, num_steps=4, coords=coords)
+            for c in carries
+        ]
+        training_config = TrainingConfig(
+            num_epochs=3, learning_rate=1e-2, log_interval=1,
+            early_stopping_patience=None,
+        )
+        best_params, history = train_coupled_policy_ensemble(
+            coupler=coupler, workflow=WORKFLOW, policy=policy, coords=coords,
+            terrain_fmask=jnp.zeros(coords.horizontal.nodal_shape),
+            train_carries=carries[:2], train_baselines=baselines[:2],
+            heldout_carries=(carries[2],), heldout_baselines=(baselines[2],),
+            training_config=training_config, controller_config=config,
+            heldout_interval=99,  # would suppress held-out logging if not gated
+            select_on_heldout=True,
+        )
+        n = history['epochs_completed']
+        self.assertEqual(history['selection_metric'], 'heldout')
+        # Held-out evaluated EVERY epoch despite heldout_interval=99.
+        self.assertEqual(len(history['heldout_loss_history']), n)
+        self.assertEqual(len(history['coherence_history']), n)
+        self.assertEqual(len(history['per_ic_grad_norm_history']), n)
+        # Coherence is a ratio in (0, ~1]; per-IC norms present, one per IC.
+        for c in history['coherence_history']:
+            self.assertTrue(0.0 <= c <= 1.5)
+        for norms in history['per_ic_grad_norm_history']:
+            self.assertEqual(len(norms), 2)
+        # best_loss == min over epochs of the mean held-out loss (selection
+        # is on held-out, not train).
+        heldout_means = [sum(hl) / len(hl)
+                         for _, hl in history['heldout_loss_history']]
+        self.assertAlmostEqual(history['best_loss'], min(heldout_means),
+                               places=6)
+
+    def test_select_on_heldout_requires_heldout_ics(self):
+        coords = get_speedy_coords()
+        coupler = FakeCoupler()
+        config = CoupledControllerConfig(
+            control_interval_steps=2, total_steps=4, target_cooling=-0.1,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15,
+        )
+        policy = MCBPolicyMLP(
+            output_shape=coords.horizontal.nodal_shape, hidden_dims=(8,),
+            max_perturbation=0.15,
+        )
+        step_fn = create_coupled_step_fn(coupler, WORKFLOW)
+        carry = make_fake_carry(coords, 288.0)
+        baseline = compute_baseline_trajectory(
+            carry, step_fn, num_steps=4, coords=coords)
+        with self.assertRaises(ValueError):
+            train_coupled_policy_ensemble(
+                coupler=coupler, workflow=WORKFLOW, policy=policy,
+                coords=coords,
+                terrain_fmask=jnp.zeros(coords.horizontal.nodal_shape),
+                train_carries=[carry], train_baselines=[baseline],
+                heldout_carries=(), heldout_baselines=(),
+                training_config=TrainingConfig(num_epochs=1),
+                controller_config=config, select_on_heldout=True,
+            )
+
+
+class TestTerminalDsstLossMode(unittest.TestCase):
+    """loss_mode='terminal_dsst' must equal the gate metric (final dSST error).
+
+    The historical 'summed' objective sums per-interval losses dominated by
+    early-interval transients and the uniformity penalty (<0.2% gate-relevant
+    and rewarding overcooling). 'terminal_dsst' trains on exactly what the
+    pre-registered gate scores.
+    """
+
+    def _setup(self):
+        coords = get_speedy_coords()
+        coupler = FakeCoupler()
+        policy = MCBPolicyMLP(
+            output_shape=coords.horizontal.nodal_shape, hidden_dims=(8,),
+            max_perturbation=0.15,
+        )
+        params = policy.init(jax.random.PRNGKey(1), jnp.zeros(13))
+        step_fn = create_coupled_step_fn(coupler, WORKFLOW)
+        carry = make_fake_carry(coords, 289.0)
+        baseline = compute_baseline_trajectory(
+            carry, step_fn, num_steps=4, coords=coords)
+        ocean_mask = jnp.ones(coords.horizontal.nodal_shape)
+        return coords, coupler, policy, params, carry, baseline, ocean_mask
+
+    def test_terminal_loss_equals_gate_dsst_error(self):
+        coords, coupler, policy, params, carry, baseline, ocean_mask = \
+            self._setup()
+        cfg = CoupledControllerConfig(
+            control_interval_steps=2, total_steps=4, target_cooling=-0.1,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15, loss_mode="terminal_dsst",
+            forcing_reg_weight=0.0,  # isolate the pure dSST term
+        )
+        loss = float(unroll_coupled_simple(
+            coupler=coupler, workflow=WORKFLOW, policy_fn=policy.apply,
+            policy_params=params, initial_carry=carry,
+            baseline_trajectory=baseline, coords=coords,
+            ocean_mask=ocean_mask, config=cfg,
+        ))
+        metrics = evaluate_coupled_policy(
+            coupler=coupler, workflow=WORKFLOW, policy_fn=policy.apply,
+            policy_params=params, initial_carry=carry,
+            baseline_trajectory=baseline, coords=coords,
+            ocean_mask=ocean_mask, config=cfg,
+        )["metrics"]
+        expected = (metrics["final_sst_change"] - cfg.target_cooling) ** 2
+        # With forcing_reg=0 the training loss IS the squared gate error. The
+        # loss subtracts-then-weights (more float32-stable) while the gate
+        # metric weights-then-subtracts two ~289 K sums, so they agree only to
+        # a float32 reduction-order epsilon (~1e-5 K in dSST, three orders
+        # below the 0.013 K noise floor) — not bit-identical. places=4 still
+        # separates this from the ~10x larger summed objective.
+        self.assertAlmostEqual(loss, expected, places=4)
+
+    def test_terminal_differs_from_summed(self):
+        coords, coupler, policy, params, carry, baseline, ocean_mask = \
+            self._setup()
+        base = dict(
+            control_interval_steps=2, total_steps=4, target_cooling=-0.1,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15,
+        )
+        summed = float(unroll_coupled_simple(
+            coupler=coupler, workflow=WORKFLOW, policy_fn=policy.apply,
+            policy_params=params, initial_carry=carry,
+            baseline_trajectory=baseline, coords=coords, ocean_mask=ocean_mask,
+            config=CoupledControllerConfig(loss_mode="summed", **base),
+        ))
+        terminal = float(unroll_coupled_simple(
+            coupler=coupler, workflow=WORKFLOW, policy_fn=policy.apply,
+            policy_params=params, initial_carry=carry,
+            baseline_trajectory=baseline, coords=coords, ocean_mask=ocean_mask,
+            config=CoupledControllerConfig(loss_mode="terminal_dsst", **base),
+        ))
+        self.assertNotAlmostEqual(summed, terminal, places=4)
+
+
+class TestAreaWeights(unittest.TestCase):
+    """R1 regression: compute_area_weights must be a genuine cos(lat) weighting.
+
+    Latitudes are stored in RADIANS. The historical bug applied jnp.radians()
+    to them a second time, collapsing the weights to near-uniform (pole/equator
+    ratio ~1) and silently turning every 'area-weighted' global mean into a
+    cell-count mean that over-weights the poles ~20x.
+    """
+
+    def test_pole_equator_ratio_is_cosine(self):
+        from jcm.mcb.state_features import compute_area_weights
+        coords = get_speedy_coords()
+        w = compute_area_weights(coords)
+        # Normalized to a probability distribution over the grid.
+        self.assertAlmostEqual(float(jnp.sum(w)), 1.0, places=5)
+        ratio = float(jnp.max(w) / jnp.min(w))
+        # Correct cos(lat) weighting at T30 gives ~20; the double-radians bug
+        # gives ~1. Guard hard against a regression to near-uniform.
+        self.assertGreater(ratio, 10.0)
+
+    def test_matches_cosine_of_latitude(self):
+        import numpy as np
+        from jcm.mcb.state_features import compute_area_weights
+        coords = get_speedy_coords()
+        lats = np.asarray(coords.horizontal.latitudes)
+        w = np.asarray(compute_area_weights(coords))
+        expected = np.cos(lats)
+        expected = expected / expected.sum()  # per-latitude, before lon tiling
+        # Every longitude row is identical; compare one column to cos(lat).
+        got = w[0, :] / w[0, :].sum()
+        self.assertTrue(np.allclose(got, expected, rtol=1e-5))
 
 
 if __name__ == "__main__":

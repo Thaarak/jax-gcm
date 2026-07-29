@@ -51,6 +51,7 @@ from jcm.mcb.train import TrainingConfig, save_checkpoint
 from jem.base.coupler import Coupler
 from jem.components.JCM import make_jem_compatible
 from jem.components.slab.slab_ocean_model.slab_ocean_model import SlabOceanModel
+from jem.components.slab.slab_land_model.slab_land_model import SlabLandModel
 from jem.mapping.mapper import BasicMapper
 
 
@@ -74,17 +75,20 @@ def parse_args():
 def warm_start_params(policy, feature_dim, stage1_path):
     """Build initial policy params warm-started from the Stage 1 pattern.
 
-    The MLP output layer produces logits that go through
-    max_perturbation * sigmoid(logits) — the same parameterization Stage 1
-    used (0.15 * sigmoid(theta)). Setting the output bias to theta and the
-    output kernel to zero makes the initial policy output exactly the
-    Stage 1 optimized pattern, regardless of input features. Gradients
-    still flow to the kernel (hidden activations are non-zero), so the
-    network can learn state-dependence from there.
+    The policy output head is clipped-linear (jcm/mcb/policy.py:
+    clip(logits, 0, max_perturbation)). Setting the output bias to the Stage 1
+    optimized PATTERN (already in [0, max_perturbation]) and the output kernel
+    to zero makes the initial policy output exactly that pattern, regardless of
+    input features (clip is the identity inside the bound). Gradients still flow
+    to the kernel (hidden activations are non-zero) wherever the output is
+    strictly inside (0, max_perturbation), so the network can learn
+    state-dependence from there.
     """
     with open(stage1_path, 'rb') as f:
         stage1 = pickle.load(f)
-    theta = jnp.asarray(stage1['best_theta'])
+    # Seed with the actual optimized field (parameterization-independent), not
+    # the sigmoid logit `best_theta` the old head required.
+    pattern = jnp.asarray(stage1['best_pattern'])
 
     params = policy.init(jax.random.PRNGKey(0), jnp.zeros(feature_dim))
     params = jax.tree_util.tree_map(lambda x: x, params)  # ensure mutable copy
@@ -92,12 +96,12 @@ def warm_start_params(policy, feature_dim, stage1_path):
         params = flax.core.unfreeze(params)
 
     out = params['params']['output']
-    assert out['bias'].shape == (theta.size,), (out['bias'].shape, theta.shape)
-    out['bias'] = theta.reshape(-1).astype(out['bias'].dtype)
+    assert out['bias'].shape == (pattern.size,), (out['bias'].shape, pattern.shape)
+    out['bias'] = pattern.reshape(-1).astype(out['bias'].dtype)
     out['kernel'] = jnp.zeros_like(out['kernel'])
 
     print(f"  Warm-started output bias from {stage1_path}")
-    print(f"    theta range: [{float(theta.min()):.3f}, {float(theta.max()):.3f}]  "
+    print(f"    pattern range: [{float(pattern.min()):.4f}, {float(pattern.max()):.4f}]  "
           f"(Stage 1 loss {stage1.get('best_loss', float('nan')):.6f}, "
           f"cooling {stage1.get('achieved_cooling', float('nan')):+.4f} K)")
     return params
@@ -168,8 +172,15 @@ def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=Fal
     atm_forcing = None
     if realistic_terrain:
         atm_forcing = ForcingData.from_file(FORCING_NC, coords)
+        # Collapse SST and land-surface-temperature to 2D (day-0 climatology
+        # placeholder). The coupler overwrites SST from the slab ocean and stl_am
+        # from the slab land model every step; a 3D field would break the
+        # lax.scan shape invariant (3D input vs 2D coupled output). The 3D annual
+        # cycle for snow / soil moisture is kept — only these two prognostic
+        # coupled fields are collapsed.
         atm_forcing = atm_forcing.copy(
-            sea_surface_temperature=atm_forcing.sea_surface_temperature[:, :, 0]
+            sea_surface_temperature=atm_forcing.sea_surface_temperature[:, :, 0],
+            stl_am=atm_forcing.stl_am[:, :, 0],
         )
 
     # Make JEM-compatible
@@ -181,13 +192,22 @@ def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=Fal
     # On realistic terrain, mask_file pins land cells to a fixed temperature
     # so only ocean SST evolves, consistent with the atmosphere land mask.
     timestep_seconds = 86400.0  # 1 day in seconds
+    # Over realistic terrain, initialize SST from the T30 SST climatology
+    # (forcing.nc `sst`) instead of the idealized 273.15 + 27·cos²(1.5·lat)
+    # field, which is ~6 K too cold and was the confirmed driver of the
+    # +1.4 K/60-day spin-up drift. forcing_method stays "None" (a FREE slab: no
+    # relaxation), so the ocean responds freely to MCB — relaxation would damp
+    # the very cooling signal we optimize. On the aquaplanet, SST_clim_file=None
+    # keeps the idealized init (Stage 1-4 behavior unchanged).
     ocn_model = SlabOceanModel(
         start_datetime=start_datetime,
         timestep=timestep_seconds,
         mask_file=TERRAIN_NC if realistic_terrain else None,
+        SST_clim_file=FORCING_NC if realistic_terrain else None,
     )
 
-    # Create mapper for atmosphere-ocean coupling
+    # Create mapper for atmosphere-ocean coupling. The SEA slab heat flux drives
+    # the ocean; the ocean SST is fed back as the atmosphere's SST boundary.
     mapper = BasicMapper()
     mapper.add_mapping(
         source=("atm", "derived.total_heat_flux"),
@@ -198,13 +218,50 @@ def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=Fal
         target=("atm", "forcing.sea_surface_temperature"),
     )
 
+    components = {"atm": atm_model, "ocn": ocn_model}
+
+    # Over realistic terrain, also couple a slab LAND model so land-surface
+    # temperature is PROGNOSTIC (responds to the atmosphere) rather than pinned
+    # to climatology — a prerequisite for land-driven precipitation
+    # teleconnections. The LAND slab heat flux (hfluxn[..., 0]) drives the land
+    # model; its land_surface_temperature is fed back as the atmosphere's stl_am.
+    if realistic_terrain:
+        lnd_model = SlabLandModel(
+            start_datetime=start_datetime,
+            timestep=timestep_seconds,
+            mask_file=TERRAIN_NC,
+            land_clim_file=FORCING_NC,
+        )
+        mapper.add_mapping(
+            source=("atm", "derived.land_heat_flux"),
+            target=("lnd", "forcing.total_heat_flux"),
+        )
+        mapper.add_mapping(
+            source=("lnd", "state.land_surface_temperature"),
+            target=("atm", "forcing.stl_am"),
+        )
+        components["lnd"] = lnd_model
+
     # Create coupler
     coupler = Coupler(
-        components={"atm": atm_model, "ocn": ocn_model},
+        components=components,
         mappers={"coupling": mapper},
     )
 
     return coupler, coords, terrain, atm_model
+
+
+def coupler_workflow(coupler):
+    """Workflow (mapper + component step order) matching a coupler's components.
+
+    ["coupling", "atm", "ocn"] on the aquaplanet; ["coupling", "atm", "ocn",
+    "lnd"] over realistic terrain (where the slab land model is present). Drivers
+    should derive the workflow from the coupler with this helper rather than
+    hard-coding it, so the land step is run exactly when the land component
+    exists.
+    """
+    order = ["atm", "ocn", "lnd"]
+    return ["coupling"] + [c for c in order if c in coupler.components]
 
 
 def main():
