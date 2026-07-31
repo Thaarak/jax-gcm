@@ -331,6 +331,57 @@ it is the most interesting scientific lesson the project has produced.
 | TOST bound achievable now → with micro-ensembles | ±12.5 mK → ~±5 mK (feedback) | executed/hand-verified |
 | Held-out IC looks consumed (v1–v3) | 13 gate tests + 5 probe + ~123 selection | prereg-compliance lens |
 
+## Addendum — Confirmatory campaign results (2026-07-31)
+
+The Tier-1 confirmatory campaign (`run_campaign_confirm.sh`, PREREGISTRATION.md Amendment 2) ran
+2026-07-30/31 on diya (2.74 h for the main eval): 20 FRESH ICs (seeds 3000–3019, never previously
+touched), k=8 micro-ensembles per (arm, IC) with per-member in-process baselines, the registered
+final-10-day time-mean dSST metric, and formal paired t / Wilcoxon / TOST. All numbers below were
+independently recomputed from `confirmatory_eval.pkl` member-level data and match the campaign's
+recorded gates exactly.
+
+**The measurement fix worked as designed.** Arm-mean standard errors dropped from ~0.007 K (v3) to
+**0.0014 K** — a 5× improvement, exactly the k=8 × n=20 prediction. The micro-ensembles directly
+measured the per-run chaos noise at 0.0129–0.0144 K, and the cross-process noise floor
+(`noise_floor_crossproc.pkl`) measured **σ_run = 0.0160 K** where the old harness reported 0.0 —
+both confirming the meta-audit's 0.014–0.017 K diagnosis. Residual real IC-to-IC response
+heterogeneity is ~0.004 K.
+
+**Results on the registered metric (n=20 fresh ICs):**
+
+| Arm | dSST (10-day mean) | G2 | mean \|err\| |
+|---|---|---|---|
+| stage1-static | **−0.1023 ± 0.0014** | PASS (powered) | 0.0054 |
+| retrain (v3 NN feedback) | −0.0938 ± 0.0015 | PASS | 0.0070 |
+| open-loop (time-only) | −0.0914 ± 0.0014 | PASS | 0.0091 |
+
+**Primary comparisons (Holm-corrected family of two):** retrain vs static p_t=0.274 (Holm 0.32);
+retrain vs open-loop p_t=0.161 (Holm 0.32). Both ties — but now with **tight TOST equivalence
+bounds: any feedback effect vs static is within ±0.0043 K, and vs the open-loop schedule within
+±0.0045 K, at 95% confidence** (≤4.5% of the target signal). Combined with the design-headroom
+ceiling (~0.006 K for a perfect controller), the feedback question is now CLOSED for this task
+distribution, quantitatively: neural feedback cannot and does not add measurable value here.
+
+**Secondary:** open-loop vs static +0.0037, p_t=0.057 / p_w=0.058 — the 2·s.e. gate labels this
+FAIL but the registered paired t does not reject at α=0.05 (the known anti-conservative
+discrepancy; per Amendment 2 the t-test governs and the disagreement is reported). Directionally,
+the static pattern had the smallest error of all three arms. Leave-one-out: the retrain-vs-static
+tie is fully stable; retrain-vs-openloop can flip to significant (retrain better) on dropping one
+IC — noise around zero, consistent with the equivalence bounds.
+
+**The two defensible, protocol-clean results of the project are therefore:**
+1. **Confirmatory positive:** gradient-based optimization through the differentiable coupled model
+   yields an MCB pattern that hits the −0.1 K target on never-touched ICs on the registered metric
+   with real statistical power (−0.1023 ± 0.0014 K, G2 PASS). Caveats: single season, single ocean
+   state, in-model forcing scale beyond published MCB feasibility, stratiform deck unperturbed.
+2. **Significant bounded-negative:** any advantage of the neural feedback controller over a static
+   pattern or an open-loop schedule is smaller than ~4.5 mK (95% CI), i.e. under ~4.5% of the
+   target effect — in an environment whose theoretical feedback ceiling is ~6 mK. The Tier-2
+   disturbance-injection experiment remains the path to testing feedback where it has real headroom.
+
+Remaining protocol caveat: the trained arms are the single-seed v3 checkpoints (re-evaluated, not
+retrained); Amendment 2's ≥3-seed rule applies to any future training-based claim.
+
 ## Appendix B — Provenance
 
 - Raw artifacts pulled 2026-07-29 from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/` (eval_final/v2/v3,
