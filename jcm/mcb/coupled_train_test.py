@@ -610,3 +610,92 @@ class TestAreaWeights(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTailMeanMetric(unittest.TestCase):
+    """The pre-registered final-10-day time-mean dSST (meta-audit Tier 1).
+
+    With the FakeCoupler (dSST/step = -0.05 * perturbation) and a constant
+    policy p, the dSST after t steps is -0.05*p*t exactly, so both the
+    snapshot and the tail-mean have closed forms.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from jcm.mcb.coupled_controller import evaluate_coupled_policy
+        cls.evaluate_coupled_policy = staticmethod(evaluate_coupled_policy)
+        cls.coords = get_speedy_coords()
+        cls.coupler = FakeCoupler()
+        cls.shape = cls.coords.horizontal.nodal_shape
+        cls.ocean_mask = jnp.ones(cls.shape)
+        cls.p = 0.02
+        cls.total_steps = 8
+        cls.config = CoupledControllerConfig(
+            control_interval_steps=2,
+            total_steps=cls.total_steps,
+            target_cooling=-0.1,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15,
+            use_checkpointing=True,
+        )
+        step_fn = create_coupled_step_fn(cls.coupler, WORKFLOW)
+        cls.carry = make_fake_carry(cls.coords, 288.0)
+        cls.baseline = compute_baseline_trajectory(
+            cls.carry, step_fn, num_steps=cls.total_steps, coords=cls.coords)
+
+    def _eval(self, tail_mean_days):
+        policy_fn = lambda params, feats: jnp.full(self.shape, self.p)  # noqa: E731
+        return self.evaluate_coupled_policy(
+            coupler=self.coupler,
+            workflow=WORKFLOW,
+            policy_fn=policy_fn,
+            policy_params={},
+            initial_carry=self.carry,
+            baseline_trajectory=self.baseline,
+            coords=self.coords,
+            ocean_mask=self.ocean_mask,
+            config=self.config,
+            tail_mean_days=tail_mean_days,
+        )["metrics"]
+
+    # Analytic tolerances are loose (2e-4) because 288 K SST quantizes at the
+    # float32 ULP (~3e-5 K/step, accumulating); the sharp assertions are the
+    # index-convention invariants, which must hold to float32 exactness.
+
+    def test_snapshot_and_tail_mean(self):
+        m = self._eval(tail_mean_days=4)
+        rate = 0.05 * self.p
+        # Snapshot at T=8 steps: -0.05*p*8
+        self.assertAlmostEqual(m["final_sst_change"],
+                               -rate * self.total_steps, delta=2e-4)
+        # Tail mean over t = 5..8: -0.05*p*mean(5,6,7,8) = -0.05*p*6.5
+        self.assertIn("final_sst_change_10d", m)
+        self.assertEqual(m["tail_mean_days"], 4)
+        self.assertAlmostEqual(m["final_sst_change_10d"],
+                               -rate * 6.5, delta=2e-4)
+        # INVARIANT: the last daily tail dSST is the same quantity as the
+        # snapshot (same final state, same baseline index) — exact.
+        self.assertAlmostEqual(float(m["dsst_daily_tail"][-1]),
+                               m["final_sst_change"], places=6)
+        # INVARIANT: the reported tail mean is the mean of the daily values.
+        self.assertAlmostEqual(
+            m["final_sst_change_10d"],
+            float(jnp.mean(jnp.asarray(m["dsst_daily_tail"]))), places=6)
+        # Daily tail dSSTs are strictly monotone (cooling accumulates), so an
+        # off-by-one in the baseline index would break the analytic values.
+        daily = [float(x) for x in m["dsst_daily_tail"]]
+        for t, got in zip((5, 6, 7, 8), daily):
+            self.assertAlmostEqual(got, -rate * t, delta=2e-4)
+
+    def test_tail_disabled_reproduces_old_metrics(self):
+        m = self._eval(tail_mean_days=0)
+        self.assertNotIn("final_sst_change_10d", m)
+        self.assertAlmostEqual(m["final_sst_change"],
+                               -0.05 * self.p * self.total_steps, delta=2e-4)
+
+    def test_tail_clipped_to_horizon(self):
+        m = self._eval(tail_mean_days=99)
+        self.assertEqual(m["tail_mean_days"], self.total_steps)
+        # Mean over all t=1..8: -0.05*p*4.5
+        self.assertAlmostEqual(m["final_sst_change_10d"],
+                               -0.05 * self.p * 4.5, delta=2e-4)

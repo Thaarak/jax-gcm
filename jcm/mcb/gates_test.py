@@ -94,12 +94,28 @@ class TestNoWorseGate(unittest.TestCase):
         g = no_worse_gate(policy_loss, static_loss)
         self.assertEqual(g["verdict"], "FAIL")
 
-    def test_within_noise_is_not_sig_worse(self):
+    def test_within_noise_is_underpowered_not_pass(self):
+        # PREREGISTRATION.md section 5: a margin within 2 s.e. must be
+        # reported as underpowered, never converted into a PASS (the old
+        # "PASS (not sig. worse)" label was an unregistered non-inferiority
+        # framing — 2026-07-29 meta-audit).
         rng = np.random.default_rng(2)
         static_loss = np.abs(rng.normal(0.02, 0.005, 8))
         policy_loss = static_loss + rng.normal(0, 0.005, 8)
         g = no_worse_gate(policy_loss, static_loss)
-        self.assertIn("PASS", g["verdict"])  # not significantly worse
+        self.assertIn("underpowered", g["verdict"])
+        self.assertNotIn("PASS", g["verdict"])
+
+    def test_paired_stats_reports_formal_tests(self):
+        rng = np.random.default_rng(5)
+        a = rng.normal(0.0, 1.0, 10)
+        b = a + rng.normal(0.5, 0.3, 10)
+        st = paired_stats(b, a)
+        self.assertIn("p_t", st)
+        self.assertIn("p_wilcoxon", st)
+        self.assertIn("equivalence_bound_95", st)
+        self.assertLess(st["p_t"], 0.05)  # 0.5 shift, sd 0.3 -> significant
+        self.assertGreater(st["equivalence_bound_95"], abs(st["mean"]))
 
 
 class TestLearned(unittest.TestCase):

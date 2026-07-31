@@ -8,15 +8,24 @@ with an explicit 2-s.e. significance rule. A verdict whose margin is within
 2 s.e. is reported as ``underpowered`` (neither PASS nor FAIL), never as a
 result.
 
-No SciPy dependency: for paired samples the test statistic is the mean of the
-per-IC differences over their standard error (a paired t / z); at the small n
-here the 2-s.e. rule is the honest, conservative call. Pure NumPy so the module
-is unit-testable without the model.
+No SciPy dependency: pure NumPy so the module is unit-testable without the
+model. The primary decision rule is the pre-registered 2-s.e. margin; note
+that at n=10 this is slightly ANTI-conservative (t_{0.975,9}=2.262, so the
+2-s.e. rule runs at alpha ~= 7.7%, not 5%). Every gate therefore also reports
+the formal paired-t and exact Wilcoxon p-values plus the demonstrable TOST
+equivalence bound (gates_stats.py, the tests PREREGISTRATION.md section 4
+actually names) so verdicts can be checked at the registered alpha = 0.05.
 """
 
 from typing import Sequence
 
 import numpy as np
+
+from jcm.mcb.gates_stats import (
+    equivalence_bound,
+    paired_t_test,
+    wilcoxon_signed_rank,
+)
 
 
 def paired_stats(policy: Sequence[float], static: Sequence[float]) -> dict:
@@ -34,7 +43,7 @@ def paired_stats(policy: Sequence[float], static: Sequence[float]) -> dict:
     n = int(d.size)
     mean = float(d.mean()) if n else float("nan")
     se = float(d.std(ddof=1) / np.sqrt(n)) if n > 1 else float("inf")
-    return {
+    result = {
         "mean": mean,
         "se": se,
         "n": n,
@@ -42,6 +51,18 @@ def paired_stats(policy: Sequence[float], static: Sequence[float]) -> dict:
         "ci95": (mean - 2 * se, mean + 2 * se),
         "significant": abs(mean) > 2 * se,
     }
+    if n > 1:
+        t_res = paired_t_test(d)
+        w_res = wilcoxon_signed_rank(d)
+        result.update({
+            "p_t": t_res["p"],
+            "p_wilcoxon": w_res["p"],
+            "ci95_t": t_res["ci95"],
+            "significant_t": bool(np.isfinite(t_res["p"])
+                                  and t_res["p"] < 0.05),
+            "equivalence_bound_95": equivalence_bound(d),
+        })
+    return result
 
 
 def cooling_gate(dsst_per_ic: Sequence[float],
@@ -96,9 +117,14 @@ def no_worse_gate(policy_loss: Sequence[float],
     """G4: policy held-out loss is no worse than static (paired).
 
     d = policy_loss - static_loss (lower is better). The policy FAILS only if
-    it is SIGNIFICANTLY worse (mean - 2 s.e. > 0). If the policy is clearly
-    better (mean + 2 s.e. < 0) that is a strong PASS; otherwise it is a
-    (weak) PASS = "not significantly worse", flagged as such.
+    it is SIGNIFICANTLY worse (mean - 2 s.e. > 0) and PASSES only if it is
+    significantly better. A margin within 2 s.e. is reported as
+    "underpowered (not sig. worse)" per PREREGISTRATION.md section 5 ("any
+    gate margin below 2 s.e. is reported as not significant / underpowered,
+    never as PASS or FAIL") — the 2026-07-29 meta-audit found the previous
+    "PASS (not sig. worse)" label converted absence of evidence into a pass,
+    an unregistered non-inferiority framing with no margin. Use the reported
+    ``equivalence_bound_95`` for a real non-inferiority claim.
     """
     st = paired_stats(policy_loss, static_loss)  # policy - static; <=0 is good
     if not np.isfinite(st["se"]):
@@ -108,7 +134,7 @@ def no_worse_gate(policy_loss: Sequence[float],
     elif st["mean"] - 2 * st["se"] > 0:
         verdict = "FAIL"  # significantly worse than static
     else:
-        verdict = "PASS (not sig. worse)"
+        verdict = "underpowered (not sig. worse)"
     return {**st, "verdict": verdict}
 
 

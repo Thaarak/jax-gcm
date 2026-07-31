@@ -143,3 +143,54 @@ class TestOceanMaskedLoss(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPrecipitationMetrics(unittest.TestCase):
+    """Regression tests for the R4 softplus-offset fix and the mm/day metric."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.coords = get_speedy_coords()
+        from jcm.mcb.state_features import compute_area_weights
+        cls.area_weights = compute_area_weights(cls.coords)
+        cls.shape = cls.coords.horizontal.nodal_shape
+
+    def _carry_with_precip(self, precip_field):
+        carry = make_fake_carry(self.coords, jnp.full(self.shape, 288.0))
+        physics = carry["atm"]["derived"]["physics"]
+        carry["atm"]["derived"]["physics"] = physics._replace(
+            convection=_Convection(precnv=precip_field),
+            condensation=_Condensation(precls=jnp.zeros(self.shape)),
+        )
+        return carry
+
+    def test_do_nothing_scores_zero(self):
+        """A run identical to baseline must score exactly 0, not ln(2)/100."""
+        from jcm.mcb.coupled_loss import coupled_precipitation_loss
+        precip = jnp.full(self.shape, 2.0)
+        carry = self._carry_with_precip(precip)
+        loss = coupled_precipitation_loss(
+            carry, precip, self.coords, self.area_weights, region="amazon")
+        self.assertAlmostEqual(float(loss), 0.0, places=6)
+
+    def test_decrease_penalized_increase_not(self):
+        from jcm.mcb.coupled_loss import coupled_precipitation_loss
+        baseline = jnp.full(self.shape, 2.0)
+        dec = self._carry_with_precip(jnp.full(self.shape, 1.5))
+        inc = self._carry_with_precip(jnp.full(self.shape, 2.5))
+        loss_dec = float(coupled_precipitation_loss(
+            dec, baseline, self.coords, self.area_weights, region="amazon"))
+        loss_inc = float(coupled_precipitation_loss(
+            inc, baseline, self.coords, self.area_weights, region="amazon"))
+        self.assertGreater(loss_dec, 0.1)
+        self.assertLess(loss_inc, 0.0)  # shifted softplus: increase < 0
+        self.assertLess(abs(loss_inc), loss_dec)  # asymmetric
+
+    def test_mm_day_metric_signed_and_scaled(self):
+        from jcm.mcb.coupled_loss import region_precip_change_mm_day
+        baseline = jnp.full(self.shape, 2.0)  # g/(m^2 s)
+        carry = self._carry_with_precip(jnp.full(self.shape, 1.0))
+        change = float(region_precip_change_mm_day(
+            carry, baseline, self.coords, self.area_weights, region="amazon"))
+        # -1 g/(m^2 s) * 86.4 = -86.4 mm/day
+        self.assertAlmostEqual(change, -86.4, places=3)

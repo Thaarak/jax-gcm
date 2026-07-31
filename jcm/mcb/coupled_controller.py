@@ -98,12 +98,17 @@ class CoupledControlStep(NamedTuple):
         carry: Final coupled carry after the control interval.
         mcb_forcing: Applied MCB forcing field.
         loss: Loss value for this interval.
+        sst_ocean_mean: Optional (interval_steps,) per-coupling-step
+            area-weighted ocean-mean SST scalars, collected only when the
+            unroll is asked for them (needed for the pre-registered
+            final-10-day time-mean dSST metric). None in training mode.
 
     """
 
     carry: dict  # CoupledCarry
     mcb_forcing: jnp.ndarray
     loss: jnp.ndarray
+    sst_ocean_mean: Any = None
 
 
 def create_coupled_step_fn(
@@ -189,6 +194,40 @@ def run_interval_final_carry(
     return final_carry
 
 
+def run_interval_final_carry_with_sst(
+    carry: dict,
+    step_fn: Callable,
+    num_steps: int,
+    sst_weights: jnp.ndarray,
+) -> Tuple[dict, jnp.ndarray]:
+    """Like run_interval_final_carry, also collecting per-step ocean-mean SST.
+
+    Emits one scalar per coupling step (the area x ocean weighted mean SST
+    after that step) — negligible memory — so evaluation can compute the
+    pre-registered final-10-day time-mean dSST (PREREGISTRATION.md section 3)
+    instead of the noisier day-60 snapshot.
+
+    Args:
+        carry: Initial coupled carry.
+        step_fn: Coupler step function.
+        num_steps: Number of coupling steps to run.
+        sst_weights: Normalized area x ocean weights (ix, il).
+
+    Returns:
+        (final_carry, sst_means) with sst_means of shape (num_steps,);
+        sst_means[s] is the mean SST after step s+1 of the interval.
+
+    """
+    def body(c, step_idx):
+        new_c, _ = step_fn(c, step_idx)
+        sst = new_c["ocn"]["state"].sea_surface_temperature
+        return new_c, jnp.sum(sst * sst_weights)
+
+    body = jax.checkpoint(body)
+    final_carry, sst_means = lax.scan(body, carry, jnp.arange(num_steps))
+    return final_carry, sst_means
+
+
 def create_coupled_control_step(
     coupler,
     workflow: list,
@@ -197,6 +236,7 @@ def create_coupled_control_step(
     coords,
     config: CoupledControllerConfig,
     ocean_mask: jnp.ndarray,
+    collect_sst_weights: jnp.ndarray = None,
 ) -> Callable:
     """Create a single coupled control step function.
 
@@ -217,6 +257,11 @@ def create_coupled_control_step(
         coords: Model coordinates.
         config: Controller configuration.
         ocean_mask: Ocean cell mask for MCB application.
+        collect_sst_weights: Optional normalized area x ocean weights. When
+            given, each control step also records the per-coupling-step
+            ocean-mean SST (CoupledControlStep.sst_ocean_mean) so evaluation
+            can form the pre-registered final-10-day time-mean dSST. Leave
+            None in training (no extra state saved under BPTT).
 
     Returns:
         Function (carry, policy_params, interval_idx) -> CoupledControlStep.
@@ -259,11 +304,20 @@ def create_coupled_control_step(
 
         # Run coupled simulation for control interval (predictions discarded
         # for memory efficiency under BPTT)
-        final_carry = run_interval_final_carry(
-            carry=carry,
-            step_fn=step_fn,
-            num_steps=config.control_interval_steps,
-        )
+        sst_means = None
+        if collect_sst_weights is not None:
+            final_carry, sst_means = run_interval_final_carry_with_sst(
+                carry=carry,
+                step_fn=step_fn,
+                num_steps=config.control_interval_steps,
+                sst_weights=collect_sst_weights,
+            )
+        else:
+            final_carry = run_interval_final_carry(
+                carry=carry,
+                step_fn=step_fn,
+                num_steps=config.control_interval_steps,
+            )
 
         # Compute loss vs the paired baseline at the interval end. The SST
         # cooling / uniformity terms are ocean-masked on realistic terrain
@@ -284,6 +338,7 @@ def create_coupled_control_step(
             carry=final_carry,
             mcb_forcing=mcb_perturbation,
             loss=loss,
+            sst_ocean_mean=sst_means,
         )
 
     return control_step
@@ -299,6 +354,7 @@ def unroll_coupled_with_policy(
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
+    collect_sst: bool = False,
 ) -> Tuple[jnp.ndarray, dict, Any]:
     """Unroll coupled simulation with neural network control.
 
@@ -315,6 +371,10 @@ def unroll_coupled_with_policy(
         coords: Model coordinates.
         ocean_mask: Ocean mask for MCB application.
         config: Controller configuration.
+        collect_sst: When True, trajectory.sst_ocean_mean holds the
+            per-coupling-step ocean-mean SST, shape (num_intervals,
+            interval_steps) — used by evaluation for the pre-registered
+            final-10-day time-mean dSST. Keep False for training.
 
     Returns:
         Tuple of:
@@ -325,6 +385,12 @@ def unroll_coupled_with_policy(
     """
     num_intervals = config.total_steps // config.control_interval_steps
 
+    collect_sst_weights = None
+    if collect_sst:
+        from jcm.mcb.state_features import compute_area_weights
+        w = compute_area_weights(coords) * ocean_mask
+        collect_sst_weights = w / jnp.sum(w)
+
     # Create control step function
     control_step = create_coupled_control_step(
         coupler=coupler,
@@ -334,6 +400,7 @@ def unroll_coupled_with_policy(
         coords=coords,
         config=config,
         ocean_mask=ocean_mask,
+        collect_sst_weights=collect_sst_weights,
     )
 
     # Optionally wrap with checkpointing for memory efficiency
@@ -467,17 +534,25 @@ def evaluate_coupled_policy(
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
+    tail_mean_days: int = 10,
 ) -> dict:
     """Evaluate a trained policy and return detailed metrics.
 
     Args:
-        Same as unroll_coupled_with_policy.
+        Same as unroll_coupled_with_policy, plus:
+        tail_mean_days: Window for the pre-registered terminal metric
+            (PREREGISTRATION.md section 3): dSST time-mean over the final
+            ``tail_mean_days`` coupling steps. 0 disables collection and
+            reproduces the old snapshot-only behavior.
 
     Returns:
         Dictionary with metrics:
         - total_loss: Sum of interval losses
         - mean_loss: Average loss per interval
-        - final_sst_change: Final global SST change
+        - final_sst_change: Final global SST change (day-60 snapshot; kept
+          for continuity with pre-2026-07-30 artifacts)
+        - final_sst_change_10d: dSST time-mean over the final
+          ``tail_mean_days`` days — the REGISTERED cooling metric
         - mean_mcb_forcing: Average MCB forcing magnitude
         - max_mcb_forcing: Maximum MCB forcing
         - trajectory: Full control step trajectory
@@ -485,6 +560,7 @@ def evaluate_coupled_policy(
     """
     from jcm.mcb.state_features import compute_area_weights
 
+    collect_sst = tail_mean_days > 0
     total_loss, final_carry, trajectory = unroll_coupled_with_policy(
         coupler=coupler,
         workflow=workflow,
@@ -495,6 +571,7 @@ def evaluate_coupled_policy(
         coords=coords,
         ocean_mask=ocean_mask,
         config=config,
+        collect_sst=collect_sst,
     )
 
     num_intervals = config.total_steps // config.control_interval_steps
@@ -522,6 +599,23 @@ def evaluate_coupled_policy(
         'max_mcb_forcing': float(jnp.max(trajectory.mcb_forcing)),
         'loss_trajectory': jax.device_get(trajectory.loss),
     }
+
+    if collect_sst:
+        # Pre-registered terminal metric: dSST time-mean over the final
+        # ``tail`` days. trajectory.sst_ocean_mean[i, s] is the ocean-mean
+        # SST after coupling step i*L + s + 1, so flat index t-1 = day t;
+        # baseline_trajectory.sst[t] is the state after t steps.
+        tail = int(min(tail_mean_days, config.total_steps))
+        policy_daily = jnp.reshape(trajectory.sst_ocean_mean, (-1,))
+        baseline_tail = jnp.stack([
+            jnp.sum(baseline_trajectory.sst[t] * sst_weights)
+            for t in range(config.total_steps - tail + 1,
+                           config.total_steps + 1)
+        ])
+        dsst_tail = policy_daily[-tail:] - baseline_tail
+        metrics['final_sst_change_10d'] = float(jnp.mean(dsst_tail))
+        metrics['tail_mean_days'] = tail
+        metrics['dsst_daily_tail'] = jax.device_get(dsst_tail)
 
     return {
         'total_loss': total_loss,

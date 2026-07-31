@@ -186,8 +186,13 @@ def create_latitude_band_mask(coords, lat_min: float, lat_max: float) -> jnp.nda
         Binary mask (ix, il) for the latitude band.
 
     """
-    lats = coords.horizontal.latitudes  # (il,)
-    lat_mask = (lats >= lat_min) & (lats <= lat_max)
+    # coords.horizontal.latitudes are in RADIANS (same convention as
+    # compute_area_weights above); the band bounds are in degrees, so convert
+    # before comparing. Comparing degrees to radians makes any band inside
+    # (-87, 87) degenerate: e.g. (-30, 30) covers the whole globe and (30, 60)
+    # is empty, because all radian values lie in (-pi/2, pi/2).
+    lats_deg = jnp.rad2deg(coords.horizontal.latitudes)  # (il,)
+    lat_mask = (lats_deg >= lat_min) & (lats_deg <= lat_max)
     return jnp.broadcast_to(lat_mask[None, :], coords.horizontal.nodal_shape)
 
 

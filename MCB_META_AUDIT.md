@@ -1,0 +1,346 @@
+# MCB Meta-Audit: Independent Validation of the Entire Project (2026-07-29)
+
+**What this document is.** A full, independent, adversarial validation of every stage of the MCB
+project — the original staged plan, the 2026-07-12 audit, the P0–P2 rebuild, and campaigns v1/v2/v3 —
+performed without trusting any project document. Every headline statistic was recomputed from the raw
+GPU artifacts (pulled from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/`), every claimed code fix was
+verified by reading and (where cheap) executing the actual code, and an 8-lens multi-agent review
+(objective alignment, gate statistics, training/selection, physics R6/R7, IC independence, experimental
+design headroom, pre-registration compliance, result robustness) was run over the codebase and
+artifacts (~1.1M tokens of checking; most findings verified by execution).
+
+**Companion documents:** `MCB_PROJECT_REPORT.md` (plain-language account), `MCB_IMPLEMENTATION_PLAN.md`
+(engineering log), `PREREGISTRATION.md` (frozen analysis plan). This document **corrects** specific
+claims in the first two.
+
+---
+
+## TL;DR
+
+The project's bookkeeping is impeccable — every recorded gate number reproduces from the raw per-IC
+data to 1e-12 — and the headline *negative* result (neural feedback ≈ static pattern ≈ open-loop
+schedule) is solid; in fact it is **stronger than the project's own documents state**. But three
+things the project currently believes are wrong:
+
+1. **The "held-out RMS halved (0.020→0.011 K), real but underpowered" claim is a selection artifact
+   and must be retracted.** It is the minimum of 39 noisy held-out evaluations — the very metric used
+   for model selection — and it reverses on independent re-evaluation.
+2. **The noise floor is mismeasured.** `σ_compile = 0.0` was guaranteed by the harness's construction
+   (within-process reps only). Real cross-process per-run chaos noise is ~0.014–0.017 K — larger than
+   σ_IC and 3× the effects under test. The same checkpoint on the same ICs differs by up to 0.049 K
+   per IC between two steps of the same campaign.
+3. **The feedback-vs-static null was baked into the experimental design.** A mathematically *perfect*
+   feedback controller could only ever have been worth ~6 mK on the gate metric — below the n=10
+   detection floor. "More ICs and seeds" cannot fix this; a cheap design change can.
+
+There is currently **no statistically significant positive scientific result** in the project — but
+there are two or three genuinely achievable ones (Part 4).
+
+---
+
+## Part 1 — What was validated and CONFIRMED
+
+All verified by execution unless noted.
+
+- **The rebuild is real.**
+  - R1 area weights: `compute_area_weights` produces cos-lat weights, pole/equator ratio 20.17 on T30.
+  - R6 cloud rewire: MCB enters `shortwave_radiation.py:74-83` as a clipped, ocean-masked cloud-albedo
+    perturbation whose SW effect scales as `pert × cloudc` (correct Twomey direction). The
+    discriminating 3-region regression test (cloudy ocean / clear ocean / land) passes and would fail
+    on the old surface-albedo physics.
+  - R7 flux split: `JCM.py:131-133` routes sea-slab flux (`-hfluxn[...,1]`) to the ocean and land-slab
+    flux (`-hfluxn[...,0]`) to a prognostic slab land. v3 provably ran realistic terrain (explicit
+    flag, campaign log lines, orography eval gate, IC-manifest assertion) — no silent aquaplanet.
+  - Selection machinery: `select_on_heldout` gates best_params + early stopping on held-out loss
+    evaluated every epoch on the pre-update (shipped) params; the off-by-one is fixed and its
+    regression test has teeth. Warm start reproduces the static pattern **bit-exactly** (max diff 0.0).
+  - Objective alignment: `loss_mode="terminal_dsst"` (`coupled_controller.py:357-374`) is
+    line-for-line the same scalar the gates score (same final step, weights, ocean mask, paired
+    baseline); the forcing regularizer is a measured 0.3–1% of the loss.
+  - 107/107 `jcm/mcb` tests pass; equilibration drift criterion credibly met; no train/held-out
+    leakage (disjoint seeds 1000–1019, no shared post-branch segments).
+
+- **The recorded v3 numbers are faithful.** G2 −0.0973±0.0077 (PASS, in band, powered);
+  G3 −0.0048±0.0063 (underpowered); G4 +0.000538±0.000444; feedback −0.0054±0.0039; nn-vs-random
+  +0.0033±0.0041 — all reproduce from per-IC data to 1e-12. (Sign convention:
+  improvement = comparator_err − treatment_err, positive = treatment better. Note both G3 and the
+  feedback gate point estimates run **against** the neural controller.)
+
+- **The v3 null verdicts are robust** to proper paired t (p = 0.20–0.46), exact Wilcoxon
+  (p = 0.19–0.70), 10k bootstrap (all 95% CIs straddle 0), and (mostly) leave-one-out. The ties are
+  genuine ties.
+
+- **v3 training genuinely descended** — the first campaign ever to do so (train-loss trend p<0.001;
+  grad norm 0.21 → 0.004). The machinery finally works. (What the descent *bought* is another matter —
+  see Part 2.1.)
+
+---
+
+## Part 2 — What was found that the project documents do NOT know
+
+### 2.1 The "held-out loss halved" claim is a selection artifact — RETRACT
+
+`MCB_PROJECT_REPORT.md:172` and the plan's v3 section claim the retrain "genuinely halved" held-out
+RMS dSST error (0.020→0.011 K), "real but below the significance bar." Refuted on four independent
+grounds (all executed):
+
+- 0.011 K = √(0.000120), the **minimum of 39 per-epoch held-out evaluations** — the very metric used
+  for selection and early stopping. The post-warmup held-out curve has **no trend** (Spearman p=0.69
+  for epochs ≥5; the linear p=0.002 is driven entirely by epochs 1–4, where training first *degraded*
+  the warm start to ~0.0010 and then recovered).
+- The plateau (0.000359 ± 0.000120) is statistically identical to the static warm start (0.000394,
+  paired p=0.86). A simulated min-of-39-draws null puts the observed "best" at its **58.5th
+  percentile** — exactly what pure noise produces. This is audit root-cause R2 reincarnated on
+  held-out data.
+- Because warm-start = static bit-exactly and selection takes the min over all epochs *including
+  epoch 0*, "best ≤ static" was **guaranteed by construction**.
+- Cross-checks: the random-init ablation's "best" (9.9e-5) *beat* the warm-started run's (1.2e-4);
+  and on both independent re-evaluations of the selected checkpoint (campaign steps 5 and 6), the
+  retrain policy measured **worse than static** on the exact trained metric (terminal RMS error
+  0.0231 K and 0.0176 K vs static's 0.0136 K). The "static = 0.020" baseline in the claim was itself
+  the inflated epoch-0 training-process draw; the actual static pattern scores 0.0136 K RMS.
+
+**Honest restatement:** *no detectable held-out improvement over static at any point in training.*
+This strengthens, not weakens, the project's own negative conclusion.
+
+### 2.2 The noise floor is wrong: unmeasured ~0.014–0.017 K per-run chaos noise
+
+- `run_noise_floor.py` loops reps **inside one process** (same compiled program) — the 8 "reps" per IC
+  are **bit-identical** in the pickle, so σ_compile = 0.0 was guaranteed by construction. Cross-process
+  variance was never sampled; the old "~15% XLA variation" concern was never actually laid to rest.
+- Measured cross-process reality: the **same retrain_v3 checkpoint on the same 10 held-out ICs**
+  gives per-IC dSSTs differing by up to **0.049 K** (sd 0.024, mean shift 0.007 K) between campaign
+  steps 5 and 6 (eval mean −0.0973 vs ablation mean −0.1043 — the docs quote both without flagging
+  it). The same static pattern differs RMS 0.0134 K (max 0.032 K) per IC between the v2 and v3 evals.
+  Mechanism: 60 days of chaos amplifies any compile-level bit difference to weather-noise scale.
+- Consequence for the statistics: the G3 per-IC paired scatter (sd 0.0198) is **statistically
+  indistinguishable from what two runs of the SAME policy produce via chaos alone** (F=0.66, p=0.55).
+  Pairing on ICs buys almost nothing (policy–static per-IC correlation 0.41); the G3 "tie" is a tie
+  between noise realizations. Within-script paired gates remain internally valid (the empirical s.e.
+  absorbs this noise), but **every cross-script/cross-campaign number comparison in the docs carries
+  ~±0.008 K contamination**, and the "learned requires > 2·σ_compile" rule is vacuous at σ_compile=0.
+- float32 itself is NOT the problem for measurement: dSST values are quantized at exactly the f32 ULP
+  (2⁻¹⁵ K ≈ 3e-5 K), ~160× finer than the effects; within-process runs are bit-deterministic. The G3
+  null is chaos/power-limited, not precision-limited. (The x64/P0.4 loose end remains open only for
+  BPTT gradient quality, blocked by the lax.scan f32/f64 carry mismatch.)
+
+### 2.3 The feedback null was baked in by design — the deepest finding
+
+- **Episodes are climatologically identical.** All 20 ICs branch from ONE equilibrated carry with
+  0.05 K noise + a 30-day spin; all share ONE calendar date (2000-01-01 + 30d ≈ late January — single
+  boreal-winter season, and the model DOES run a real seasonal cycle, so this matters); the rollout
+  is fully deterministic (no stochastic terms anywhere in the step path). The slab's SST e-folding
+  time (60–570 days, computed from the model's own ρ·cp·h and plausible feedback strengths) is 2–19×
+  the 30-day spin, so the ICs sample independent *weather* around **one** ocean state — effective
+  n=10 for weather noise, **n=1 for climate/season**.
+- **The controller cannot see anything.** At the first control decision, **11 of 13 policy features
+  are exactly zero by construction** (paired anomalies vs each IC's own baseline, plus time=0); the
+  two absolute-SST features spread ~1e-4 K across ICs. Measured cross-IC action spread at interval 0:
+  ≤5.2e-4 albedo vs a 0.09 cap. The only exploitable signal is per-episode chaotic divergence.
+- **The ceiling is below the floor.** Executed Monte Carlo with the measured quantities: a PERFECT
+  controller (cancelling all correctable variance given the last action at day 45 and slab inertia)
+  is worth ~**0.006 K** on the G3 metric — detected only **46%** of the time at n=10 under the
+  pre-registered rule; a realistic partial controller needs n≈400. "Underpowered" was the
+  near-certain a-priori outcome.
+- **The data actively indicate zero realized feedback value.** The trained feedback policy has
+  1.5–2× static's cross-IC dispersion (sd 0.018–0.024 vs 0.0129) — a noise **amplifier** — while the
+  feature-blind time-only open-loop schedule is numerically the **best** policy overall (mean gate
+  error 0.0089 K vs static 0.0122–0.0166 and retrain 0.0142–0.0231, per-process variation). All three
+  training configs (warm-start, open-loop, random-init) converge to the same ~1e-4 held-out band, the
+  open-loop noise floor.
+- The gradient probe's "a gate-improving GENERALIZING direction exists (0.01531→0.01439)" claim
+  **fails its own significance standard**: best step improvement +0.0009 ± 0.0046, **p=0.85**; all
+  four step sizes p>0.5.
+- **Bottom line:** "feedback adds nothing demonstrable" is a property of THIS task distribution, not
+  a finding about MCB feedback control. The docs' closing claim that resolving it "would require more
+  ICs/seeds, not more code" (`MCB_PROJECT_REPORT.md:190`) is **wrong in the most important way** —
+  more samples of the current design can at best bound a ~6 mK ceiling that exists only because the
+  environment gave feedback nothing to observe or correct.
+
+### 2.4 Pre-registration compliance is substantially overstated
+
+- **Seeds (worst violation):** PREREGISTRATION §2 requires ≥3 policy-init seeds per configuration
+  with numbers reported mean±s.e. over seeds. Every campaign ran **one** seed (hardcoded 42 /
+  PRNGKey(0); no `--seed` flag exists; no seed in checkpoint metadata; "seed" absent from the entire
+  campaign log). Every controller-level conclusion is a statement about one optimization run.
+- **Metric:** §3 froze the dSST metric as the **time-mean over the final 10 days**, "not a single
+  day-60 snapshot." The snapshot is what everything uses — training, gates, noise floor, ablations.
+  The 10-day-mean was never implemented anywhere. No amendment logged.
+- **Tests:** §4 names "paired t / Wilcoxon, α=0.05." Neither is implemented; the code uses a bare
+  2·s.e. rule, which at n=10 runs at α≈7.7% (anti-conservative — the docstring's "conservative" claim
+  is backwards). Re-running the registered tests on the archived diffs: **v1's celebrated "G3 PASS —
+  controller beats static" was never significant** (paired t p=0.0615, Wilcoxon p=0.0645) — part of
+  the v1→v2 "reversal" narrative was manufactured by the liberal rule. All v3 verdicts survive both
+  tests.
+- **G5/teleconnections:** silently dropped — no resolvability control was run, no formal withdrawal
+  as §3 requires. Worse, the one precip comparison v3 did compute (legacy gate) **FAILED and went
+  unreported**, breaching §5's report-all-runs rule. The "without harming Amazon/Sahel" half of the
+  project's stated objective has no v3 verdict at all (and the precip metric is still R4-contaminated
+  — see 2.5).
+- **Held-out exhaustion:** the identical 10 held-out ICs (seeds 1010–1019, byte-identical across v1
+  and v3 manifests) absorbed **13 formal gate tests** (v1/v2/v3) + **5 gradient-probe looks** (which
+  chose v3's objective) + **~123 per-epoch selection looks** (which chose v3's checkpoints), then
+  scored the final gates. Familywise false-positive exposure ≈49% at nominal α. v3's G2 PASS is a
+  third try at the same band after two result-informed redesigns. **Any future "significant" result
+  on these 10 ICs is uninterpretable; fresh held-out trajectories are mandatory.** The prereg itself
+  contains the design flaw: it mandates held-out selection while gating on the same held-out set,
+  with no third split.
+- Other unlogged deviations: cap 0.15→0.09, CI=15 vs §1's "2×30-day intervals," x64 A/B never run
+  (f32 chosen by default), TOA-W/m² effort metric never computed, no amendment log at all. Nuance in
+  the project's favor: v1/v2 violated §5's held-out-selection rule, so the v3 re-run was partly
+  *compliance repair*, not pure forking; and the headline v3 conclusions are nulls, which forking
+  paths cannot manufacture — the final negative survives.
+
+### 2.5 New code bugs found (none previously documented)
+
+| Bug | Location | Consequence |
+|---|---|---|
+| `create_latitude_band_mask` compares **degree bounds to radian latitudes** | `state_features.py:177-191` | "Tropical" (−30,30) mask covers **100% of the globe** (executed); (30,60) band is empty. Two of the 13 policy features are exact duplicates of the global anomalies; the "tropics" loss/eval term is actually global; any future latitude-band analysis would be corrupted. |
+| Legacy surface-albedo MCB path still live | `mcb_forcing.py`, `speedy/forcing.py:31-41`, `speedy_physics.py mcb_config` | Dormant in v3, but passing `mcb_config` (the more discoverable API) **silently reintroduces root cause R6**. Delete or rewire. |
+| Teleconnection precip metric still has the softplus(0) offset | `coupled_loss.py:193-196` | R4 recurring: the metric sits at the do-nothing constant 0.006931 for most cells; plan item 0.5 was never completed despite "fixed" framing. |
+| G4 scored on the old summed loss, not the trained metric | `run_stage5_eval.py:100-109` (loss_mode never set → default "summed") | "Gate-aligned training" is true only for G2/G3; G4 judges a quantity of which the trained term is 1–5%. |
+| G4 converts "underpowered" into "PASS (not sig. worse)" | `gates.py:104-111` | Contradicts prereg §5 ("never as PASS or FAIL"); v3's G4 mean is numerically *worse* and is one IC (18) from flipping to significantly-worse. The feedback gate is likewise one IC (11) from flipping to "significantly worse than open-loop." |
+| Noise floor measured on train ICs, applied to held-out gates | `run_noise_floor.py:135-137` + `run_campaign.sh` | The "gates are powered" calibration was derived from the wrong split (happens to hold empirically). |
+
+### 2.6 Physical-scope caveats (for any writeup)
+
+- Hitting −0.1 K in 60 days required ~3–4.6 W/m² sustained ocean-mean forcing (slab heat-capacity
+  math closes) — **at or beyond the maximum published MCB deployment** (~−1 W/m² moderate, −3.7 W/m²
+  Latham-type max). ~25% of grid cells sit pinned at the 0.09 cap (near-bang-bang pattern,
+  Southern-Ocean-heavy); local instantaneous forcing ~10–15 W/m² is 2–3× the published regional band.
+- SPEEDY's **stratiform** cloud albedo term (`albcls·clstr` — the analog of the marine stratocumulus
+  real MCB targets) is **not perturbed**; only the convective/total deck at cloud top is. The
+  optimizer found the *model*-optimal pattern, which is not necessarily the real-world MCB pattern.
+- Scope of every v3 result: single season (boreal winter), single ocean state (n=1), weather-noise-only
+  IC variation, 60-day horizon on a shallow slab (near-maximally responsive by construction).
+
+---
+
+## Part 3 — What can honestly be claimed today
+
+1. **Genuine and defensible:** a fully differentiable coupled atmosphere–ocean–land model through
+   which BPTT/gradient optimization works end-to-end (Stage-0 AD-vs-FD check; survived everything),
+   plus a corrected, honest experimental framework (paired control-relative gates, underpowered
+   verdicts, noise-floor thinking — even where execution fell short of the plan).
+2. **Defensible with caveats (exploratory, not confirmatory):** differentiable optimization finds a
+   physically sensible, on-target static MCB pattern (−0.097/−0.104 K in both realizations, in band)
+   — on an unregistered metric, a third look at the same band, single season/ocean state, at a
+   forcing scale beyond published MCB feasibility, with the stratiform caveat.
+3. **Solid negative (understated by the docs):** the neural feedback controller adds nothing over a
+   static pattern or an open-loop schedule; the "real but underpowered improvement" life-raft should
+   be retracted; every point estimate runs against the controller; the trained controller amplifies
+   variance. AND: the experiment could not have shown otherwise (Part 2.3) — the null is a design
+   property, which is itself the most interesting lesson.
+4. **Not claimable:** real-world MCB efficacy or deployment guidance; teleconnection safety (metric
+   broken, one computed comparison failed unreported); aerosol dose-response/cloud adjustments;
+   anything ENSO/AMOC/decadal (structurally absent physics).
+
+---
+
+## Part 4 — Paths to a statistically significant result (ranked)
+
+**Why not just scale the current design:** at the observed ~5 mK effects (which point the *wrong*
+way) the power calculation demands ~126–134 fresh held-out ICs for G3 (~43–48 for the feedback gate),
+and the perfect-controller ceiling is ~6 mK anyway. Pouring compute into the existing task buys, at
+best, a tighter null.
+
+**Cost basis (measured):** 60-day rollout ≈ 16 s on diya post-compile; full 60-cell eval ≈ 16 min;
+training epoch (10 ICs, BPTT) ≈ 6 min; fresh IC ≈ 30 s (spin + baseline).
+
+### Tier 1 — Fix the measurement channel (do regardless; ~1 day of code + a few GPU-hours)
+
+1. **Micro-ensembles per (arm, IC):** average k=8 tiny-perturbation replicate rollouts per cell
+   (each with its own paired baseline). Since per-IC paired diffs are ~pure chaos noise
+   (σ_run ≈ 0.014 K), paired sd drops 0.0198 → ~0.007; detection floor at n=10 becomes ~4.4 mK
+   (~3.1 mK at n=20). Full 3-arm + baseline eval over 20 ICs ≈ 3 GPU-hours. **This alone converts
+   every "underpowered" verdict into either a real decision or a tight equivalence bound.**
+2. **TOST equivalence testing:** with current data the demonstrable bound is only ±12.5 mK (feedback,
+   n=10) / ±16 mK (G3); with micro-ensembles it tightens to ~±5 mK — i.e., a *statistically
+   significant* bounded-negative: "any feedback benefit is <5% of the target, at 95% confidence."
+3. **Fresh confirmatory IC set** (mandatory — the current 10 are exhausted), **≥3 seeds per arm**
+   (~36 GPU-h for all arms), the registered **10-day terminal mean** (only ~×0.85–0.95 sd, but it is
+   what was frozen), a **cross-process noise-floor harness** (separate processes, not
+   `jax.clear_caches`), and the Part-2.5 bug fixes. Log everything as prereg amendments; add a third
+   IC split (selection / gating / confirmation).
+
+### Tier 2 — The decisive feedback experiment (~1 week; answers the project's actual question)
+
+4. **Per-episode randomized OBSERVABLE disturbances.** Draw a solar-constant perturbation or
+   hemispheric SST anomaly per episode; apply it identically to the policy run and its paired
+   baseline (the `mcb_perturbation` carry channel is the exact injection pattern; the absolute-SST
+   features already make it observable). The disturbance changes MCB efficacy per episode, so any
+   fixed schedule MUST err by the disturbance-response spread — which the experimenter dials to
+   5–10× σ_IC — while a controller that reads the state can compensate. The information-theoretic
+   asymmetry is airtight: open-loop cannot cancel randomness it cannot see. n=10–20 with
+   micro-ensembles is fully powered. Train with domain randomization over the disturbances; choose
+   disturbances the slab responds to within 60 days. **Either outcome is significant and
+   publishable** — "feedback provably adds value once there is something to correct," or "even with
+   dialed-in headroom, BPTT-trained feedback fails to realize it."
+5. **Season-staggered episodes** (~5-line change in `run_generate_ics_independent.py`; setup already
+   takes `start_datetime`): insolation geometry makes the optimal pattern time-dependent; also fixes
+   the single-season scoping. Composes with #4.
+6. **Per-episode varying cooling targets** appended to the features (trivial; `target_cooling` is a
+   config scalar): "controller tracks a commanded target" is a genuine capability a static pattern
+   cannot match; effect size = target spread, dialable to 50 mK. Closer to a capability demo than
+   climate science, but near-certain significance.
+
+### Tier 3 — Reframed positive claims (high probability of significance; mostly eval-only)
+
+7. **Optimized pattern vs canonical MCB regions at matched effort:** paired comparison against the
+   three literature stratocumulus boxes (SE Pacific, SE Atlantic, NE Pacific) scaled to identical
+   total forcing. Expected effect ≫ noise floor → significant at n=10–20. Claim: "gradient-based
+   deployment optimization through a differentiable coupled model beats hand-placed literature
+   patterns per unit effort, in-model." **Fix the stratiform-albedo gap first** (it likely biases
+   against the canonical regions); quantifying how the optimal pattern shifts under that fix is
+   itself a publishable physics-sensitivity result.
+8. **Dose-response curves and adjoint sensitivity maps** (cooling per unit cloud-albedo by region at
+   short horizons where adjoints are well-conditioned), compared against GeoMIP-style efficacy
+   rankings — deterministic-derivative results with no statistical-power problem.
+9. **A methods paper the project already owns:** "chaos noise, not compile noise, sets the power
+   floor for short-horizon geoengineering experiments in differentiable climate models —
+   within-process determinism is a false reassurance; micro-ensemble averaging restores power." The
+   project's own artifacts are the dataset (σ_run ≈ 0.014–0.017 K finding, σ_compile=0 trap, power
+   analysis). Genuinely useful to the differentiable-climate community.
+
+### Recommendation
+
+Do **Tier 1 immediately** (cheap; everything else depends on it), then **#4 as the flagship** — it is
+the only path on which the project's original question gets a real answer rather than a foregone
+null — with **#7 as the near-certain positive result** to anchor a writeup. In any account of the
+work so far: retract the loss-halving claim, correct the noise-floor claim, report the precip-gate
+result, and reframe the feedback null as "no headroom by design." That reframing is not a weakness —
+it is the most interesting scientific lesson the project has produced.
+
+---
+
+## Appendix A — Key measured quantities
+
+| Quantity | Value | Source |
+|---|---|---|
+| Per-run cross-process chaos noise (day-60 dSST) | ~0.014–0.017 K/IC (max 0.049 K) | same checkpoint, steps 5 vs 6 of campaign v3; v2-vs-v3 static arms |
+| σ_IC (cross-IC, fixed pattern) | 0.0129–0.0142 K | noise-floor pickles |
+| σ_compile (within-process) | 0.0 exactly (bit-identical reps) | noise_floor_v2_f32.pkl — artifact of harness design |
+| G3 paired-diff sd / feedback-gate sd | 0.0198 / 0.0123 K | eval_v3, ablation_compare_v3 |
+| Effects under test | ~0.005 K (against the controller) | G3 −0.0048, feedback −0.0054, nn +0.0033 |
+| n for 80% power at 5 mK | ~126–134 (G3), ~43–48 (feedback) | noncentral-t, executed |
+| Perfect-controller ceiling on G3 | ~0.006 K (46% detection at n=10) | Monte Carlo, executed |
+| Trained-feedback vs static cross-IC dispersion | 0.018–0.024 vs 0.0129 K | eval_v3 + ablation |
+| Best policy by mean gate error | open-loop 0.0089 < static 0.0122–0.0166 < retrain 0.0142–0.0231 K | per-process |
+| Rollout / epoch / IC-gen cost (GB10) | 16 s / ~6 min / ~30 s | campaign_v3.log timings |
+| Micro-ensemble k=8 detection floor | ≥4.4 mK (n=10), ≥3.1 mK (n=20) | σ√(2/k)/√n |
+| TOST bound achievable now → with micro-ensembles | ±12.5 mK → ~±5 mK (feedback) | executed/hand-verified |
+| Held-out IC looks consumed (v1–v3) | 13 gate tests + 5 probe + ~123 selection | prereg-compliance lens |
+
+## Appendix B — Provenance
+
+- Raw artifacts pulled 2026-07-29 from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/` (eval_final/v2/v3,
+  ablation_compare_v2/v3, gradient_probe_v3, noise floors, retrain_v3 + ablation histories, stage1_v2
+  pattern, campaign_v3.log) to the session scratchpad (`diya_artifacts/`).
+- Validation: 8-lens multi-agent workflow (run wf_7fb7bebb) + inline recomputation; most findings
+  verified by executing code against artifacts (venv `.venv/bin/python`, jax 0.10.0, numpy 2.4.4).
+- The planned ideation subagents were interrupted by a session limit + infrastructure outage; the
+  future-experiment analysis in Part 4 was synthesized inline from the completed lenses' quantitative
+  findings (esp. the design-headroom lens's executed Monte Carlo and codebase-support assessments).
+- Full per-lens findings: session transcript
+  `subagents/workflows/wf_7fb7bebb-87f/` and the workflow output file; condensed working notes in the
+  scratchpad (`inline_stats_findings.md`, `synthesis_draft.md`).

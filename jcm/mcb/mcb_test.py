@@ -331,15 +331,24 @@ class TestMCBGradients(unittest.TestCase):
 class TestMCBIntegration(unittest.TestCase):
     """Integration tests for MCB with SpeedyPhysics."""
 
-    def test_speedy_physics_with_mcb_config(self):
-        """SpeedyPhysics should accept mcb_config parameter."""
+    def test_speedy_physics_with_mcb_config_requires_opt_in(self):
+        """The legacy surface-albedo mcb_config path must be explicit opt-in.
+
+        The 2026-07-12 audit (root cause R6) found this path perturbs the
+        sea-surface albedo — anti-correlated with cloud cover, the opposite
+        of the Twomey effect. It must raise unless explicitly allowed.
+        """
         from jcm.physics.speedy.speedy_physics import SpeedyPhysics
 
         nodal_shape = (64, 32)
         config = MCBConfig.uniform(nodal_shape, perturbation=0.05)
 
-        # Should not raise
-        physics = SpeedyPhysics(mcb_config=config)
+        with self.assertRaises(ValueError):
+            SpeedyPhysics(mcb_config=config)
+
+        physics = SpeedyPhysics(
+            mcb_config=config, allow_legacy_surface_albedo_mcb=True
+        )
         self.assertIsNotNone(physics.mcb_config)
 
     def test_speedy_physics_without_mcb_config(self):

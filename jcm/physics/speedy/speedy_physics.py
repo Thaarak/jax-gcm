@@ -50,6 +50,7 @@ class SpeedyPhysics(Physics):
                  parameters: Parameters=Parameters.default(),
                  mcb_config=None,
                  checkpoint_terms=True,
+                 allow_legacy_surface_albedo_mcb=False,
     ) -> None:
         """Initialize the SpeedyPhysics class with the specified parameters.
 
@@ -57,9 +58,26 @@ class SpeedyPhysics(Physics):
             parameters (Parameters): Parameters for the physics model.
             mcb_config: Optional MCBConfig for Marine Cloud Brightening forcing.
                 If provided, MCB albedo perturbations will be applied in set_forcing.
+                DEPRECATED: this path perturbs the SEA-SURFACE albedo, which is
+                anti-correlated with cloud cover — the opposite of the Twomey
+                effect (2026-07-12 audit root cause R6). Requires the explicit
+                opt-in flag below; use the dynamic cloud-albedo path
+                (forcing.mcb_perturbation via jcm/mcb) for real MCB experiments.
             checkpoint_terms (bool): Flag to indicate if terms should be checkpointed.
+            allow_legacy_surface_albedo_mcb (bool): Explicit opt-in to the
+                deprecated surface-albedo mcb_config path.
 
         """
+        if mcb_config is not None and not allow_legacy_surface_albedo_mcb:
+            raise ValueError(
+                "mcb_config uses the DEPRECATED surface-albedo MCB path: it "
+                "brightens the sea surface, not clouds, so its effect is "
+                "anti-correlated with cloud cover — the opposite of the "
+                "Twomey effect (audit root cause R6). Use the dynamic "
+                "cloud-albedo path (forcing.mcb_perturbation, see jcm/mcb) "
+                "instead, or pass allow_legacy_surface_albedo_mcb=True if you "
+                "really intend to run the legacy surface-albedo experiment."
+            )
         self.parameters = parameters
         self.mcb_config = mcb_config
 

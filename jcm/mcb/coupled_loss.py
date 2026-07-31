@@ -165,7 +165,10 @@ def coupled_precipitation_loss(
     """Compute precipitation protection loss for a region.
 
     Penalizes precipitation DECREASES in the specified region.
-    Uses softplus for smooth differentiability.
+    Uses softplus for smooth differentiability, shifted so that zero change
+    scores exactly 0 (the shift is a constant, so gradients are unchanged).
+    Values are negative when regional precipitation INCREASES vs baseline —
+    interpret this as "no harm", not as a reward to optimize for.
 
     Args:
         coupled_carry: Coupled simulation state.
@@ -190,10 +193,44 @@ def coupled_precipitation_loss(
     region_precip = compute_regional_mean(precip, region_mask, area_weights)
     region_baseline = compute_regional_mean(baseline_precip, region_mask, area_weights)
 
-    # Asymmetric loss: penalize decreases only
+    # Asymmetric loss: penalize decreases only. Subtract softplus(0) so a
+    # do-nothing policy scores exactly 0 — without this the metric floor is
+    # ln(2)/100 = 6.93e-3, a constant that dominated the region-precip
+    # comparisons (audit root cause R4) and made the gate insensitive.
     precip_change = region_precip - region_baseline
-    loss = jax.nn.softplus(-precip_change * 100) / 100
+    loss = (jax.nn.softplus(-precip_change * 100)
+            - jax.nn.softplus(jnp.array(0.0))) / 100
     return loss
+
+
+def region_precip_change_mm_day(
+    coupled_carry: dict,
+    baseline_precip: jnp.ndarray,
+    coords,
+    area_weights: jnp.ndarray,
+    region: str = 'amazon',
+) -> jnp.ndarray:
+    """Regional-mean precipitation change vs baseline in mm/day.
+
+    The pre-registered teleconnection metric (PREREGISTRATION.md section 3):
+    a signed physical-units change, not a penalty transform. SPEEDY precip
+    (precnv + precls) is in g/(m^2 s); 1 g/m^2 of water = 1e-3 mm, so
+    mm/day = g/(m^2 s) * 86.4.
+
+    Returns:
+        Scalar signed change (negative = regional drying vs baseline).
+
+    """
+    atm_physics = coupled_carry["atm"]["derived"]["physics"]
+    precip = atm_physics.convection.precnv + atm_physics.condensation.precls
+
+    bounds = TELECONNECTION_REGIONS[region]
+    region_mask = create_region_mask(coords.horizontal, bounds[:2], bounds[2:])
+
+    region_precip = compute_regional_mean(precip, region_mask, area_weights)
+    region_baseline = compute_regional_mean(
+        baseline_precip, region_mask, area_weights)
+    return (region_precip - region_baseline) * 86.4
 
 
 def tropical_precipitation_loss(

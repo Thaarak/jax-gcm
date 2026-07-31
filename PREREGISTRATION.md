@@ -79,3 +79,82 @@ gate is a bare band on an n≤2 mean.
    of control intervals so feedback is actually tested.)
 2. **No warm-start:** train from random init. The trained policy must beat its own warm-start
    initialization on held-out ICs by > 2·s.e. to claim the NN adds anything over the static pattern.
+
+---
+
+## AMENDMENTS
+
+### Amendment 1 — retroactive disclosure of deviations in campaigns v1-v3 (logged 2026-07-30)
+
+The 2026-07-29 meta-audit (`MCB_META_AUDIT.md`) found the following unlogged deviations from the
+frozen plan. They are recorded here as the amendment rule requires; none is retroactively "approved".
+
+1. **Seeds (§2, violated by v1, v2, v3):** every arm ran exactly one policy-init seed (hardcoded 42 /
+   PRNGKey(0)); no seed was recorded in checkpoint metadata; no number was reported mean±s.e. over
+   seeds. All v3 controller-level conclusions are single-training-realization statements.
+2. **Metric (§3, violated everywhere):** the registered cooling metric (time-mean over the final 10
+   days) was never implemented; every training objective, gate, noise floor, and ablation used the
+   forbidden day-60 snapshot.
+3. **Tests (§4, violated):** neither the paired t nor Wilcoxon was implemented; a bare 2·s.e. rule
+   was used (anti-conservative at n=10, alpha ≈ 7.7%). Under the registered tests, v1's "G3 PASS —
+   controller beats static" was never significant (paired t p=0.0615, Wilcoxon p=0.0645).
+4. **G4 verdict (§5, violated):** within-noise margins were labeled "PASS (not sig. worse)" instead
+   of "underpowered".
+5. **G5 (§3, violated):** the teleconnection gate was dropped without the required resolvability
+   control or formal withdrawal, and the one regional-precip comparison computed in v3 (legacy gate)
+   FAILED and went unreported, breaching §5's report-all-runs rule.
+6. **Configuration changes without amendment:** max_perturbation 0.15→0.09 (v2); loss_mode
+   summed→terminal_dsst (v3; permitted on the letter of the plan, unlogged); control interval 15 d
+   vs §1's "2×30-day"; the §1 x64-vs-f32 A/B never ran (float32 by default; blocked by a lax.scan
+   carry-dtype mismatch); v3 reused v2's cached ICs/baselines (§3 requires regenerated baselines).
+7. **Noise floor (§5):** sigma_compile was measured with in-process recompiled reps, which are
+   bitwise identical on the GPU — 0.0 by construction. Cross-process runs of the identical
+   computation differ by ~0.014-0.017 K per IC (chaos amplification of compile-level differences),
+   so the "learned > 2·sigma_compile" rule was vacuous and per-run noise was unmodeled.
+8. **Held-out exhaustion (design flaw in this plan):** §5 mandates held-out model selection while §4
+   gates on the same held-out set, with no third split. Across v1/v2/v3 the same 10 held-out ICs
+   (seeds 1010-1019) absorbed 13 gate tests, 5 gradient-probe looks, and ~123 per-epoch selection
+   looks. **Those 10 ICs are retired for all confirmatory use.**
+
+Consequences adopted: the v3 "held-out RMS halved (0.020→0.011 K)" claim is RETRACTED (min-of-39
+selection artifact; does not replicate on re-evaluation); v3's G2 PASS and G4 PASS are downgraded to
+exploratory; the null verdicts (G3 tie, feedback ≈ open-loop, warm-start ≈ random) stand — nulls are
+not manufactured by forking paths — but are scoped to a single-season, single-ocean-state,
+weather-noise-only task distribution in which the feedback-headroom ceiling (~0.006 K) was below the
+detection floor by design.
+
+### Amendment 2 — confirmatory protocol (frozen 2026-07-30, BEFORE any new GPU campaign)
+
+All future confirmatory claims use this protocol. Changes after the first confirmatory GPU run must
+be logged here as further amendments.
+
+1. **Fresh ICs, third-split discipline.** A new independent-trajectory IC set is generated with
+   `run_generate_ics_independent.py` using a previously unused seed range (`--seed0 3000`+). ICs used
+   for any model selection or exploratory look are never used for confirmatory gates. ICs seeds
+   1000-1019 are retired from confirmatory use.
+2. **Registered metric, implemented.** The cooling metric is the area-weighted, ocean-masked dSST
+   time-mean over the final 10 days vs the paired baseline (`final_sst_change_10d`,
+   `evaluate_coupled_policy(tail_mean_days=10)`).
+3. **Micro-ensembles.** Each (arm, IC) is evaluated as the mean over k=8 members (member 0
+   unperturbed; members 1-7 seeded 0.001 K SST perturbations). Every member's paired baseline is
+   regenerated IN THE SAME PROCESS as the policy runs (`run_confirmatory_eval.py`); cached baselines
+   are never used for confirmatory numbers.
+4. **Tests.** Primary rule remains the 2·s.e. margin for continuity, but every gate also reports the
+   paired t and exact Wilcoxon p-values at the registered alpha = 0.05, and verdicts must be
+   consistent with the paired t; disagreements are reported, not resolved silently. Within-noise
+   results are reported as "underpowered", never PASS/FAIL, together with the TOST
+   `equivalence_bound_95` (the demonstrable |effect| bound), which converts a powered null into a
+   bounded-equivalence claim.
+5. **Primary comparisons (pre-specified, Holm-corrected as a family of two):**
+   (a) trained controller vs stage1-static on |dSST_10d − target|;
+   (b) trained controller vs time-only open-loop on the same metric.
+   All other comparisons are secondary/exploratory and labeled as such.
+6. **Seeds.** Any training-based arm requires ≥3 policy-init seeds (`--seed`, recorded in checkpoint
+   metadata); arm-level numbers are reported per-seed AND pooled mean ± s.e. over seeds.
+7. **Noise floor.** The per-run noise is measured with `run_noise_floor.py --cross-process`
+   (fresh-process reps), on the SAME split the gates use, before any gate is interpreted.
+8. **Effort metric.** Ocean-mean MCB albedo forcing and its TOA W/m² equivalent are reported per §3.
+9. **Teleconnection metric.** Regional precip is reported in physical units (mm/day,
+   `region_precip_change_mm_day`, offset-free); the G5 gate stays WITHDRAWN unless the §3
+   resolvability control is run and passes, and all computed regional-precip comparisons are
+   reported regardless of outcome.

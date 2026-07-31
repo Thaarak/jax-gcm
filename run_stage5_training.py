@@ -126,6 +126,12 @@ def parse_args():
     parser.add_argument("--forcing-reg-weight", type=float, default=0.001,
                         help="Mean-square forcing penalty in terminal_dsst "
                              "mode.")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Policy-init random seed (PREREGISTRATION.md "
+                             "section 2 requires >=3 seeds per configuration; "
+                             "run this script once per seed). Threads to both "
+                             "random init and the warm-start hidden layers, "
+                             "and is recorded in checkpoint metadata.")
     parser.add_argument("--select-on-heldout", action="store_true",
                         help="Gate model selection + early stopping on mean "
                              "held-out loss (evaluated every epoch) instead of "
@@ -294,7 +300,9 @@ def main():
         grad_clip_norm=1.0,
         log_interval=1,
         early_stopping_patience=20,
+        random_seed=args.seed,
     )
+    print(f"  Policy-init seed: {args.seed}")
 
     # Warm start: Stage 4 13-feature checkpoint loaded directly (same feature
     # dim -> no expand_policy_input), or the Stage 1 pattern (bias trick).
@@ -302,7 +310,7 @@ def main():
     init_source = "random"
     if args.warm_start_stage1:
         initial_params = warm_start_params(
-            policy, feature_dim, args.warm_start_stage1
+            policy, feature_dim, args.warm_start_stage1, seed=args.seed
         )
         init_source = f"stage1:{args.warm_start_stage1}"
     elif Path(args.init_checkpoint).exists():
@@ -397,8 +405,11 @@ def main():
             'terrain_source': manifest.get('terrain_source'),
             'loss_weights': loss_weights._asdict(),
             'init_source': init_source,
+            'seed': args.seed,
             'train_ics': [e['spinup_days'] for e, _, _ in train_ics],
             'heldout_ics': [e['spinup_days'] for e, _, _ in heldout_ics],
+            'train_ic_seeds': [e.get('seed') for e, _, _ in train_ics],
+            'heldout_ic_seeds': [e.get('seed') for e, _, _ in heldout_ics],
             'days': args.days,
             'control_interval': args.control_interval,
         }

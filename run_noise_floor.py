@@ -95,6 +95,15 @@ def parse_args():
     p.add_argument("--x64", action="store_true",
                    help="Enable float64 (env set at import time). Compare "
                         "sigma_compile with/without this ON GPU to settle P0.4.")
+    p.add_argument("--cross-process", action="store_true",
+                   help="Run each rep in a FRESH PYTHON PROCESS instead of "
+                        "jax.clear_caches() in-process. The 2026-07-29 "
+                        "meta-audit showed in-process recompiled reps are "
+                        "bit-identical (sigma_compile=0 by construction) "
+                        "while cross-process runs of the same computation "
+                        "differ by ~0.014-0.017 K/IC (XLA autotuning x 60-day "
+                        "chaos). THIS mode measures the real per-run noise.")
+    p.add_argument("--worker-output", default=None, help=argparse.SUPPRESS)
     p.add_argument("--no-realistic-terrain", dest="realistic_terrain",
                    action="store_false", default=True)
     p.add_argument("--target-cooling", type=float, default=-0.1)
@@ -105,9 +114,58 @@ def parse_args():
     return p.parse_args()
 
 
+def run_cross_process(args):
+    """Spawn each rep as a fresh Python process and merge the results.
+
+    Each worker computes ONE rep for every IC in its own process (own XLA
+    compilation/autotuning), which is the noise mode the in-process
+    clear_caches harness structurally cannot see.
+    """
+    import subprocess
+    import tempfile
+
+    print("=" * 72)
+    print(f"CROSS-PROCESS NOISE FLOOR: {args.reps} worker processes")
+    print("=" * 72)
+    base_cmd = [sys.executable, os.path.abspath(__file__)]
+    skip_next = False
+    for a in sys.argv[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if a == "--cross-process":
+            continue
+        if a in ("--reps", "--output"):
+            skip_next = True
+            continue
+        base_cmd.append(a)
+    merged = {}
+    with tempfile.TemporaryDirectory(prefix="nf_workers_") as tmp:
+        for k in range(args.reps):
+            wout = str(Path(tmp) / f"worker_{k}.pkl")
+            cmd = base_cmd + ["--reps", "1", "--worker-output", wout]
+            print(f"\n[worker {k + 1}/{args.reps}] {' '.join(cmd)}",
+                  flush=True)
+            t0 = time.time()
+            subprocess.run(cmd, check=True)
+            with open(wout, "rb") as f:
+                worker_per_ic = pickle.load(f)["per_ic"]
+            for ic, blob in worker_per_ic.items():
+                if ic not in merged:
+                    merged[ic] = {"entry": blob["entry"], "reps": []}
+                merged[ic]["reps"].extend(blob["reps"])
+            print(f"[worker {k + 1}] done in {time.time() - t0:.0f}s")
+    return merged
+
+
 def main():
     args = parse_args()
     assert args.days % args.control_interval == 0
+
+    if args.cross_process and args.worker_output is None:
+        per_ic = run_cross_process(args)
+        report_and_save(per_ic, args, noise_label="sigma_run(cross-process)")
+        return
 
     print("=" * 72)
     print("P1 NOISE-FLOOR HARNESS  (fixed Stage-1 static pattern)")
@@ -203,12 +261,28 @@ def main():
                   f"loss={r['loss']:.6f}  ({r['wall_s']:.1f}s)")
         per_ic[ic] = {"entry": entry, "reps": reps}
 
+    if args.worker_output is not None:
+        with open(args.worker_output, "wb") as f:
+            pickle.dump({"per_ic": per_ic}, f)
+        print(f"[worker] wrote {args.worker_output}")
+        return
+
+    report_and_save(per_ic, args, noise_label="sigma_compile(in-process)")
+
+
+def report_and_save(per_ic, args, noise_label):
+    """Compute and print the noise decomposition; save the pickle.
+
+    noise_label distinguishes what the per-IC rep spread measures:
+    in-process recompiled reps (old mode; bit-identical on GPU, so ~0 by
+    construction) vs cross-process runs (the real per-run chaos noise).
+    """
     # --- Statistics ---
     def col(ic, key):
         return np.array([r[key] for r in per_ic[ic]["reps"]], dtype=float)
 
     print("\n" + "=" * 72)
-    print("SIGMA_COMPILE  (spread across recompiled reps, per IC)")
+    print(f"{noise_label.upper()}  (spread across reps, per IC)")
     print("=" * 72)
     print(f"  {'IC':>3} {'split':>7} {'dSST mean':>11} {'dSST std':>10} "
           f"{'loss mean':>11} {'loss std':>11}")
@@ -263,9 +337,16 @@ def main():
         pickle.dump({
             "config": vars(args),
             "x64": bool(jax.config.jax_enable_x64),
+            "noise_label": noise_label,
             "per_ic": per_ic,
+            # Key names kept for compatibility; what the rep-spread MEASURES
+            # depends on the mode — see noise_label (in-process recompiles
+            # are bit-identical on GPU, cross-process is the real per-run
+            # chaos noise; 2026-07-29 meta-audit).
             "sigma_compile_dsst": sig_comp_dsst,
             "sigma_compile_loss": sig_comp_loss,
+            "sigma_run_dsst": sig_comp_dsst,
+            "sigma_run_loss": sig_comp_loss,
             "sigma_ic_dsst": sig_ic_dsst,
             "sigma_ic_loss": sig_ic_loss,
         }, f)

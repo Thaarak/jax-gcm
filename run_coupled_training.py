@@ -72,7 +72,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def warm_start_params(policy, feature_dim, stage1_path):
+def warm_start_params(policy, feature_dim, stage1_path, seed=0):
     """Build initial policy params warm-started from the Stage 1 pattern.
 
     The policy output head is clipped-linear (jcm/mcb/policy.py:
@@ -90,7 +90,7 @@ def warm_start_params(policy, feature_dim, stage1_path):
     # the sigmoid logit `best_theta` the old head required.
     pattern = jnp.asarray(stage1['best_pattern'])
 
-    params = policy.init(jax.random.PRNGKey(0), jnp.zeros(feature_dim))
+    params = policy.init(jax.random.PRNGKey(seed), jnp.zeros(feature_dim))
     params = jax.tree_util.tree_map(lambda x: x, params)  # ensure mutable copy
     if isinstance(params, flax.core.FrozenDict):
         params = flax.core.unfreeze(params)
