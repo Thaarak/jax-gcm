@@ -382,6 +382,78 @@ IC — noise around zero, consistent with the equivalence bounds.
 Remaining protocol caveat: the trained arms are the single-seed v3 checkpoints (re-evaluated, not
 retrained); Amendment 2's ≥3-seed rule applies to any future training-based claim.
 
+## Addendum 2 — Tier-2 campaign results: feedback under uncertain efficacy (2026-08-01/02)
+
+The Tier-2 campaign (`run_campaign_tier2.sh`, PREREGISTRATION.md Amendment 3 + pre-launch revisions)
+ran 2026-07-31→08-01 on diya (~26 h): per-episode unobserved efficacy η ~ U[0.6, 1.4] (antithetic,
+mean exactly 1.0), 20 fresh confirmatory ICs (seeds 5000–5019), k=4 micro-ensembles with in-process
+member baselines, registered 10-day tail metric, 8 arms. The manipulation check passed its
+pre-registered gate (static degrades to 19.8 mK mean error under η-uncertainty vs 5.4 mK at η=1).
+All numbers below were independently recomputed from member-level raw data and adversarially
+verified (2-lens review, wf_7a76e9e1; the PI headline additionally survived LOO over all 20 ICs
+(max p=0.0013), removal of the 3 most extreme η draws, permutation and bootstrap tests, the
+alternative snapshot metric (p=1e-5), and Bonferroni over all 5 secondary comparisons (p=0.0029)).
+
+**Results on mean |dSST_10d − target| (n=20 paired ICs):**
+
+| Arm | mean error | vs static |
+|---|---|---|
+| static pattern (η-blind) | 20.2 ± 2.5 mK | — |
+| open-loop schedule (trained, pooled 3 seeds) | 19.7 ± 2.2 mK | n.s. |
+| NN feedback (trained, pooled 3 seeds) | 18.7 ± 2.2 mK | −1.6 mK, p=0.42 (H2 NULL) |
+| **PI/deadbeat (hand-designed, no training)** | **10.1 ± 1.6 mK** | **−10.2 mK, p=5.9e-4** |
+
+**Primary hypotheses (Holm): both NULL.** H2 (NN vs static): −1.6 mK, p=0.42, |effect| < 4.8 mK
+(TOST 95%). H3 (NN vs open-loop): −1.0 mK, p=0.065 (Holm 0.13), |effect| < 1.9 mK.
+
+**The two significant Tier-2 findings (both pre-registered secondaries, reported as such):**
+
+1. **Feedback control demonstrably compensates uncertain MCB efficacy — the project's first
+   significant feedback win.** The hand-designed deadbeat controller halves the error
+   (20.2 → 10.1 mK; p=5.9e-4, Wilcoxon 7.1e-4, Bonferroni×5 = 0.0029; 16/20 ICs), with the
+   mechanism physically verified: its command correlates −0.94 with η (monotone down-modulation, no
+   overshoot, member spread 11 vs 15 mK). The pre-registered asymmetric-authority prediction
+   reproduced exactly: near-perfect 4.5 mK on η≥1 episodes (where reducing the command suffices)
+   vs 15.7 mK on η<1 (where the cap on the bang-bang pattern blocks up-modulation — an actuator
+   constraint, not physics: the widening probe measured cooling efficiency flat at −3.4 to −3.6
+   K per unit forcing across deployments). Scope caveat: the controller reads a noiseless
+   ocean-mean dSST vs the paired counterfactual baseline — an idealized observer — so 10.1 mK is
+   an upper bound on deployable performance; this bounds external validity only, and the NN arms
+   consumed the same features.
+
+2. **The BPTT-trained neural controller is significantly WORSE than the hand-designed controller**
+   (+8.6 mK, p=7.0e-3) and indistinguishable from static. Diagnosis (verified from training
+   histories + behavior): the failure is in TRAINING, not information or authority — PI achieves
+   10.1 mK from two features the NN also receives. All six training runs' losses sat flat at the
+   static-under-η noise floor (~5–10e-4 vs the PI-equivalent 2e-4; cross-IC gradient coherence
+   ~0.45; per-epoch η redraws added ~24 mK loss variance on top of ~12 mK rollout chaos, burying
+   the feedback gradient). Held-out selection over 6 fixed ICs added winner's curse (an open-loop
+   arm, structurally incapable of feedback, was "selected" at held-out loss 8.5e-5 yet evaluated at
+   21.4 mK). The resulting policies modulate in the CORRECT direction (command-vs-η r = −0.64 to
+   −0.74 in all seeds — genuine but vestigial feedback) at 5–10× too little amplitude; only seed 43
+   (~26% η-rejection) beat static (14.4 mK). A 2–6% warm-start-inherited thermal over-gain (shared
+   by the open-loop arms) explains the stratified better-at-low-η/worse-at-high-η pattern.
+
+**Honest headline for the project:** *In a differentiable coupled GCM with pre-registered protocol,
+classical feedback control halves the error induced by realistic seeding-efficacy uncertainty, while
+gradient-through-the-model trained neural controllers — the project's founding bet — fail to realize
+the same gains, not for lack of information or actuator authority but because BPTT through 60-day
+chaotic rollouts does not converge at practical budgets.* Combined with Tier-1 (static pattern
+on-target; feedback worthless when there is nothing to correct, bounded within ±4.5 mK), the project
+now has three defensible, statistically significant results and a mechanistic account of each.
+
+**Follow-up with the highest leverage (from the verified diagnosis):** initialize the NN by
+supervised imitation of the PI law (a noiseless regression onto the same features — bypasses the
+chaotic-rollout gradient entirely, lands the policy in the 10 mK basin), then fine-tune with
+η-marginalized objectives and a much larger selection set; the open question it answers is whether
+a learned policy can exceed PI by widening deployment on low-η episodes (the physical headroom the
+probe confirmed exists and the cap denies to pattern-scaling controllers).
+
+Artifacts: `diya:mcb_experiments_gpu/{tier2_eval.pkl, tier2_eval_analysis.pkl,
+t2_manipulation_check.pkl, t2_widening_probe.pkl, t2_feedback_s4*, t2_openloop_s4*, ics_t2_train,
+ics_t2_eval}`, `campaign_tier2.log`; local copies + verification transcripts in the session
+scratchpad (`tier2/`, workflow wf_7a76e9e1).
+
 ## Appendix B — Provenance
 
 - Raw artifacts pulled 2026-07-29 from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/` (eval_final/v2/v3,

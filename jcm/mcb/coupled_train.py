@@ -225,10 +225,11 @@ def create_coupled_grad_fn(
 
     """
     @jax.jit
-    def grad_fn(
+    def _grad_fn(
         params: dict,
         initial_carry: dict,
         baseline_trajectory: CoupledBaselineTrajectory,
+        efficacy: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, dict]:
         def loss_fn(p):
             return unroll_coupled_simple(
@@ -241,9 +242,16 @@ def create_coupled_grad_fn(
                 coords=coords,
                 ocean_mask=ocean_mask,
                 config=controller_config,
+                efficacy=efficacy,
             )
 
         return jax.value_and_grad(loss_fn)(params)
+
+    def grad_fn(params, initial_carry, baseline_trajectory, efficacy=1.0):
+        # efficacy is a TRACED scalar (Tier-2 domain randomization): one
+        # compiled function serves every per-episode draw.
+        return _grad_fn(params, initial_carry, baseline_trajectory,
+                        jnp.asarray(efficacy, dtype=jnp.float32))
 
     return grad_fn
 
@@ -269,10 +277,11 @@ def create_coupled_eval_fn(
 
     """
     @jax.jit
-    def eval_fn(
+    def _eval_fn(
         params: dict,
         initial_carry: dict,
         baseline_trajectory: CoupledBaselineTrajectory,
+        efficacy: jnp.ndarray,
     ) -> jnp.ndarray:
         return unroll_coupled_simple(
             coupler=coupler,
@@ -284,7 +293,12 @@ def create_coupled_eval_fn(
             coords=coords,
             ocean_mask=ocean_mask,
             config=controller_config,
+            efficacy=efficacy,
         )
+
+    def eval_fn(params, initial_carry, baseline_trajectory, efficacy=1.0):
+        return _eval_fn(params, initial_carry, baseline_trajectory,
+                        jnp.asarray(efficacy, dtype=jnp.float32))
 
     return eval_fn
 
@@ -501,6 +515,9 @@ def train_coupled_policy_ensemble(
     initial_params: Optional[dict] = None,
     heldout_interval: int = 10,
     select_on_heldout: bool = False,
+    train_efficacies: tuple = (),
+    heldout_efficacies: tuple = (),
+    efficacy_resample: Optional[dict] = None,
 ) -> Tuple[dict, Dict[str, Any]]:
     """Train MCB policy across an ensemble of varied initial conditions.
 
@@ -540,6 +557,23 @@ def train_coupled_policy_ensemble(
             ``select_on_heldout`` is False (logging only).
         select_on_heldout: Gate model selection and early stopping on the
             mean held-out loss (evaluated every epoch) instead of train loss.
+        train_efficacies: Optional per-episode MCB efficacy factors, one per
+            training IC (Tier-2 domain randomization: applied perturbation =
+            efficacy x command; the policy never observes efficacy directly).
+            Fixed across epochs so each (IC, efficacy) pair is one episode.
+            Empty means 1.0 everywhere (Tier-1 behavior).
+        heldout_efficacies: Same for held-out (validation) episodes, drawn
+            independently of the training draws. Held-out efficacies are
+            ALWAYS fixed across epochs so the selection metric stays
+            comparable epoch to epoch.
+        efficacy_resample: Optional {"range": (lo, hi), "seed": int}. When
+            set, TRAINING efficacies are REDRAWN every epoch (epoch-seeded)
+            instead of fixed — the 2026-07-31 adversarial review showed that
+            with one fixed eta per IC and absolute-SST features that
+            fingerprint the IC, memorizing the IC->eta map strictly dominates
+            learning the feedback law on the training loss. Per-epoch
+            redraws give num_epochs x num_ics draws. Zero compile cost:
+            efficacy is a traced scalar.
 
     Returns:
         Tuple of:
@@ -602,8 +636,36 @@ def train_coupled_policy_ensemble(
     coherence_history = []       # ||mean g|| / mean ||g_i|| per epoch
     heldout_loss_history = []    # (epoch, [per-IC held-out losses])
 
+    if not train_efficacies:
+        train_efficacies = tuple(1.0 for _ in train_carries)
+    if not heldout_efficacies:
+        heldout_efficacies = tuple(1.0 for _ in heldout_carries)
+    assert len(train_efficacies) == len(train_carries), (
+        f"{len(train_efficacies)} efficacies for {len(train_carries)} train ICs")
+    assert len(heldout_efficacies) == len(heldout_carries), (
+        f"{len(heldout_efficacies)} efficacies for "
+        f"{len(heldout_carries)} held-out ICs")
+
+    train_efficacy_history = []
+
+    def epoch_train_efficacies(epoch):
+        if efficacy_resample is None:
+            return train_efficacies
+        import numpy as _np
+        lo, hi = efficacy_resample["range"]
+        rng = _np.random.default_rng(efficacy_resample["seed"] + epoch)
+        return tuple(float(x) for x in rng.uniform(lo, hi, num_train))
+
     print("Starting coupled MCB policy ensemble training")
     print(f"  Training ICs: {num_train}, held-out ICs: {len(heldout_carries)}")
+    if efficacy_resample is not None:
+        print(f"  Efficacy randomization ON (redrawn PER EPOCH from "
+              f"U{tuple(efficacy_resample['range'])}, seed "
+              f"{efficacy_resample['seed']}); held-out fixed: "
+              f"{list(heldout_efficacies)}")
+    elif any(e != 1.0 for e in train_efficacies + heldout_efficacies):
+        print(f"  Efficacy randomization ON: train {list(train_efficacies)}, "
+              f"held-out {list(heldout_efficacies)}")
     print(f"  Epochs: {training_config.num_epochs}")
     print(f"  Learning rate: {training_config.learning_rate}")
     print(f"  Control interval: {controller_config.control_interval_steps} steps")
@@ -621,8 +683,11 @@ def train_coupled_policy_ensemble(
         ic_losses = []
         grad_sum = None
         per_ic_grad_norms = []
-        for carry, baseline in zip(train_carries, train_baselines):
-            loss, grads = grad_fn(params, carry, baseline)
+        epoch_efficacies = epoch_train_efficacies(epoch)
+        train_efficacy_history.append(list(epoch_efficacies))
+        for carry, baseline, eff in zip(train_carries, train_baselines,
+                                        epoch_efficacies):
+            loss, grads = grad_fn(params, carry, baseline, eff)
             ic_losses.append(float(loss))
             g_flat = jnp.concatenate(
                 [g.ravel() for g in jax.tree.leaves(grads)]
@@ -669,8 +734,9 @@ def train_coupled_policy_ensemble(
         if do_heldout:
             eval_params = measured_params if select_on_heldout else params
             heldout_losses = [
-                float(eval_fn(eval_params, carry, baseline))
-                for carry, baseline in zip(heldout_carries, heldout_baselines)
+                float(eval_fn(eval_params, carry, baseline, eff))
+                for carry, baseline, eff in zip(
+                    heldout_carries, heldout_baselines, heldout_efficacies)
             ]
             heldout_loss_history.append((epoch, heldout_losses))
             heldout_mean = sum(heldout_losses) / len(heldout_losses)
@@ -740,6 +806,10 @@ def train_coupled_policy_ensemble(
         'epochs_completed': len(loss_history),
         'num_train_ics': num_train,
         'num_heldout_ics': len(heldout_carries),
+        'train_efficacies': list(train_efficacies),
+        'heldout_efficacies': list(heldout_efficacies),
+        'efficacy_resample': efficacy_resample,
+        'train_efficacy_history': train_efficacy_history,
         'mode': 'coupled-ensemble',
     }
 

@@ -95,5 +95,95 @@ class ParseArmsTest(unittest.TestCase):
         self.assertIn("static", FEATURE_CONFIGS)
 
 
+
+
+class PiControllerTest(unittest.TestCase):
+    """The deadbeat PI arm compensates unobserved efficacy; static cannot.
+
+    Uses the FakeCoupler from coupled_train_test (dSST/step = -0.05 x applied
+    perturbation), pattern p=0.1, cap 0.15, target -0.02 over 4 steps with
+    2-step control intervals — chosen so the PI gains stay inside the cap:
+    eta=0.8 needs gain 1.5 (command exactly at cap), eta=1.25 needs 0.6.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import jax.numpy as jnp
+        from jcm.mcb.coupled_controller import (
+            CoupledControllerConfig,
+            create_coupled_step_fn,
+            evaluate_coupled_policy,
+        )
+        from jcm.mcb.coupled_features import (
+            CoupledFeatureConfig,
+            compute_baseline_trajectory,
+        )
+        from jcm.mcb.coupled_train_test import (
+            WORKFLOW,
+            FakeCoupler,
+            make_fake_carry,
+        )
+        from jcm.physics.speedy.speedy_coords import get_speedy_coords
+
+        cls.jnp = jnp
+        cls.evaluate = staticmethod(evaluate_coupled_policy)
+        cls.workflow = WORKFLOW
+        cls.coords = get_speedy_coords()
+        cls.coupler = FakeCoupler()
+        cls.shape = cls.coords.horizontal.nodal_shape
+        cls.p = 0.1
+        cls.target = -0.02
+        cls.config = CoupledControllerConfig(
+            control_interval_steps=2, total_steps=4,
+            target_cooling=cls.target,
+            feature_config=CoupledFeatureConfig(),  # fc11 (what PI reads)
+            max_perturbation=0.15, use_checkpointing=True,
+        )
+        step_fn = create_coupled_step_fn(cls.coupler, WORKFLOW)
+        cls.carry = make_fake_carry(cls.coords, 288.0)
+        cls.baseline = compute_baseline_trajectory(
+            cls.carry, step_fn, num_steps=4, coords=cls.coords)
+
+    def _run(self, policy_fn, params, eta):
+        return self.evaluate(
+            coupler=self.coupler, workflow=self.workflow,
+            policy_fn=policy_fn, policy_params=params,
+            initial_carry=self.carry, baseline_trajectory=self.baseline,
+            coords=self.coords, ocean_mask=self.jnp.ones(self.shape),
+            config=self.config, tail_mean_days=0, efficacy=eta,
+        )["metrics"]["final_sst_change"]
+
+    def test_pi_compensates_static_does_not(self):
+        from run_confirmatory_eval import make_pi_policy_fn
+        jnp = self.jnp
+        pattern = jnp.full(self.shape, self.p)
+        static_fn = lambda params, feats: pattern  # noqa: E731
+        pi_fn = make_pi_policy_fn()
+        pi_params = {"pattern": pattern, "target": self.target}
+        for eta in (0.8, 1.25):
+            d_static = self._run(static_fn, {}, eta)
+            d_pi = self._run(pi_fn, pi_params, eta)
+            err_static = abs(d_static - self.target)
+            err_pi = abs(d_pi - self.target)
+            # Static misses by ~|eta-1| x |target| (0.004-0.005 here).
+            self.assertGreater(err_static, 0.003,
+                               msg=f"eta={eta}: manipulation check failed")
+            # PI recovers the target (residual ~ f32 mean-noise, <1e-3).
+            self.assertLess(err_pi, 0.001, msg=f"eta={eta}")
+            self.assertLess(err_pi, 0.25 * err_static, msg=f"eta={eta}")
+
+    def test_pi_is_inert_at_unit_efficacy(self):
+        from run_confirmatory_eval import make_pi_policy_fn
+        jnp = self.jnp
+        pattern = jnp.full(self.shape, self.p)
+        static_fn = lambda params, feats: pattern  # noqa: E731
+        pi_fn = make_pi_policy_fn()
+        pi_params = {"pattern": pattern, "target": self.target}
+        d_static = self._run(static_fn, {}, 1.0)
+        d_pi = self._run(pi_fn, pi_params, 1.0)
+        # At eta=1 the PI gain stays ~1, so it tracks the static pattern.
+        self.assertAlmostEqual(d_pi, d_static, delta=1e-3)
+
+
 if __name__ == "__main__":
     unittest.main()

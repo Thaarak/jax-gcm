@@ -116,7 +116,8 @@ def parse_args():
     parser.add_argument("--max-perturbation", type=float, default=0.15,
                         help="Max albedo perturbation (forcing cap); "
                              "lower to reduce overcooling (G2).")
-    parser.add_argument("--loss-mode", choices=["summed", "terminal_dsst"],
+    parser.add_argument("--loss-mode",
+                        choices=["summed", "terminal_dsst", "tail_dsst"],
                         default="summed",
                         help="'summed' = historical interval-sum loss "
                              "(<0.2%% gate-relevant, rewards overcooling). "
@@ -126,6 +127,26 @@ def parse_args():
     parser.add_argument("--forcing-reg-weight", type=float, default=0.001,
                         help="Mean-square forcing penalty in terminal_dsst "
                              "mode.")
+    parser.add_argument("--efficacy-range", type=float, nargs=2, default=None,
+                        metavar=("LO", "HI"),
+                        help="Tier-2 domain randomization: per-episode MCB "
+                             "efficacy drawn Uniform[LO, HI] (applied "
+                             "perturbation = efficacy x command; unobserved "
+                             "by the policy). Omit for fixed efficacy 1.0.")
+    parser.add_argument("--efficacy-seed", type=int, default=910,
+                        help="RNG seed for the per-episode efficacy draws "
+                             "(train and held-out draws are independent).")
+    parser.add_argument("--efficacy-resample-per-epoch", action="store_true",
+                        help="Redraw TRAINING efficacies every epoch "
+                             "(Tier-2 anti-memorization fix; validation "
+                             "efficacies stay fixed). Requires "
+                             "--efficacy-range.")
+    parser.add_argument("--regen-baselines", action="store_true",
+                        help="Recompute train/validation paired baselines "
+                             "IN THIS PROCESS instead of using the cached "
+                             "generation-time pickles (~0.01 K cross-process "
+                             "mismatch, same order as the Tier-2 eta signal "
+                             "in the features; 2026-07-31 review).")
     parser.add_argument("--seed", type=int, default=42,
                         help="Policy-init random seed (PREREGISTRATION.md "
                              "section 2 requires >=3 seeds per configuration; "
@@ -244,6 +265,26 @@ def main():
     train_baselines = [b for _, _, b in train_ics]
     heldout_carries = [c for _, c, _ in heldout_ics]
     heldout_baselines = [b for _, _, b in heldout_ics]
+
+    if args.regen_baselines:
+        # Cached baselines come from the IC-generation PROCESS; cross-process
+        # chaos divergence is ~0.01 K — the same order as the Tier-2 eta
+        # signal the anomaly features must carry. Regenerate in-process so
+        # training features/losses are exactly paired (matches the eval
+        # driver's behavior). ~16 s per baseline on GPU.
+        from jcm.mcb.coupled_features import compute_baseline_trajectory
+        from jcm.mcb.coupled_controller import create_coupled_step_fn
+        print("  Regenerating train/validation baselines IN-PROCESS "
+              f"({len(train_carries) + len(heldout_carries)} x {args.days}d)...")
+        _step_fn = create_coupled_step_fn(coupler, workflow, jitted=True)
+        train_baselines = [
+            compute_baseline_trajectory(c, _step_fn, num_steps=args.days,
+                                        coords=coords)
+            for c in train_carries]
+        heldout_baselines = [
+            compute_baseline_trajectory(c, _step_fn, num_steps=args.days,
+                                        coords=coords)
+            for c in heldout_carries]
 
     # 13-feature config (same as Stage 4): absolute-SST features distinguish
     # ICs at interval 0. Warm start loads with the SAME dim -> no expand.
@@ -372,6 +413,31 @@ def main():
     print("Starting ensemble training...")
     print("=" * 70)
 
+    train_efficacies, heldout_efficacies = (), ()
+    efficacy_resample = None
+    if args.efficacy_range is not None:
+        import numpy as _np
+        lo, hi = args.efficacy_range
+        rng = _np.random.default_rng(args.efficacy_seed)
+        train_efficacies = tuple(
+            float(x) for x in rng.uniform(lo, hi, len(train_carries)))
+        # Validation efficacies: ANTITHETIC pairs (x, lo+hi-x) so the fixed
+        # selection metric covers both eta directions evenly regardless of
+        # draw luck (2026-07-31 review: an all-high validation draw would
+        # never test low-eta compensation during checkpoint selection).
+        n_held = len(heldout_carries)
+        half = rng.uniform(lo, hi, (n_held + 1) // 2)
+        anti = (lo + hi) - half
+        heldout_efficacies = tuple(
+            float(x) for pair in zip(half, anti) for x in pair)[:n_held]
+        if args.efficacy_resample_per_epoch:
+            efficacy_resample = {"range": (lo, hi),
+                                 "seed": args.efficacy_seed + 500}
+        print(f"  Efficacy randomization: Uniform[{lo}, {hi}] "
+              f"(seed {args.efficacy_seed}; "
+              f"train {'redrawn per epoch' if efficacy_resample else 'fixed'}; "
+              f"validation antithetic fixed)")
+
     best_params, history = train_coupled_policy_ensemble(
         coupler=coupler,
         workflow=workflow,
@@ -387,6 +453,9 @@ def main():
         initial_params=initial_params,
         heldout_interval=args.heldout_interval,
         select_on_heldout=args.select_on_heldout,
+        train_efficacies=train_efficacies,
+        heldout_efficacies=heldout_efficacies,
+        efficacy_resample=efficacy_resample,
     )
 
     print("\nSaving results...")
@@ -400,12 +469,18 @@ def main():
             'target_cooling': args.target_cooling,
             'mode': 'coupled-ensemble-realistic',
             'feature_dim': feature_dim,
-            'include_absolute_sst': True,
+            'include_absolute_sst': args.feature_mode != 'time-only',
+            'feature_mode': args.feature_mode,
             'realistic_terrain': bool(args.realistic_terrain),
             'terrain_source': manifest.get('terrain_source'),
             'loss_weights': loss_weights._asdict(),
             'init_source': init_source,
             'seed': args.seed,
+            'efficacy_range': args.efficacy_range,
+            'efficacy_seed': (args.efficacy_seed
+                              if args.efficacy_range is not None else None),
+            'train_efficacies': list(train_efficacies),
+            'heldout_efficacies': list(heldout_efficacies),
             'train_ics': [e['spinup_days'] for e, _, _ in train_ics],
             'heldout_ics': [e['spinup_days'] for e, _, _ in heldout_ics],
             'train_ic_seeds': [e.get('seed') for e, _, _ in train_ics],

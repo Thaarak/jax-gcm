@@ -271,9 +271,14 @@ class TestEnsembleGradients(unittest.TestCase):
         self.assertEqual(len(avg_leaves), len(ref_leaves))
         # Gradients must actually flow
         self.assertFalse(all(jnp.allclose(g, 0.0) for g in avg_leaves))
+        # Tolerance is platform-sensitive: the two computations sum in
+        # different orders under f32 (host-averaged per-IC grads vs
+        # grad-of-mean), and ARM/x86 XLA fuse differently — measured up to
+        # ~5e-5 abs diff on the GB10 (aarch64) for O(0.1-1)-norm grads. A
+        # real bug (sign, factor, dropped IC) shows up at O(1e-2) or more.
         for a, r in zip(avg_leaves, ref_leaves):
             self.assertTrue(
-                jnp.allclose(a, r, rtol=1e-4, atol=1e-7),
+                jnp.allclose(a, r, rtol=1e-3, atol=2e-4),
                 f"max abs diff {float(jnp.max(jnp.abs(a - r))):.3e}",
             )
 
@@ -699,3 +704,238 @@ class TestTailMeanMetric(unittest.TestCase):
         # Mean over all t=1..8: -0.05*p*4.5
         self.assertAlmostEqual(m["final_sst_change_10d"],
                                -0.05 * self.p * 4.5, delta=2e-4)
+
+
+class TestEfficacy(unittest.TestCase):
+    """Per-episode MCB efficacy (Tier-2 meta-audit experiment).
+
+    With the FakeCoupler (dSST/step = -0.05 * applied perturbation) and a
+    constant commanded policy p, applied = eta * p exactly, so the terminal
+    dSST scales linearly in eta.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from jcm.mcb.coupled_controller import evaluate_coupled_policy
+        cls.evaluate_coupled_policy = staticmethod(evaluate_coupled_policy)
+        cls.coords = get_speedy_coords()
+        cls.coupler = FakeCoupler()
+        cls.shape = cls.coords.horizontal.nodal_shape
+        cls.ocean_mask = jnp.ones(cls.shape)
+        cls.p = 0.02
+        cls.total_steps = 4
+        cls.config = CoupledControllerConfig(
+            control_interval_steps=2,
+            total_steps=cls.total_steps,
+            target_cooling=-0.1,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15,
+            use_checkpointing=True,
+        )
+        step_fn = create_coupled_step_fn(cls.coupler, WORKFLOW)
+        cls.carry = make_fake_carry(cls.coords, 288.0)
+        cls.baseline = compute_baseline_trajectory(
+            cls.carry, step_fn, num_steps=cls.total_steps, coords=cls.coords)
+
+    def _dsst(self, efficacy):
+        policy_fn = lambda params, feats: jnp.full(self.shape, self.p)  # noqa: E731
+        out = self.evaluate_coupled_policy(
+            coupler=self.coupler, workflow=WORKFLOW, policy_fn=policy_fn,
+            policy_params={}, initial_carry=self.carry,
+            baseline_trajectory=self.baseline, coords=self.coords,
+            ocean_mask=self.ocean_mask, config=self.config,
+            tail_mean_days=0, efficacy=efficacy,
+        )
+        m = dict(out["metrics"])
+        # Per-cell field cooling: exact modulo per-step float32 rounding
+        # (~1 ULP/step at 288 K), unlike the area-weighted mean whose f32
+        # summation carries ~3e-4 absolute noise on this uniform field.
+        final = out["final_carry"]["ocn"]["state"].sea_surface_temperature
+        m["field_dsst"] = float(final[0, 0]) - 288.0
+        return m
+
+    def test_efficacy_scales_cooling_linearly(self):
+        full = self._dsst(1.0)
+        half = self._dsst(0.5)
+        boosted = self._dsst(1.5)
+        # Sharp assertion at the field level (exact to per-step rounding).
+        ulp = 2.0 ** -15  # float32 ULP at 288 K
+        self.assertAlmostEqual(half["field_dsst"],
+                               0.5 * full["field_dsst"], delta=3 * ulp)
+        self.assertAlmostEqual(boosted["field_dsst"],
+                               1.5 * full["field_dsst"], delta=5 * ulp)
+        # Metric level: tolerance covers the f32 weighted-sum noise (~3e-4),
+        # which mostly cancels in the paired difference but not exactly.
+        self.assertAlmostEqual(half["final_sst_change"],
+                               0.5 * full["final_sst_change"], delta=5e-4)
+        # Applied forcing scales too (mcb_forcing is the APPLIED field).
+        self.assertAlmostEqual(half["mean_mcb_forcing"],
+                               0.5 * full["mean_mcb_forcing"], places=6)
+        self.assertEqual(half["efficacy"], 0.5)
+
+    def test_default_efficacy_is_identity(self):
+        explicit = self._dsst(1.0)["final_sst_change"]
+        policy_fn = lambda params, feats: jnp.full(self.shape, self.p)  # noqa: E731
+        default = self.evaluate_coupled_policy(
+            coupler=self.coupler, workflow=WORKFLOW, policy_fn=policy_fn,
+            policy_params={}, initial_carry=self.carry,
+            baseline_trajectory=self.baseline, coords=self.coords,
+            ocean_mask=self.ocean_mask, config=self.config,
+            tail_mean_days=0,
+        )["metrics"]["final_sst_change"]
+        self.assertAlmostEqual(default, explicit, places=7)
+
+    def test_grad_fn_accepts_traced_efficacy(self):
+        from jcm.mcb.coupled_train import create_coupled_grad_fn
+        policy_fn = lambda params, feats: jnp.full(self.shape, self.p) * (  # noqa: E731
+            1.0 + 0.0 * params["scale"])
+        grad_fn = create_coupled_grad_fn(
+            coupler=self.coupler, workflow=WORKFLOW, policy_fn=policy_fn,
+            coords=self.coords, ocean_mask=self.ocean_mask,
+            controller_config=self.config,
+        )
+        params = {"scale": jnp.array(1.0)}
+        l1, _ = grad_fn(params, self.carry, self.baseline, efficacy=1.0)
+        l2, _ = grad_fn(params, self.carry, self.baseline, efficacy=0.5)
+        self.assertNotAlmostEqual(float(l1), float(l2), places=6)
+
+
+class TestEnsembleEfficacyRandomization(unittest.TestCase):
+    """Tier-2 domain randomization plumbs per-episode efficacies end to end."""
+
+    def test_efficacies_used_and_logged(self):
+        coords = get_speedy_coords()
+        coupler = FakeCoupler()
+        config = CoupledControllerConfig(
+            control_interval_steps=2, total_steps=4, target_cooling=-0.1,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15,
+        )
+        policy = MCBPolicyMLP(
+            output_shape=coords.horizontal.nodal_shape, hidden_dims=(8,),
+            max_perturbation=0.15,
+        )
+        step_fn = create_coupled_step_fn(coupler, WORKFLOW)
+        carries = [make_fake_carry(coords, v) for v in (288.0, 288.0, 288.0)]
+        baselines = [
+            compute_baseline_trajectory(c, step_fn, num_steps=4, coords=coords)
+            for c in carries
+        ]
+        training_config = TrainingConfig(
+            num_epochs=2, learning_rate=1e-3, log_interval=1,
+            early_stopping_patience=None,
+        )
+
+        def run(effs):
+            _, h = train_coupled_policy_ensemble(
+                coupler=coupler, workflow=WORKFLOW, policy=policy,
+                coords=coords,
+                terrain_fmask=jnp.zeros(coords.horizontal.nodal_shape),
+                train_carries=carries[:2], train_baselines=baselines[:2],
+                heldout_carries=(carries[2],),
+                heldout_baselines=(baselines[2],),
+                training_config=training_config, controller_config=config,
+                select_on_heldout=True,
+                train_efficacies=effs, heldout_efficacies=(effs[0],) if effs
+                else (),
+            )
+            return h
+
+        h_hi = run((1.5, 1.5))
+        h_lo = run((0.5, 0.5))
+        self.assertEqual(h_hi['train_efficacies'], [1.5, 1.5])
+        self.assertEqual(h_lo['heldout_efficacies'], [0.5])
+        # Identical ICs and identical policy init: only efficacy differs, so
+        # epoch-0 train losses must differ between the two runs (the applied
+        # forcing is 3x larger in the high-efficacy run).
+        self.assertNotAlmostEqual(h_hi['loss_history'][0],
+                                  h_lo['loss_history'][0], places=6)
+        # Default (no efficacies) must log 1.0s.
+        h_def = run(())
+        self.assertEqual(h_def['train_efficacies'], [1.0, 1.0])
+
+
+class TestTailDsstLoss(unittest.TestCase):
+    """tail_dsst loss (Amendment 3) matches the registered tail-mean metric.
+
+    FakeCoupler analytic: constant policy p, eta=1, T=8 steps, tail=4:
+    dsst_tail = -0.05*p*mean(5,6,7,8) = -0.05*p*6.5; setting target to the
+    analytic value makes the terminal loss ~ 0 + forcing_reg * p^2.
+    """
+
+    def test_tail_loss_analytic(self):
+        coords = get_speedy_coords()
+        coupler = FakeCoupler()
+        shape = coords.horizontal.nodal_shape
+        p = 0.02
+        analytic_tail = -0.05 * p * 6.5
+        config = CoupledControllerConfig(
+            control_interval_steps=2, total_steps=8,
+            target_cooling=analytic_tail,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15, use_checkpointing=True,
+            loss_mode="tail_dsst", tail_days=4, forcing_reg_weight=0.001,
+        )
+        step_fn = create_coupled_step_fn(coupler, WORKFLOW)
+        carry = make_fake_carry(coords, 288.0)
+        baseline = compute_baseline_trajectory(
+            carry, step_fn, num_steps=8, coords=coords)
+        policy_fn = lambda params, feats: jnp.full(shape, p)  # noqa: E731
+        loss = float(unroll_coupled_simple(
+            coupler=coupler, workflow=WORKFLOW, policy_fn=policy_fn,
+            policy_params={}, initial_carry=carry,
+            baseline_trajectory=baseline, coords=coords,
+            ocean_mask=jnp.ones(shape), config=config,
+        ))
+        reg = 0.001 * p ** 2  # applied forcing is p everywhere at eta=1
+        # Terminal term ~ (f32 mean-noise ~3e-4)^2 ~ 1e-7; reg = 4e-10.
+        self.assertLess(abs(loss - reg), 5e-7)
+        # A mis-set target must show up quadratically.
+        config_off = config.copy(target_cooling=analytic_tail - 0.01) if \
+            hasattr(config, "copy") else None
+        if config_off is None:
+            import dataclasses
+            try:
+                config_off = dataclasses.replace(
+                    config, target_cooling=analytic_tail - 0.01)
+            except TypeError:
+                config_off = CoupledControllerConfig(
+                    control_interval_steps=2, total_steps=8,
+                    target_cooling=analytic_tail - 0.01,
+                    feature_config=CoupledFeatureConfig(
+                        include_absolute_sst=True),
+                    max_perturbation=0.15, use_checkpointing=True,
+                    loss_mode="tail_dsst", tail_days=4,
+                    forcing_reg_weight=0.001,
+                )
+        loss_off = float(unroll_coupled_simple(
+            coupler=coupler, workflow=WORKFLOW, policy_fn=policy_fn,
+            policy_params={}, initial_carry=carry,
+            baseline_trajectory=baseline, coords=coords,
+            ocean_mask=jnp.ones(shape), config=config_off,
+        ))
+        self.assertAlmostEqual(loss_off, 0.01 ** 2 + reg, delta=1e-5)
+
+    def test_tail_loss_gradient_flows(self):
+        coords = get_speedy_coords()
+        coupler = FakeCoupler()
+        shape = coords.horizontal.nodal_shape
+        config = CoupledControllerConfig(
+            control_interval_steps=2, total_steps=4, target_cooling=-0.01,
+            feature_config=CoupledFeatureConfig(include_absolute_sst=True),
+            max_perturbation=0.15, use_checkpointing=True,
+            loss_mode="tail_dsst", tail_days=2,
+        )
+        step_fn = create_coupled_step_fn(coupler, WORKFLOW)
+        carry = make_fake_carry(coords, 288.0)
+        baseline = compute_baseline_trajectory(
+            carry, step_fn, num_steps=4, coords=coords)
+        grad_fn = create_coupled_grad_fn(
+            coupler=coupler, workflow=WORKFLOW,
+            policy_fn=lambda prm, f: jnp.full(shape, 0.01) * prm["s"],
+            coords=coords, ocean_mask=jnp.ones(shape),
+            controller_config=config,
+        )
+        loss, grads = grad_fn({"s": jnp.array(1.0)}, carry, baseline)
+        self.assertTrue(bool(jnp.isfinite(loss)))
+        self.assertNotEqual(float(grads["s"]), 0.0)

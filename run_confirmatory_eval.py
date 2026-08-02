@@ -25,6 +25,13 @@ Arms are given as repeatable --arm NAME=KIND=PATH with KIND one of:
   static    : Stage-1 optimized pattern pickle (bias-trick constant policy)
   fc13      : MLP checkpoint using the 13-feature config (absolute SST on)
   time-only : MLP checkpoint using the time-only feature config (open loop)
+  pi        : Stage-1 pattern + hand-designed deadbeat efficacy compensator
+              (the Kravitz/MacMartin-style literature baseline; no training)
+
+Tier-2 efficacy experiment (--efficacy-mode randomized): each IC draws an
+unobserved eta ~ U[range]; applied forcing = eta x command. Static/open-loop
+arms structurally cannot compensate; feedback arms (fc13, pi) can read the
+realized cooling from the paired-anomaly features and adjust.
 
 Example (diya):
     python run_confirmatory_eval.py \
@@ -42,6 +49,7 @@ import time
 from pathlib import Path
 
 import jax
+import jax.numpy as jnp
 import jax_datetime as jdt
 import numpy as np
 
@@ -81,7 +89,53 @@ FEATURE_CONFIGS = {
         include_atm_temperature=False, include_precipitation=False,
         include_time=True, include_absolute_sst=False,
     ),
+    # Hand-designed ratio/deadbeat controller on the static pattern (the
+    # Kravitz/MacMartin-style literature baseline for the Tier-2 efficacy
+    # experiment). Uses the fc11 layout: feature 0 = realized global-mean
+    # ocean dSST vs the paired baseline, feature 10 = time fraction.
+    "pi": CoupledFeatureConfig(),
+    # Constant uniform ocean field at a given level (PATH = the level as a
+    # float, e.g. uniform=uniform=0.0442). Used by the Tier-2
+    # widened-deployment efficiency probe: how much cooling per unit forcing
+    # do the cells OUTSIDE the optimized pattern deliver?
+    "uniform": CoupledFeatureConfig(),
 }
+
+# fc11 feature indices the PI controller reads (see coupled_features.py):
+_PI_DSST_IDX = 0
+_PI_TIME_IDX = 10
+
+
+def make_pi_policy_fn(gain_max: float = 3.0, eta_clip=(0.25, 4.0)):
+    """Deadbeat efficacy-compensating controller on a fixed pattern.
+
+    At each control interval it estimates the realized efficacy
+    eta_hat = realized_dsst / (target * time_fraction) (linear-ramp
+    reference), computes the gain needed to close the REMAINING error in the
+    remaining time, and commands pattern * gain / eta_hat. With exact linear
+    dynamics and no cap saturation this recovers the target for any constant
+    eta; cap-clipping of the command in control_step limits its authority on
+    cells already at the cap (a real, reportable limitation).
+
+    params: {"pattern": (ix, il) array, "target": float}
+    """
+    def pi_policy_fn(params, features):
+        pattern = params["pattern"]
+        target = params["target"]
+        realized = features[_PI_DSST_IDX]
+        tfrac = features[_PI_TIME_IDX]
+        eta_hat = jnp.where(
+            tfrac > 0.0,
+            jnp.clip(realized / (target * jnp.maximum(tfrac, 1e-6)),
+                     eta_clip[0], eta_clip[1]),
+            1.0,
+        )
+        required = (target - realized) / ((1.0 - jnp.minimum(tfrac, 0.9))
+                                          * target)
+        gain = jnp.clip(required / eta_hat, 0.0, gain_max)
+        return pattern * gain
+
+    return pi_policy_fn
 
 
 def parse_args():
@@ -119,6 +173,24 @@ def parse_args():
     p.add_argument("--max-perturbation", type=float, default=0.09)
     p.add_argument("--no-realistic-terrain", dest="realistic_terrain",
                    action="store_false", default=True)
+    p.add_argument("--efficacy-mode", choices=["fixed", "randomized"],
+                   default="fixed",
+                   help="Tier-2: 'randomized' draws a per-IC MCB efficacy "
+                        "eta ~ Uniform[range] (applied = eta x command, "
+                        "unobserved by policies). Shared across arms and "
+                        "members of the same IC (paired design).")
+    p.add_argument("--efficacy-range", type=float, nargs=2,
+                   default=(0.6, 1.4), metavar=("LO", "HI"))
+    p.add_argument("--efficacy-seed", type=int, default=920,
+                   help="Seed for eval-time efficacy draws (distinct from "
+                        "any training-time draw stream).")
+    p.add_argument("--efficacy-antithetic", action="store_true",
+                   help="Draw n/2 etas and mirror them (lo+hi-eta): exact "
+                        "mean (lo+hi)/2 and balanced low/high halves. Fixes "
+                        "the 2026-07-31 review finding that a plain seed-920 "
+                        "draw is skewed high (mean 1.07, 13/20 above 1), "
+                        "flattering the PI arm and starving the NN's "
+                        "low-eta direction.")
     p.add_argument("--output", required=True)
     return p.parse_args()
 
@@ -132,7 +204,14 @@ def parse_arms(arm_specs):
                 f"Bad --arm '{spec}': expected NAME=KIND=PATH with KIND in "
                 f"{sorted(FEATURE_CONFIGS)}")
         name, kind, path = parts
-        if not Path(path).exists():
+        if kind == "uniform":
+            try:
+                float(path)
+            except ValueError:
+                raise SystemExit(
+                    f"--arm {name}: uniform kind takes a float level, "
+                    f"got '{path}'")
+        elif not Path(path).exists():
             raise SystemExit(f"--arm {name}: path does not exist: {path}")
         arms.append({"name": name, "kind": kind, "path": path})
     names = [a["name"] for a in arms]
@@ -141,19 +220,33 @@ def parse_arms(arm_specs):
     return arms
 
 
-def build_arm_params(arm, policy, coords):
-    """Load parameters for one arm; returns (params, feature_config)."""
+def build_arm(arm, policy, coords, target_cooling):
+    """Build one arm; returns (policy_fn, params, feature_config)."""
     fc = FEATURE_CONFIGS[arm["kind"]]
     dim = get_coupled_feature_dim(fc)
     if arm["kind"] == "static":
         params = warm_start_params(policy, dim, arm["path"])
-    else:
-        params, meta = load_checkpoint(arm["path"])
-        ckpt_dim = params["params"]["hidden_0"]["kernel"].shape[0]
-        assert ckpt_dim == dim, (
-            f"Arm {arm['name']}: checkpoint feature dim {ckpt_dim} != "
-            f"{arm['kind']} feature dim {dim}")
-    return params, fc
+        return policy.apply, params, fc
+    if arm["kind"] == "pi":
+        with open(arm["path"], "rb") as f:
+            stage1 = pickle.load(f)
+        pattern = jnp.asarray(stage1["best_pattern"])
+        params = {"pattern": pattern, "target": float(target_cooling)}
+        return make_pi_policy_fn(), params, fc
+    if arm["kind"] == "uniform":
+        level = float(arm["path"])
+        shape = coords.horizontal.nodal_shape
+
+        def uniform_fn(params, features):
+            return jnp.full(shape, params["level"])
+
+        return uniform_fn, {"level": level}, fc
+    params, meta = load_checkpoint(arm["path"])
+    ckpt_dim = params["params"]["hidden_0"]["kernel"].shape[0]
+    assert ckpt_dim == dim, (
+        f"Arm {arm['name']}: checkpoint feature dim {ckpt_dim} != "
+        f"{arm['kind']} feature dim {dim}")
+    return policy.apply, params, fc
 
 
 def aggregate_and_gate(cells, comparator, target, band, tail_days):
@@ -255,7 +348,8 @@ def main():
     )
     arm_params = {}
     for arm in arms:
-        params, fc = build_arm_params(arm, policy, coords)
+        policy_fn, params, fc = build_arm(arm, policy, coords,
+                                          args.target_cooling)
         config = CoupledControllerConfig(
             control_interval_steps=args.control_interval,
             total_steps=args.days,
@@ -264,9 +358,28 @@ def main():
             max_perturbation=args.max_perturbation,
             use_checkpointing=True,
         )
-        arm_params[arm["name"]] = (params, config)
+        arm_params[arm["name"]] = (policy_fn, params, config)
 
     n_ics, k = len(ics), args.members
+
+    # Tier-2 efficacy draws: one eta per IC (an episode property), shared by
+    # every arm and member of that IC so comparisons stay exactly paired.
+    if args.efficacy_mode == "randomized":
+        lo, hi = args.efficacy_range
+        eff_rng = np.random.default_rng(args.efficacy_seed)
+        if args.efficacy_antithetic:
+            half = eff_rng.uniform(lo, hi, (n_ics + 1) // 2)
+            anti = (lo + hi) - half
+            efficacies = [float(x)
+                          for pair in zip(half, anti) for x in pair][:n_ics]
+        else:
+            efficacies = [float(x) for x in eff_rng.uniform(lo, hi, n_ics)]
+        print(f"Efficacy randomization ON: eta ~ U[{lo}, {hi}] "
+              f"(seed {args.efficacy_seed}"
+              f"{', antithetic' if args.efficacy_antithetic else ''}): "
+              f"{[round(e, 3) for e in efficacies]}")
+    else:
+        efficacies = [1.0] * n_ics
     arm_names = [a["name"] for a in arms]
     # per-arm (n_ics, k) member-level metrics
     cells = {name: {"dsst_10d": np.full((n_ics, k), np.nan),
@@ -280,6 +393,7 @@ def main():
     results = {
         "config": vars(args), "arms": arms, "manifest_ic_dir": args.ic_dir,
         "ic_entries": [e for e, _, _ in ics], "cells": cells,
+        "efficacies": efficacies,
     }
     out_path = Path(args.output)
     t_campaign = time.time()
@@ -299,12 +413,12 @@ def main():
                 member_carry, step_fn, num_steps=args.days, coords=coords)
             t_base = time.time() - t0
             for name in arm_names:
-                params, config = arm_params[name]
+                arm_policy_fn, params, config = arm_params[name]
                 t0 = time.time()
                 out = evaluate_coupled_policy(
                     coupler=coupler,
                     workflow=workflow,
-                    policy_fn=policy.apply,
+                    policy_fn=arm_policy_fn,
                     policy_params=params,
                     initial_carry=member_carry,
                     baseline_trajectory=member_baseline,
@@ -312,6 +426,7 @@ def main():
                     ocean_mask=ocean_mask,
                     config=config,
                     tail_mean_days=args.tail_days,
+                    efficacy=efficacies[i],
                 )
                 mtr = out["metrics"]
                 c = cells[name]
@@ -328,7 +443,8 @@ def main():
                     area_weights, region="sahel"))
                 print(f"  IC {entry['index']:02d} m{m} {name:>10}: "
                       f"dSST10d {mtr['final_sst_change_10d']:+.4f} "
-                      f"(snap {mtr['final_sst_change']:+.4f}) "
+                      f"(snap {mtr['final_sst_change']:+.4f}, "
+                      f"eta {efficacies[i]:.3f}) "
                       f"[base {t_base:.0f}s, eval {time.time() - t0:.0f}s]",
                       flush=True)
                 t_base = 0.0  # only report baseline time once per member

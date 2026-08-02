@@ -158,3 +158,84 @@ be logged here as further amendments.
    `region_precip_change_mm_day`, offset-free); the G5 gate stays WITHDRAWN unless the §3
    resolvability control is run and passes, and all computed regional-precip comparisons are
    reported regardless of outcome.
+
+### Amendment 3 — Tier-2 experiment: feedback under uncertain MCB efficacy (frozen 2026-07-31, BEFORE any Tier-2 GPU run)
+
+**Motivation.** The Tier-1 confirmatory campaign closed the original feedback question with a bounded
+null (any feedback effect within ±4.5 mK at 95%), and the design-headroom analysis showed the task
+gave feedback nothing to correct (perfect-controller ceiling ~6 mK). Tier-2 tests feedback where it
+has real, physically motivated headroom: **per-episode uncertain seeding efficacy** — the dominant
+real-world MCB uncertainty, and the classic argument for feedback control of SRM (cf. the
+Kravitz/MacMartin explicit-feedback SAI literature).
+
+**Mechanism (implemented, tested).** Each episode draws an unobserved efficacy
+η ~ Uniform[0.6, 1.4]; the applied cloud-albedo perturbation is η × the (cap-clipped) command.
+Policies never observe η directly; feedback arms can infer it from the realized cooling in the
+paired-anomaly features. A static pattern's expected gate error is E|η−1| × 0.1 K ≈ 20 mK — ~13×
+the Tier-1 detection floor.
+
+**Splits (all fresh; 3000–3019 are now spent by Tier-1 gates):**
+train seeds 4000-4009 (n=10), validation-for-selection seeds 4010-4015 (n=6, the held-out
+split of the same generation run; used for early stopping /
+checkpoint selection only), confirmatory eval seed0=5000 (n=20, touched exactly once by the final
+gates). Eval-time η draws use seed 920; training-time draws seed 910+run-seed; the eval η stream is
+never used in training.
+
+**Arms.** (1) stage1-static (η-blind); (2) open-loop time-only, trained under η-randomization,
+3 seeds; (3) NN feedback (fc13), trained under η-randomization (domain randomization, warm-started
+from the static pattern), 3 seeds; (4) PI: hand-designed deadbeat efficacy compensator on the static
+pattern (no training; analytically verified to recover the target under η≠1 in the linear test
+model; cap saturation limits its authority — a reportable property, not a bug).
+
+**Metric & mechanics.** Registered final-10-day time-mean dSST; k=4 micro-ensemble members per
+(arm, IC) with per-member in-process baselines; η shared across arms and members of an IC (exactly
+paired); 60-day horizon, 15-day control intervals, cap 0.09, target −0.1 K.
+
+**Manipulation check (gates the expensive steps).** Before any training, the static arm is evaluated
+under η-randomization on the validation ICs: its mean |dSST_10d − target| must exceed 3× its Tier-1
+(η=1) value. If not, the disturbance is too weak to matter and the campaign stops for redesign —
+reported either way.
+
+**Hypotheses (primary family, Holm-corrected, α=0.05, paired t on per-IC |dSST_10d − target|,
+pooled over seeds with per-seed values reported):**
+- H2: NN feedback beats static.
+- H3: NN feedback beats the trained open-loop schedule.
+**Secondary (reported, not gated):** NN vs PI (does learning beat the hand-designed compensator?);
+PI vs static; per-seed spread; G2 band per arm; TOST equivalence bounds for any null; precip
+mm/day per region.
+
+**Decision rules.** Verdicts follow the paired t at α=0.05 (the 2·s.e. rule is reported alongside;
+disagreements reported). Any null is reported with its TOST equivalence bound. All runs reported,
+including failures and the manipulation check. Seeds, η draws, and IC seeds recorded in artifacts.
+
+**Amendment 3 revisions (2026-07-31, from the pre-launch adversarial review; still BEFORE any
+Tier-2 GPU run, so the freeze is intact):**
+1. **Training objective = tail_dsst** (squared error of the final-10-day time-mean dSST — the
+   registered gate metric exactly), not the day-60 terminal snapshot: in the measured ramp-like
+   response regime (Tier-1 tail/terminal ratio 0.932 ≈ the linear-ramp 0.925), a terminal-targeting
+   controller systematically under-corrects the tail metric by up to ~half the available effect.
+2. **Training efficacies are redrawn every epoch** (epoch-seeded); with one fixed η per IC, the
+   absolute-SST features fingerprint the IC and memorizing the IC→η map strictly dominates learning
+   the feedback law (10 draws/seed cannot identify U[0.6,1.4]). Validation efficacies remain FIXED
+   (selection metric comparable across epochs) and are drawn ANTITHETICALLY (pairs x, 2−x) so both
+   η directions are covered during checkpoint selection.
+3. **Eval efficacies are antithetic** (10 draws + mirrors, seed 920): the plain draw was skewed
+   (mean 1.07, 13/20 above 1), flattering the PI arm (which has downward-only authority on the
+   bang-bang pattern) and under-exercising the NN's low-η direction.
+4. **Training baselines are regenerated in-process** (`--regen-baselines`): cached cross-program
+   baselines carry ~0.01 K mismatch — the same order as the η signal the anomaly features must carry.
+5. **Manipulation-check threshold = 0.0162 K** (3× Tier-1, as originally frozen; the campaign
+   script briefly said 0.012 — reconciled to the frozen value).
+6. **Primary analysis pooling rule pinned and pre-committed** (`analyze_tier2.py`, unit-tested):
+   the unit of analysis is the IC (n=20); an arm-group's per-IC error is the mean over its 3 seed
+   arms of |dSST_10d − target|; H2/H3 are paired t over ICs, Holm-corrected; significance requires
+   the NN-favorable direction. Concatenating (IC, seed) pairs is forbidden (pseudo-replication).
+7. **Widened-deployment efficiency probe** added to the pre-training step (uniform ocean fields at
+   0.0265 and 0.0442 mean forcing, η=1, validation ICs): measures the cooling efficiency of cells
+   outside the optimized pattern — the mechanism the NN needs for low-η compensation. Reported,
+   ungated.
+8. **PI reference calibration recorded:** the linear-ramp reference is validated by the Tier-1
+   measurement (tail/terminal = 0.932 ± 0.071 vs ramp prediction 0.925); PI's cap-limited upward
+   authority on the bang-bang pattern (η<1 episodes) is a pre-registered reportable property.
+   Expected effects on the realized antithetic draws: static mean|err| ~20 mK; a perfect
+   compensator leaves ~2 mK; detection floor ~2 mK (k=4, n=20).

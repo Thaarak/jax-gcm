@@ -70,13 +70,19 @@ class CoupledControllerConfig(NamedTuple):
             compute_coupled_loss over every control interval — the historical
             behavior, dominated by early-interval transients and the spatial
             uniformity penalty (<0.2% of its magnitude is the gated quantity).
-            "terminal_dsst" trains on exactly what the pre-registered gate
-            scores: the squared error of the final-step global-mean ocean
-            dSST vs the paired baseline, target_cooling, area x ocean weighted
-            (plus a small forcing-magnitude regularizer). This is gate-aligned.
+            "terminal_dsst" trains on the squared error of the FINAL-STEP
+            global-mean ocean dSST vs the paired baseline, target_cooling,
+            area x ocean weighted (plus a small forcing-magnitude
+            regularizer). "tail_dsst" trains on the squared error of the
+            TIME-MEAN dSST over the final ``tail_days`` coupling steps — the
+            registered gate metric exactly (PREREGISTRATION.md section 3 /
+            Amendment 3); in the slab's ramp-like 60-day response regime a
+            terminal-targeting controller systematically under-corrects the
+            tail metric, so Tier-2 training uses tail_dsst.
         forcing_reg_weight: Weight of the mean-square MCB forcing penalty
-            added in "terminal_dsst" mode (keeps the pattern from wandering
-            without materially shifting the gated dSST).
+            added in "terminal_dsst"/"tail_dsst" modes (keeps the pattern
+            from wandering without materially shifting the gated dSST).
+        tail_days: Terminal-mean window for "tail_dsst" (coupling steps).
 
     """
 
@@ -89,6 +95,7 @@ class CoupledControllerConfig(NamedTuple):
     use_checkpointing: bool = True
     loss_mode: str = "summed"
     forcing_reg_weight: float = 0.001
+    tail_days: int = 10
 
 
 class CoupledControlStep(NamedTuple):
@@ -274,8 +281,18 @@ def create_coupled_control_step(
         carry: dict,
         policy_params: dict,
         interval_idx: jnp.ndarray,
+        efficacy: jnp.ndarray = 1.0,
     ) -> CoupledControlStep:
-        """Execute one control interval with policy application."""
+        """Execute one control interval with policy application.
+
+        ``efficacy`` (Tier-2 meta-audit experiment) scales the APPLIED
+        perturbation: the policy commands a clipped albedo field, and the
+        cloud responds with efficacy x command — modeling uncertain seeding
+        efficacy, the dominant real-world MCB uncertainty. The policy never
+        observes efficacy directly; a feedback controller can only infer it
+        from the realized cooling in the paired-anomaly features. Traced
+        scalar, so one compiled function serves every draw.
+        """
         t_start = interval_idx * config.control_interval_steps
         t_end = t_start + config.control_interval_steps
 
@@ -294,9 +311,12 @@ def create_coupled_control_step(
         # Get MCB perturbation from policy
         mcb_perturbation = policy_fn(policy_params, features)
 
-        # Clip and apply ocean mask
+        # Clip the COMMAND and apply ocean mask, then scale by the episode's
+        # (unobserved) efficacy to get the APPLIED perturbation. The cap
+        # bounds the command; applied albedo remains physically clipped to
+        # [0, 1] inside shortwave_radiation.
         mcb_perturbation = jnp.clip(mcb_perturbation, 0.0, config.max_perturbation)
-        mcb_perturbation = mcb_perturbation * ocean_mask
+        mcb_perturbation = mcb_perturbation * ocean_mask * efficacy
 
         # Inject MCB into atmosphere forcing
         # The JCM wrapper will read this and pass to physics
@@ -355,6 +375,7 @@ def unroll_coupled_with_policy(
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
     collect_sst: bool = False,
+    efficacy=1.0,
 ) -> Tuple[jnp.ndarray, dict, Any]:
     """Unroll coupled simulation with neural network control.
 
@@ -375,6 +396,9 @@ def unroll_coupled_with_policy(
             per-coupling-step ocean-mean SST, shape (num_intervals,
             interval_steps) — used by evaluation for the pre-registered
             final-10-day time-mean dSST. Keep False for training.
+        efficacy: Per-episode MCB efficacy factor (Tier-2 experiment):
+            applied perturbation = efficacy x clipped command. Scalar
+            (float or traced jnp scalar); unobserved by the policy.
 
     Returns:
         Tuple of:
@@ -386,7 +410,7 @@ def unroll_coupled_with_policy(
     num_intervals = config.total_steps // config.control_interval_steps
 
     collect_sst_weights = None
-    if collect_sst:
+    if collect_sst or config.loss_mode == "tail_dsst":
         from jcm.mcb.state_features import compute_area_weights
         w = compute_area_weights(coords) * ocean_mask
         collect_sst_weights = w / jnp.sum(w)
@@ -409,9 +433,12 @@ def unroll_coupled_with_policy(
 
     # Unroll with scan over interval indices (needed to index the paired
     # baseline trajectory at the right timesteps)
+    efficacy_arr = jnp.asarray(efficacy, dtype=jnp.float32)
+
     def scan_body(state, interval_idx):
         carry, cumulative_loss = state
-        step_output = control_step(carry, policy_params, interval_idx)
+        step_output = control_step(carry, policy_params, interval_idx,
+                                   efficacy_arr)
         new_state = (step_output.carry, cumulative_loss + step_output.loss)
         return new_state, step_output
 
@@ -439,6 +466,24 @@ def unroll_coupled_with_policy(
             trajectory.mcb_forcing ** 2
         )
         total_loss = terminal + forcing_reg
+    elif config.loss_mode == "tail_dsst":
+        # Registered-metric objective (Amendment 3): squared error of the
+        # TIME-MEAN dSST over the final tail_days steps — identical to
+        # evaluate_coupled_policy's final_sst_change_10d. In the ramp-like
+        # slab response a terminal-only objective leaves the tail window
+        # systematically under-corrected (2026-07-31 adversarial review).
+        tail = int(min(config.tail_days, config.total_steps))
+        policy_daily = jnp.reshape(trajectory.sst_ocean_mean, (-1,))
+        baseline_tail = jnp.stack([
+            jnp.sum(baseline_trajectory.sst[t] * collect_sst_weights)
+            for t in range(config.total_steps - tail + 1,
+                           config.total_steps + 1)
+        ])
+        dsst_tail = jnp.mean(policy_daily[-tail:] - baseline_tail)
+        forcing_reg = config.forcing_reg_weight * jnp.mean(
+            trajectory.mcb_forcing ** 2
+        )
+        total_loss = (dsst_tail - config.target_cooling) ** 2 + forcing_reg
 
     return total_loss, final_carry, trajectory
 
@@ -453,13 +498,14 @@ def unroll_coupled_simple(
     coords,
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
+    efficacy=1.0,
 ) -> jnp.ndarray:
     """Simplified unroll returning only total loss (for training).
 
     More memory efficient as it doesn't store trajectory.
 
     Args:
-        Same as unroll_coupled_with_policy.
+        Same as unroll_coupled_with_policy (incl. per-episode efficacy).
 
     Returns:
         Scalar total loss over all control intervals.
@@ -475,6 +521,7 @@ def unroll_coupled_simple(
         coords=coords,
         ocean_mask=ocean_mask,
         config=config,
+        efficacy=efficacy,
     )
     return total_loss
 
@@ -535,6 +582,7 @@ def evaluate_coupled_policy(
     ocean_mask: jnp.ndarray,
     config: CoupledControllerConfig = CoupledControllerConfig(),
     tail_mean_days: int = 10,
+    efficacy=1.0,
 ) -> dict:
     """Evaluate a trained policy and return detailed metrics.
 
@@ -544,6 +592,8 @@ def evaluate_coupled_policy(
             (PREREGISTRATION.md section 3): dSST time-mean over the final
             ``tail_mean_days`` coupling steps. 0 disables collection and
             reproduces the old snapshot-only behavior.
+        efficacy: Per-episode MCB efficacy (applied = efficacy x command);
+            recorded in metrics. The policy does not observe it.
 
     Returns:
         Dictionary with metrics:
@@ -572,6 +622,7 @@ def evaluate_coupled_policy(
         ocean_mask=ocean_mask,
         config=config,
         collect_sst=collect_sst,
+        efficacy=efficacy,
     )
 
     num_intervals = config.total_steps // config.control_interval_steps
@@ -597,6 +648,7 @@ def evaluate_coupled_policy(
         'target_cooling': config.target_cooling,
         'mean_mcb_forcing': float(jnp.mean(trajectory.mcb_forcing)),
         'max_mcb_forcing': float(jnp.max(trajectory.mcb_forcing)),
+        'efficacy': float(efficacy),
         'loss_trajectory': jax.device_get(trajectory.loss),
     }
 
