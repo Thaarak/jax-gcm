@@ -2,13 +2,13 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md`. Written 2026-07-28.*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11).*
 
 ---
 
 ## The one-paragraph version
 
-We tried to teach a small AI to fight global warming inside a computer simulation of Earth's climate. The specific idea is **Marine Cloud Brightening (MCB)**: making low ocean clouds slightly whiter so they reflect more sunlight and cool the planet a little. We built the AI as a "controller" that watches the simulated climate and decides where and how much to brighten clouds, aiming to cool the ocean by a small target amount without wrecking rainfall in sensitive places like the Amazon. Along the way we discovered that an earlier version of this work was riddled with bugs and wishful statistics, so we tore it down, audited it, rebuilt it correctly, and ran a careful series of experiments. **The honest ending:** the corrected method *does* find a good, on-target cloud-brightening plan — but the "smart adaptive AI" part turned out to add nothing you can statistically prove over a simple fixed plan. That's a real, defensible scientific result, even though it's not the exciting one we hoped for.
+We tried to teach a small AI to fight global warming inside a computer simulation of Earth's climate. The specific idea is **Marine Cloud Brightening (MCB)**: making low ocean clouds slightly whiter so they reflect more sunlight and cool the planet a little. We built the AI as a "controller" that watches the simulated climate and decides where and how much to brighten clouds, aiming to cool the ocean by a small target amount without wrecking rainfall in sensitive places like the Amazon. Along the way we discovered — twice — that our own results couldn't be trusted: an earlier version of the work was riddled with bugs and wishful statistics, and even the careful rebuild turned out to be measuring a 5-thousandths-of-a-degree signal with an instrument that jittered by 15, in an experiment accidentally designed so the AI could never win. So we tore it down twice, fixed the measurement, and finally gave the controller a problem worth solving: uncertainty about how strongly the cloud-seeding actually works. **The honest ending, in three acts:** the corrected method *does* find a good, on-target cloud-brightening plan (now confirmed with real statistical power); under realistic uncertainty a feedback controller *demonstrably* beats the fixed plan — our strongest statistical result, and finally the project's founding claim; but the winning neural controller got every bit of its skill by *imitating a hundred-year-old control-engineering formula* — training it through the climate simulation itself, the project's founding bet, never worked, and we measured exactly why. That's a real, defensible, and genuinely interesting scientific ending — just not the one we set out to find.
 
 ---
 
@@ -129,7 +129,7 @@ Rather than patch over the problems, the project rebuilt the experiment in three
 
 **Fixing the measurement (R1–R5 repairs), plus three key ideas:**
 
-- **The noise floor.** Before you can claim a result is real, you must know how big the model's *random* run-to-run wiggle is. So we ran the *same fixed* plan many times and measured the spread. This "noise floor" turned out to be about 0.014 K. Any claimed effect smaller than roughly twice that is indistinguishable from luck. Measuring this was never done before — it's what turns "it looks like it worked" into "it's bigger than noise."
+- **The noise floor.** Before you can claim a result is real, you must know how big the model's *random* run-to-run wiggle is. So we ran the *same fixed* plan many times and measured the spread. This "noise floor" turned out to be about 0.014 K. Any claimed effect smaller than roughly twice that is indistinguishable from luck. Measuring this was never done before — it's what turns "it looks like it worked" into "it's bigger than noise." (Keep an eye on this one: Part 7 reveals the measurement had a serious blind spot.)
 
 - **Held-out selection.** When you pick your "best" model, you must judge it on **held-out** data — climates it was *not* trained on — not on the training data itself. Otherwise you're just picking whatever memorized the training set best. (The old code picked the best on training data, which is R2.)
 
@@ -139,7 +139,7 @@ Rather than patch over the problems, the project rebuilt the experiment in three
 
 ---
 
-# Part 6 — The Three Campaigns
+# Part 6 — The First Three Campaigns (v1–v3)
 
 With the foundations rebuilt, we ran three big experiments on a GPU (a fast computer chip). Each is a comparison between the **AI feedback controller** and a **static pattern** (the same brightening map applied every time, with no adaptation). The question throughout: *does the adaptive AI actually beat the simple fixed plan?*
 
@@ -169,36 +169,168 @@ We fixed both — trained the AI **directly on the gate's own metric** and selec
 | **AI feedback vs. fixed schedule** | underpowered | **underpowered, −0.0054 ± 0.0039 K** | Adaptivity is indistinguishable from a fixed schedule |
 | **Trained-from-a-head-start vs. from scratch** | FAIL | **underpowered, +0.0033 ± 0.0041 K** | The head start doesn't measurably help |
 
-At the raw-loss level the fixed training genuinely improved things — it roughly *halved* the error on unseen climates (from 0.020 K to 0.011 K). But that improvement is **below the significance bar** on the pre-registered gate at our sample size of 10 test cases. It's real but too small to prove.
+At the raw-loss level the fixed training *appeared* to genuinely improve things — roughly halving the error on unseen climates (from 0.020 K to 0.011 K), real but below the significance bar at our sample size of 10 test cases. That, at least, is what we wrote at the time. Part 7 tells what happened when this claim, too, went under the microscope.
 
 ---
 
-# Part 7 — The Honest Bottom Line
+# Part 7 — The Audit of the Audit: the second reckoning
+
+The story above — "the AI adds nothing provable, and that's our defensible negative result" — is where the project stood in late July. Before writing it up for the world, we did one last thing: a **second full audit** (2026-07-29), this time of the *rebuilt* project, done the same way as the first — trust nothing, recompute every number from the raw GPU outputs, re-run the actual code, and actively try to break every conclusion. The full findings live in `MCB_META_AUDIT.md`.
+
+The good news first: the rebuild's bookkeeping is impeccable. Every recorded number reproduces from the raw data to twelve decimal places, the v3 "tie" verdicts survive every statistical test thrown at them, and v3's training really did learn — the first campaign ever to show genuine descent. But three things the project *believed* turned out to be wrong, and the third one changed the course of everything that followed.
+
+## 7.1 The consolation prize was a mirage
+
+Part 6 ended with a life-raft: "the fixed training genuinely halved the error on unseen climates, real but too small to prove." **Retracted.** That flattering 0.011 K was the *minimum of 39 noisy measurements* — and the same number had been used to pick the "best" model in the first place. Picking your luckiest dice roll out of 39 and calling it skill is exactly the mistake (R2) that sank the original project, reincarnated on new data; a simulation confirmed that pure noise routinely produces a "best" that good. And when the selected model was independently re-evaluated — twice — it scored *worse* than the static pattern both times. The honest restatement: **training never produced any detectable improvement over the static pattern at all.**
+
+## 7.2 The noise floor had a blind spot: meet chaos noise
+
+Part 5's noise floor (~0.014 K) measured how much results wiggle across *different starting climates*. A second kind of noise — re-running the very same experiment — had been measured as exactly zero. That zero was an illusion of how the harness worked: it repeated the experiment **inside one program run**, where a computer is perfectly deterministic, so bit-for-bit identical answers were guaranteed by construction. Run the same experiment in a *fresh* program run, and the compiler may order the arithmetic microscopically differently — differences around the fifteenth decimal place. In most software that's irrelevant. In a climate model it is not, because the atmosphere is **chaotic**: any tiny difference doubles and redoubles (the famous "butterfly effect") until, after 60 simulated days, it has grown to the size of real weather variability.
+
+Measured directly: the same controller on the same starting climates, run twice, differs by up to 0.049 K per climate — typically **0.014–0.017 K per run**. From here on it helps to talk in **millikelvins (mK)** — thousandths of a degree. The cooling target is 100 mK. The chaos noise is ~14–17 mK *per individual run*. The effects the project had been hunting were ~5 mK. We had been trying to read a 5 mK signal with a 15 mK-jittery instrument, reassured by a noise meter that was blind to the jitter.
+
+## 7.3 The deepest finding: the "tie" was baked into the design
+
+Why did the adaptive AI never beat the fixed plan? The audit's answer: **because the experiment gave it literally nothing to adapt to.** All 20 test climates were grown from one parent ocean state, at one time of year, in a model with no random weather — they differ only in tiny atmospheric wiggles. At the moment of the controller's first decision, **11 of its 13 input features were exactly zero by construction**, and the remaining two differed across climates by less than a ten-thousandth of a degree. The controller was a thermostat installed in a house where the temperature never changes.
+
+A Monte Carlo calculation (a simulation of the experiment itself) made it quantitative: even a mathematically *perfect* feedback controller could beat the static pattern by at most **~6 mK** in this setup — below the ~8–13 mK smallest effect the experiment could detect. The "underpowered" verdicts were preordained before a single run. And the earlier conclusion that resolving the question "needs more test climates and seeds, not more code" was exactly backwards: no amount of data can detect headroom that the design removed.
+
+## 7.4 And the rulebook hadn't actually been followed
+
+The pre-registration — the frozen rulebook meant to keep us honest — had been quietly violated in several ways: every experiment used **one** training seed where the rules required at least three; results were scored on a day-60 snapshot where the rules froze a final-10-day average (never implemented anywhere); the significance check in the code was a home-made "2 standard errors" shortcut instead of the registered t-test — and under the proper test, v1's celebrated "AI beats static" moment *was never significant in the first place*; one rainfall comparison was computed, failed, and went unreported; and the same 10 held-out climates had been peeked at roughly 141 times across selection, probing, and gating — meaning any *future* "significant" result on them would be uninterpretable, like grading students on exam questions they had already seen.
+
+The audit's blunt summary: **at that moment the project had no statistically significant positive result at all.** But it also produced something better than a verdict — a costed, ranked plan for getting one. Step one: fix the measuring instrument (**Tier 1**). Step two: give feedback a problem it can actually solve (**Tier 2**). The rest of this report is what happened when we executed that plan.
+
+> **New terms:** *Chaos / the butterfly effect* = in a chaotic system, microscopic differences grow exponentially until they're as big as the weather itself. *Millikelvin (mK)* = a thousandth of a degree; the cooling target is 100 mK. *Selection artifact (winner's curse)* = when you pick the best-looking of many noisy options, its score is inflated by luck, so it disappoints on re-measurement.
+
+---
+
+# Part 8 — Tier 1: rebuilding the measuring instrument
+
+Tier 1 (built in about a day, run 2026-07-30/31) attacked the measurement problem directly, with five fixes:
+
+- **Micro-ensembles.** Instead of measuring each (controller, climate) pair with a single rollout, run **eight near-clones** — each nudged by an imperceptible 0.001 K so chaos sends them down different weather paths, each with its own paired no-MCB baseline — and average them. Averaging 8 noisy readings shrinks random error by √8 ≈ 2.8×. (Weather forecasters have used this "ensemble" trick for decades; we borrowed it for measurement.)
+- **Fresh test climates.** A brand-new set of 20 starting climates that no one — human or algorithm — had ever looked at, retiring the exhausted old ten. Every later experiment got its own fresh set too.
+- **The registered metric, actually implemented.** Results are now scored on the average over the final 10 days, as the rulebook always required — not a single-day snapshot.
+- **Real statistics.** The registered paired t-test and the Wilcoxon test (a backup that uses only rankings, so one weird case can't swing it) — plus a new tool, **equivalence testing (TOST)**. Ordinary tests can only *fail to find* a difference, which is not the same as showing there is none; an equivalence test can positively demonstrate "whatever difference exists is smaller than X." It converts an "underpowered" shrug into a hard bound.
+- **Bug fixes and an amendment log.** The audit's newly found code bugs were fixed (the best one: a degrees-versus-radians mix-up that made the "tropical band" feature cover the entire globe), and every deviation from the rulebook is now formally logged as a numbered amendment in `PREREGISTRATION.md`.
+
+The campaign took under three GPU-hours and worked exactly as predicted: measurement uncertainty on each arm dropped **5×** (from ±7 mK to ±1.4 mK), the micro-ensembles directly measured the chaos noise at 13–14 mK per run, and the corrected cross-process harness measured 16 mK where the old one had reported zero.
+
+**Tier-1 results (20 fresh climates, registered 10-day metric):**
+
+| Arm | Cooling achieved | Verdict |
+|---|---|---|
+| **Static pattern** | **−0.1023 ± 0.0014 K** | **PASS — on target, with real statistical power** |
+| AI feedback controller (v3) | −0.0938 ± 0.0015 K | in band |
+| Open-loop schedule | −0.0914 ± 0.0014 K | in band |
+
+The AI-versus-static and AI-versus-open-loop comparisons came out as ties once more — but this time the ties have teeth: **any feedback effect is within ±4.5 mK at 95% confidence**, under 5% of the target signal, in an environment whose theoretical ceiling for a *perfect* controller was ~6 mK (Part 7.3). The feedback question for *this* task was now closed quantitatively rather than shrugged at.
+
+Tier 1 took the project's tally from zero significant results to two:
+
+1. **A confirmatory positive:** gradient-based optimization through the differentiable model produces a brightening pattern that hits the −0.1 K target on never-before-seen climates (−0.1023 ± 0.0014 K).
+2. **A significant bounded negative:** in an environment with nothing to correct, feedback of any kind is worth less than 4.5 mK — and Part 7.3 explains *why*.
+
+(One protocol footnote, duly logged: the trained arms here were the existing single-seed v3 networks, re-evaluated on the new instrument. The ≥3-seeds rule kicks in from Tier 2 onward, where new training-based claims are made.)
+
+---
+
+# Part 9 — Tier 2: giving the controller something to correct
+
+A thermostat is pointless in a house whose temperature never changes. Tier 2 (run 2026-07-31 → 08-01, ~26 GPU-hours) finally built the house with drafts — by injecting a realistic uncertainty that a real MCB deployment would face and that a fixed plan *cannot* handle.
+
+**The uncertainty: seeding efficacy.** How much brightening does a given spraying effort actually deliver? In the real world this is the biggest question mark of all (aerosol–cloud interaction is the largest stated uncertainty in climate projection). So each 60-day episode now draws a hidden **efficacy multiplier η** ("eta"), uniformly between 0.6 and 1.4. The controller *commands* a brightening; the world silently delivers η × command; η is never revealed. A fixed plan tuned for η = 1 must now miss the target roughly in proportion to how far η landed from 1 — while a feedback controller can watch the *realized* cooling and compensate. A pre-registered "manipulation check" confirmed the knob works: the static pattern's mean miss grows from 5.4 to 19.8 mK under η-uncertainty.
+
+**A new competitor: the PI controller.** Before asking whether the *neural network* could exploit this, we added the honest yardstick — a **proportional–integral (PI) controller**, the hundred-year-old workhorse of control engineering, the law inside thermostats and cruise control. Ours is a "deadbeat" variant a few lines long: *from the cooling realized so far, estimate what η must be; divide the command by that estimate.* No training, no learning, no gradients.
+
+**Tier-2 results — mean miss of the −0.1 K target (20 fresh climates, hidden η per episode):**
+
+| Controller | Mean miss (mK) | vs static |
+|---|---|---|
+| Static pattern (η-blind) | 20.2 ± 2.5 | — |
+| Open-loop schedule (trained, 3 seeds) | 19.7 ± 2.2 | tie |
+| Neural feedback (trained, 3 seeds) | 18.7 ± 2.2 | tie (p = 0.42) |
+| **PI controller (no training)** | **10.1 ± 1.6** | **halves the error — p = 0.0006** |
+
+Two significant findings, both pre-registered:
+
+1. **Feedback control demonstrably works here — the project's first significant feedback win.** The PI controller halves the error (better on 16 of 20 climates; the result survives every robustness check we could throw at it). Its mechanism was verified directly: its command tracks the hidden efficacy almost perfectly (correlation −0.94). A pre-registered asymmetry appeared exactly as predicted: when the world over-delivers (η > 1), backing off is easy and the controller is near-perfect (4.5 mK); when the world under-delivers (η < 1), the 0.09 brightening cap blocks pushing harder (15.7 mK) — an actuator limit, not physics.
+2. **The trained neural network is significantly *worse* than the PI controller** (p = 0.007) and indistinguishable from static. The diagnosis, verified from the training records: a **training** failure, not an information problem — the PI controller gets its skill from two input features the network also receives. Gradients backpropagated through 60 days of chaotic weather simply never converge: all six training runs sat flat at the noise floor, and the resulting networks nudge in the *correct direction* but at 5–10× too little strength — vestigial feedback.
+
+The uncomfortable moral of Tier 2: given a genuinely solvable feedback problem, the differentiable climate model's gradients — the project's founding technology — lost, decisively, to a few lines of 1920s control theory.
+
+---
+
+# Part 10 — Tier 2b: if the AI can't learn it, teach it
+
+Tier 2's diagnosis suggested its own remedy. If the neural network fails only because *training through chaos* doesn't converge — not because it lacks the inputs or the capacity — then bypass the chaos: **teach the network the PI law directly.** This is called **distillation** (or imitation learning): generate a large batch of synthetic "situations," compute the PI law's answer for each, and train the network by ordinary supervised regression to copy it. No climate model in the loop, no chaos, no noise — it takes minutes. Then **fine-tune** the copy with BPTT through the climate model, starting from inside a known-good solution. Two pre-registered questions: **H5** — does the neural controller now beat the static pattern? And the more ambitious **H4** — can learning *exceed* the classical law? (There was real room to: the PI law can only scale one fixed pattern up and down, so when efficacy is low it slams into the brightening cap — a smarter policy could recruit *more ocean area* instead.)
+
+**Attempt 1: a gate earns its keep.** The campaign's pre-registered quality gate killed the first attempt after 23 minutes: the distilled network behaved exactly like the static pattern. The measured cause is a lesson in itself — the synthetic practice situations had been sampled around zero, but two of the real climate's input features sit far from zero (3.7 and 8.5 standard deviations outside the practice range). Confronted with numbers unlike anything in its training data, the network froze its correction at "change nothing." The fix: measure the real model's actual operating point, generate the practice data around it, and add a numerical-conditioning trick (train on rescaled features, then fold the rescaling back into the network's first layer so the saved network is unchanged in form). Logged as a formal amendment; pinned by a regression test.
+
+**Attempt 2 passed every gate** — the copy was near-perfect (mean copying error under 0.002 albedo), and on validation climates the imitation-only network already scored at PI level. The full campaign (~11.5 hours) then fine-tuned three seeds and evaluated everything on 20 brand-new climates with a fresh η stream.
+
+**Tier-2b results — mean miss of the target (20 fresh climates):**
+
+| Controller | Mean miss (mK) |
+|---|---|
+| Static pattern | 19.5 ± 2.7 |
+| PI controller | 9.3 ± 1.6 |
+| Imitation-only network | 8.2 ± 1.5 |
+| **Fine-tuned network (3 seeds pooled)** | **7.9 ± 1.2** |
+
+- **H5 — SIGNIFICANT: the headline of the entire project.** The fine-tuned neural controller beats the static pattern by **−11.6 mK (p = 0.00025** after multiple-comparison correction; the rank-based test agrees at p = 0.0002). It wins on 18 of 20 climates; the verdict survives dropping any single climate (worst case p = 0.0003), and resampling the data 10,000 ways puts the true effect between −16 and −7 mK. **The project's founding claim — a neural feedback controller demonstrably outperforming a static deployment — is finally supported**, with the strongest statistics of the entire effort.
+- **H4 — null.** The fine-tuned network does *not* beat the PI controller (−1.5 mK, p = 0.20; provably within ±3.4 mK). Learning did not exceed the hand-designed law. The "recruit more area when efficacy is low" hope showed a suggestive trend (p = 0.053) — real enough to motivate a follow-up, not real enough to claim.
+- **The kicker.** Fine-tuned ≈ imitation-only, provably within ±2.4 mK: the gradient fine-tuning — BPTT through the differentiable climate model, the founding technology — **added essentially nothing**, even when started inside a known-good solution. Every bit of the network's demonstrated skill was put there by copying the classical controller. (This was one of the pre-stated possible outcomes: "the chaos-gradient bottleneck persists even from a good basin.")
+- And the PI controller beat static for the **third time, on a third independent climate set** — that result is now as replicated as anything in the project.
+
+---
+
+# Part 11 — The Honest Bottom Line
 
 ## What genuinely worked
 
-- **The differentiable climate model is real and valuable.** You can compute gradients all the way through a coupled atmosphere–ocean–land simulation and use them to optimize. This is the novel engineering achievement, and it survived every round of scrutiny.
-- **Differentiable optimization finds a good, physically sensible MCB plan.** Once the physics was fixed, the optimizer put the brightening exactly where real MCB belongs — the subtropical stratocumulus cloud decks — and hit the cooling target on the nose (−0.097 K vs. a −0.1 K goal), on climates it had never seen.
+- **The differentiable climate model is real and valuable.** Gradients flow correctly through a coupled atmosphere–ocean–land simulation. This survived two audits and every campaign.
+- **Differentiable optimization designs a good static plan — now confirmed with power.** The optimized pattern hits the cooling target on never-touched climates: −0.1023 ± 0.0014 K against a −0.1 K goal (Tier 1).
+- **A neural feedback controller can provably beat a static plan under realistic uncertainty.** Under hidden efficacy variation, the imitation-initialized network wins by −11.6 mK, p = 0.00025 — the founding claim, finally supported (Tier 2b).
 
 ## What didn't
 
-- **The headline idea — that an adaptive AI feedback controller beats a simple fixed plan — was never demonstrated.** After correcting all the bugs, the AI is *on par with* a static pattern and *indistinguishable from* a fixed open-loop schedule. The "look at the state and react" ability we were most excited about adds nothing we can statistically prove.
-- **Every earlier "success" (Stages 1–5) was an artifact** of the seven bugs — broken averages, un-converged training, the wrong physics, a dead land model, and statistics run on noise.
+- **Training the controller *through the simulation*.** BPTT through 60-day chaotic rollouts neither discovered the feedback law from scratch (Tier 2: trained networks ≈ static, significantly worse than PI) nor improved it when handed it on a plate (Tier 2b: fine-tuning ≈ imitation, within ±2.4 mK). The measured mechanism: ~12–17 mK of per-run chaos noise buries the gradient signal at any practical budget.
+- **Both generations of wishful results.** The original Stages 1–5 dissolved under the first audit (seven root causes); the rebuild's own consolation claims — the "halved loss," the zero noise floor, the "generalizing improvement direction" — dissolved under the second. What survived is what was pre-registered, replicated, and adversarially re-derived.
+
+## The four significant results
+
+1. **Confirmatory positive (Tier 1):** the gradient-optimized static pattern hits the target on fresh climates, −0.1023 ± 0.0014 K.
+2. **Significant bounded negative (Tier 1):** with nothing to correct, feedback of any kind is worth less than 4.5 mK — and the design analysis explains why (a ~6 mK ceiling).
+3. **Classical feedback halves the efficacy-uncertainty error (Tier 2, replicated 3×):** 20 → 10 mK, p = 0.0006 — while directly-trained neural controllers fail to realize the same gain (a measured training failure, not an information limit).
+4. **An imitation-initialized neural controller significantly beats static deployment (Tier 2b):** −11.6 mK, p = 0.00025 — with fine-tuning contributing provably nothing beyond the imitation.
+
+## The one-sentence headline
+
+**A neural network controller *can* demonstrably steer a climate intervention under realistic uncertainty — but in this project every bit of that ability came from imitating hundred-year-old control theory, and none of it from gradient training through the climate model itself.** The differentiable model's proven value is *design* (finding the spatial pattern); its value for *training controllers* through long chaotic rollouts is, on this evidence, bounded near zero — and we can say exactly why.
 
 ## What's still open (honestly)
 
-The final feedback question isn't proven *negative* — it's **underpowered**. The possible benefit (~0.005 K) is about the same size as our measurement uncertainty (~0.004–0.006 K). Resolving it would need more test climates and more random seeds, not more code. There's also one small unresolved engineering item (a numerical-precision detail called the "x64 dtype" fix) that doesn't affect any conclusion.
+- **Can learning ever exceed the classical law?** The low-efficacy "recruit more area" trend (p = 0.053) is the natural next experiment — it needs either more test climates or a design that isolates the cap-limited episodes.
+- **The idealized observer.** All feedback controllers here read a noiseless measurement of the realized cooling, computed against a paired counterfactual baseline — something no real deployment could have. Adding observation noise is the external-validity test still to run.
+- **Scope.** Everything holds for one season, one ocean state, a slab ocean with no currents, a 60-day horizon, an in-model forcing at or beyond published MCB feasibility, and with the model's stratocumulus-analog cloud deck unperturbed. These are statements about control and optimization in a differentiable climate model — not deployment guidance for real MCB.
 
 ## The scientific lesson
 
-This is what good science looks like when it's working: a chain of exciting-looking results was checked rigorously, most of it dissolved into noise and bugs, and what remained was a smaller but *trustworthy* truth. The corrected result — *differentiable optimization yields a good static cloud-brightening plan, but adaptive neural feedback adds nothing you can demonstrate over a fixed plan* — is a genuine, publishable, defensible finding. It's less flashy than "AI controls the climate," but unlike the original claims, it's actually true.
+Twice this project tore down its own results — and both teardowns made the final product stronger. The first audit found broken code; the second found something subtler: *correct* code measuring the wrong thing, a noise meter blind to the dominant noise, and an experiment whose null result was guaranteed by its own design. The way out was not more compute but better *measurement* (micro-ensembles, equivalence bounds, fresh test sets) and a better *question* (inject the very uncertainty that feedback exists to fight). The final story is smaller than "AI controls the climate," but it is coherent, mechanistic, replicated — and true.
 
 ---
 
 ## Where to look next in the codebase
 
-- **`MCB_IMPLEMENTATION_PLAN.md`** — the detailed engineering log: the full audit (R1–R7), the rebuild, and the campaign-by-campaign numbers (v1/v2/v3 sections at the top).
-- **`PREREGISTRATION.md`** — the frozen, pre-committed rules for the final experiments.
-- **`jcm/mcb/`** — the controller, the loss, the coupled training loop, and the pre-registered gates (`gates.py`).
-- **`run_gradient_probe.py`** — the v3 diagnostic that showed v2's negative was a training artifact.
-- **`jcm/physics/speedy/shortwave_radiation.py`** — where MCB now correctly brightens cloud albedo (the R6 fix).
+- **`MCB_META_AUDIT.md`** — the second audit, and (in its addenda) the full Tier-1/2/2b campaign numbers behind Parts 7–10.
+- **`MCB_IMPLEMENTATION_PLAN.md`** — the detailed engineering log of the original effort: the first audit (R1–R7), the rebuild, and campaigns v1/v2/v3.
+- **`PREREGISTRATION.md`** — the frozen rules, now with the formal amendment log (Amendments 1–4) covering every Tier-1/2/2b design decision.
+- **`jcm/mcb/gates_stats.py`** — the paired t / Wilcoxon / equivalence (TOST) statistics behind every verdict, in pure NumPy with its own test suite.
+- **`run_confirmatory_eval.py`** — the micro-ensemble evaluation harness (and the PI controller) used by all three campaigns.
+- **`run_noise_floor.py --cross-process`** — the corrected chaos-noise measurement (Part 7.2).
+- **`run_pi_imitation.py`** — the Tier-2b distillation of the PI law, including the feature-anchoring fix.
+- **`run_campaign_confirm.sh` / `run_campaign_tier2.sh` / `run_campaign_tier2b.sh`** — the gated, resumable campaign scripts exactly as run.
+- **`analyze_tier2.py` / `analyze_tier2b.py`** — the primary analyses, written and frozen before the data existed.
+- **`jcm/physics/speedy/shortwave_radiation.py`** — where MCB correctly brightens cloud albedo (the R6 fix).
