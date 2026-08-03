@@ -454,6 +454,53 @@ t2_manipulation_check.pkl, t2_widening_probe.pkl, t2_feedback_s4*, t2_openloop_s
 ics_t2_eval}`, `campaign_tier2.log`; local copies + verification transcripts in the session
 scratchpad (`tier2/`, workflow wf_7a76e9e1).
 
+## Addendum 3 — Tier-2b results: PI-imitation initialization (2026-08-02/03)
+
+The Tier-2b campaign (Amendment 4 + revision 1) tested the verified Tier-2 diagnosis by initializing
+the NN via supervised distillation of the PI law. Attempt 1 was stopped in 23 minutes by the
+pre-registered imitation gate: the distilled net behaved exactly like static (19.4 mK) because the
+real model's absolute-SST features (measured f11 = −1.83, f12 = −4.23) sat 3.7–8.5σ outside the
+synthetic sampling. After the fix (sampling anchored at the measured operating point; training on
+standardized features folded back into the first-layer weights; regression test at the real
+operating point), attempt 2 passed every gate — imitation-only scored 10.7 mK on validation,
+already at PI level — and ran to completion (~11.5 h). Eval: 20 FRESH ICs (seeds 6000–6019, first
+confirmatory use), fresh antithetic η stream (seed 930), k=4 members, registered tail metric.
+All numbers independently recomputed from per-IC data (match to the recorded analysis).
+
+**Results, mean |dSST_10d − target| (n=20):** static 19.5 ± 2.7 mK; **PI 9.3 ± 1.6**;
+**imitation-only 8.2 ± 1.5**; **fine-tuned NN (pooled 3 seeds) 7.9 ± 1.2** (per-seed 6.9/8.5/8.2 —
+tight, unlike Tier-2's direct-BPTT spread).
+
+**Primary hypotheses (Holm):**
+- **H5 — the fine-tuned neural controller SIGNIFICANTLY beats the static pattern: −11.6 mK,
+  Holm p = 2.5e-4** (Wilcoxon 2.1e-4). The project's founding claim — a neural feedback controller
+  demonstrably outperforming a static deployment — is finally supported, with the strongest
+  statistics of the entire effort.
+- **H4 — fine-tuned NN vs PI: NULL** (−1.5 mK, p = 0.20; TOST |effect| < 3.4 mK). Learning did not
+  demonstrably exceed the hand-designed law.
+
+**Secondaries (pre-registered):** imitation-only ≈ PI (−1.2 mK, n.s., equivalence < 3.2 mK) —
+distillation transferred fully; **fine-tuned ≈ imitation-only (−0.3 mK, n.s., equivalence
+< 2.4 mK) — gradient fine-tuning added essentially nothing**, the pre-stated outcome "the
+chaos-gradient bottleneck persists even from a good basin." The η<1-stratified fine-tuned-vs-PI
+comparison (the widening hypothesis) is suggestive but not significant (−2.9 mK, p = 0.053).
+Behaviorally, all learned arms carry full-strength feedback (command-vs-η r = −0.91 to −0.95,
+matching PI's −0.93 — versus direct BPTT's vestigial −0.64 to −0.74 in Tier-2). PI-beats-static
+replicated for the third time on a third independent IC set and η stream (9.3 vs 19.5 mK).
+
+**Tier-2b's contribution to the honest headline:** *a neural feedback controller CAN significantly
+beat static deployment under efficacy uncertainty — but the capability was put there by imitating a
+classical controller, not by gradient training through the climate model. Differentiable-simulator
+gradients neither found the feedback law from scratch (Tier-2) nor measurably improved upon it once
+given it (fine-tuning ≈ imitation, bounded within 2.4 mK).* The differentiable-GCM's demonstrated
+optimization value remains spatial-pattern design (Tier-1); its BPTT policy-gradient value at these
+horizons is, on this evidence, bounded near zero — with the ~12 mK/run chaos noise as the measured
+mechanism.
+
+Artifacts: `diya:mcb_experiments_gpu/{tier2b_eval.pkl, tier2b_eval_analysis.pkl,
+t2b_imitation_gate.pkl, t2b_imitation_s5*.pkl, t2b_finetuned_s5*, ics_t2b_eval}`,
+`campaign_tier2b.log`; local copies in the session scratchpad (`tier2b/`).
+
 ## Appendix B — Provenance
 
 - Raw artifacts pulled 2026-07-29 from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/` (eval_final/v2/v3,

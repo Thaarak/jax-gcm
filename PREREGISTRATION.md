@@ -239,3 +239,64 @@ Tier-2 GPU run, so the freeze is intact):**
    authority on the bang-bang pattern (η<1 episodes) is a pre-registered reportable property.
    Expected effects on the realized antithetic draws: static mean|err| ~20 mK; a perfect
    compensator leaves ~2 mK; detection floor ~2 mK (k=4, n=20).
+
+### Amendment 4 — Tier-2b: PI-imitation initialization (frozen 2026-08-02, BEFORE any Tier-2b GPU run)
+
+**Motivation.** Tier-2 (Addendum 2 of MCB_META_AUDIT.md) showed classical deadbeat feedback halves
+efficacy-uncertainty error (10.1 vs 20.2 mK) while BPTT-trained NNs stay at static level — a verified
+TRAINING failure (flat losses at the static-under-η floor, gradient coherence ~0.45), not an
+information or authority limit. Tier-2b tests the diagnosis's remedy: initialize the NN by
+supervised imitation of the PI law (a noiseless regression onto the same features), then fine-tune
+with BPTT. The open scientific question: can a learned policy EXCEED PI by widening deployment on
+low-η episodes, where the cap blocks PI's pattern-scaling but the widening probe measured flat
+cooling efficiency (−3.4 to −3.6 K per unit forcing)?
+
+**Imitation (run_pi_imitation.py).** Target = clip(pattern × pi_gain(f0, f10), 0, cap) over synthetic
+feature batches covering f0 (realized dSST) ∈ [−0.25, 0.05], f10 (time fraction) ∈ {0, .25, .5, .75},
+other features sampled broadly (teaches initial invariance); MSE, Adam; 3 init seeds (52, 53, 54);
+fidelity acceptance: mean |NN − PI| output error < 0.002 albedo on a held-out feature grid, and a
+FakeCoupler closed-loop check within 1 mK of PI.
+
+**Gate (before fine-tuning spend).** Imitation-only policy evaluated under η-randomization on the
+Tier-2 validation ICs (seeds 4010–4015, k=2): mean |dSST_10d − target| must be < 15 mK (PI reference
+~10–12; static ~20). Failure = distillation failed; stop and report.
+
+**Fine-tuning.** run_stage5_training from each imitation checkpoint: loss_mode=tail_dsst,
+select-on-heldout (validation = 4010–4015, antithetic η), per-epoch η redraws, in-process baselines,
+learning-rate 1e-3 (10× lower than Tier-2: protect the init), 30 epochs, patience 15, cap 0.09,
+CI 15, 60 d. Training ICs = seeds 4000–4009 (reused; training-data reuse is permitted).
+
+**Evaluation.** FRESH confirmatory ICs seed0=6000 (n=20; the 5000s are spent by Tier-2 gates); FRESH
+antithetic η stream seed 930; k=4 members, in-process member baselines; registered 10-day tail
+metric; arms: static, pi, imitation_s52 (no fine-tune), finetuned_s52/s53/s54.
+
+**Hypotheses (primary family, Holm, α=0.05, paired t on per-IC |dSST_10d − target|, pooled = per-IC
+mean over the 3 fine-tuned seeds; significance requires the NN-favorable direction;
+analyze_tier2b.py pre-committed):**
+- H4: fine-tuned NN (pooled) beats PI.
+- H5: fine-tuned NN (pooled) beats static.
+**Secondary (reported, ungated):** imitation-only vs PI (TOST equivalence: did distillation
+transfer?); fine-tuned vs imitation-only (did fine-tuning add anything?); η<1-stratified fine-tuned
+vs PI (the widening mechanism must concentrate gains there); per-seed values; G2 band; forcing-vs-η
+response correlations.
+
+**Decision rules.** As Amendment 3 (paired t governs; TOST bounds for nulls; all runs reported).
+Interpretation grid pre-stated: H4 sig + η<1-concentrated = learning exceeds hand design via
+widening; H4 null + imitation≈PI = distillation transfers but gradients add nothing (chaos-gradient
+bottleneck persists even from a good basin); imitation-only ≉ PI = distillation itself fails
+(feature-space mismatch between synthetic and rollout distributions).
+
+**Amendment 4, revision 1 (2026-08-02, after the imitation gate fired; BEFORE any fine-tuning or
+confirmatory-eval spend — the seed-6000 eval set was generated but never evaluated on):** the first
+campaign attempt stopped at the pre-registered imitation gate (static 19.8 / PI 12.1 / imitation-only
+19.4 mK — distillation did not transfer; the net behaved exactly like static). Root cause, measured:
+the real model's absolute-SST features sit at f11 ≈ −1.83 and f12 ≈ −4.23, i.e. −3.7σ / −8.5σ outside
+the synthetic sampling (N(0, 0.5)), where the MLP extrapolated to a frozen gain ≈ 1. Fix (pre-launch
+of attempt 2): (a) nuisance-feature sampling anchored at the measured operating point with generous
+widths (f11 ± 1.5, f12 ± 2.0; anomaly features widened to cover mid-rollout scales incl. heat flux
+± 5σ); (b) distillation trains on standardized features with the standardization FOLDED into the
+first-layer weights afterwards (mathematically identical network on raw features; required because
+raw-scale nuisance inputs made the wide-range regression unoptimizable); (c) new regression test
+pins fidelity at the measured operating point. The PI-vs-static replication observed at the gate
+(12.1 vs 19.8 mK on the validation ICs, fresh η stream) is noted as corroborating Tier-2's headline
+on an independent draw. Gate threshold, hypotheses, splits, and η streams unchanged.
