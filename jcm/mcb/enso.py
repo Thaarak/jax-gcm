@@ -27,6 +27,12 @@ from typing import NamedTuple, Tuple
 import jax.numpy as jnp
 
 
+# Nino3.4 box (single source of truth — the pacemaker, the realized index,
+# and the controller's absolute-box feature must agree on it).
+NINO34_LAT_BOUNDS: Tuple[float, float] = (-5.0, 5.0)
+NINO34_LON_BOUNDS: Tuple[float, float] = (190.0, 240.0)   # 170W-120W
+
+
 class EnsoConfig(NamedTuple):
     """Configuration for the ENSO pacemaker.
 
@@ -54,8 +60,8 @@ class EnsoConfig(NamedTuple):
     ramp_days: float = 30.0
     relax_tau_days: float = 5.0
     phase0: float = 0.0
-    lat_bounds: Tuple[float, float] = (-5.0, 5.0)
-    lon_bounds: Tuple[float, float] = (190.0, 240.0)
+    lat_bounds: Tuple[float, float] = NINO34_LAT_BOUNDS
+    lon_bounds: Tuple[float, float] = NINO34_LON_BOUNDS
     taper_lat_deg: float = 3.0
     taper_lon_deg: float = 10.0
 

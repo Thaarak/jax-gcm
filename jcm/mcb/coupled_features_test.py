@@ -222,5 +222,87 @@ class TestTerrainActivation(unittest.TestCase):
         self.assertGreater(float(jnp.sum(terrain.fmask)), 0.0)
 
 
+class TestNinoBoxFeature(unittest.TestCase):
+    """Tests for the absolute Nino3.4 box feature (ENSO experiment, fc14)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.coords = get_speedy_coords()
+
+    def _extract(self, carry, config, time_fraction=0.0):
+        baseline = CoupledBaseline.from_coupled_carry(carry, self.coords)
+        return extract_coupled_features(
+            carry, baseline, self.coords, config, time_fraction=time_fraction
+        )
+
+    def test_dim_is_14_with_all_flags(self):
+        config = CoupledFeatureConfig(include_absolute_sst=True,
+                                      include_nino_box=True)
+        self.assertEqual(get_coupled_feature_dim(config), 14)
+        self.assertFalse(CoupledFeatureConfig().include_nino_box)
+
+    def test_appended_at_end_first_13_unchanged(self):
+        carry = make_fake_carry(self.coords, sst_value=290.0)
+        f13 = self._extract(
+            carry, CoupledFeatureConfig(include_absolute_sst=True),
+            time_fraction=0.5)
+        f14 = self._extract(
+            carry, CoupledFeatureConfig(include_absolute_sst=True,
+                                        include_nino_box=True),
+            time_fraction=0.5)
+        self.assertEqual(f14.shape, (14,))
+        self.assertTrue(jnp.array_equal(f14[:13], f13))
+
+    def test_uniform_sst_value(self):
+        """On uniform 302 K SST the feature is 302 - 300 = 2."""
+        carry = make_fake_carry(self.coords, sst_value=302.0)
+        f14 = self._extract(
+            carry, CoupledFeatureConfig(include_absolute_sst=True,
+                                        include_nino_box=True))
+        self.assertAlmostEqual(float(f14[13]), 2.0, places=4)
+
+    def test_sees_box_anomaly_not_far_field(self):
+        """A +2 K anomaly inside the box moves the feature by ~+2; the same
+        anomaly in the Atlantic moves it not at all.
+        """
+        from jcm.mcb.enso import EnsoConfig, nino_pattern
+        shape = self.coords.horizontal.nodal_shape
+        base = jnp.full(shape, 300.0)
+        core = (nino_pattern(self.coords.horizontal,
+                             EnsoConfig(taper_lat_deg=1e-6,
+                                        taper_lon_deg=1e-6)) >= 0.999)
+        cfg = CoupledFeatureConfig(include_absolute_sst=True,
+                                   include_nino_box=True)
+
+        carry_box = make_fake_carry(
+            self.coords, sst_field=base + 2.0 * core)
+        f_box = self._extract(carry_box, cfg)
+        self.assertAlmostEqual(float(f_box[13]), 2.0, places=3)
+
+        atlantic = nino_pattern(
+            self.coords.horizontal,
+            EnsoConfig(lon_bounds=(320.0, 340.0), taper_lat_deg=1e-6,
+                       taper_lon_deg=1e-6)) >= 0.999
+        carry_atl = make_fake_carry(
+            self.coords, sst_field=base + 2.0 * atlantic)
+        f_atl = self._extract(carry_atl, cfg)
+        self.assertAlmostEqual(float(f_atl[13]), 0.0, places=4)
+
+    def test_checkpoint_expansion_13_to_14_is_identity_on_old_features(self):
+        """expand_policy_input(13 -> 14) leaves the policy output unchanged
+        for any value of the new feature (zero row).
+        """
+        import jax
+        from jcm.mcb.policy import MCBPolicyMLP, expand_policy_input
+        policy = MCBPolicyMLP(output_shape=(8, 4), hidden_dims=(16,),
+                              max_perturbation=0.09)
+        p13 = policy.init(jax.random.PRNGKey(0), jnp.zeros(13))
+        p14 = expand_policy_input(p13, 13, 14)
+        feats = jnp.linspace(-1.0, 1.0, 13)
+        out13 = policy.apply(p13, feats)
+        out14 = policy.apply(p14, jnp.concatenate([feats, jnp.array([7.7])]))
+        self.assertTrue(jnp.array_equal(out13, out14))
+
+
 if __name__ == "__main__":
     unittest.main()
