@@ -342,3 +342,19 @@ Jan–Feb (Amazon wet season; Sahel dry season, which partly explains the tight 
 **Forward rule (binding on any future precipitation gate).** Before any controller comparison on
 precipitation may be scored: (1) implement and record the §3 interval-mean metric; (2) measure the
 precip noise floor at the experiment's horizon; (3) intersect the region masks with the land mask.
+
+### Pre-amendment note — ENSO scoping run (logged 2026-08-08; exploratory calibration, no gates)
+
+Next experiment: closed-loop MCB feedback against imposed ENSO variability (the 2026-08-03
+verified direction; no published study closes this loop — Lee et al. 2025 GRL is feedforward+PI
+against warming only). Before any design freeze, `run_enso_scoping.py` measures the two unknowns
+the design depends on: (a) this model's GMST-per-Nino3.4 sensitivity (no published SPEEDY+slab
+number; obs reference ~0.11 K/K at ~3-month lag, Trenberth et al. 2002) and (b) the long-horizon
+chaos noise floor from control-member spread. Mechanism: Molteni-2024-style pacemaker —
+SST relaxation (tau = 5 d) toward a commanded step anomaly (+/-2 K, 30-day ramp) inside a tapered
+Nino3.4 mask, relaxing against a paired no-ENSO control trajectory (relaxation, not q-flux, per
+Dommenget 2010 slab-amplification; `jcm/mcb/enso.py`, phase driven by sim_time). This run is
+EXPLORATORY instrument calibration (like the Tier-1 noise floor): no gates, no hypotheses, and
+its ICs/outputs will not be reused for any confirmatory claim. The ENSO experiment itself will be
+frozen as a numbered amendment (arms, hypotheses, splits, n x k, horizon) BEFORE any gated GPU
+campaign, informed by these calibration numbers.
