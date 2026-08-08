@@ -2,7 +2,7 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12).*
 
 ---
 
@@ -322,6 +322,22 @@ Twice this project tore down its own results — and both teardowns made the fin
 
 ---
 
+# Part 12 — Closing the books on rainfall
+
+One loose end remained after Part 11, and it was an integrity debt as much as a science question. Remember the original worry from Part 1: cooling the ocean in the wrong place might dry out the Amazon or the Sahel. Every campaign since Tier 1 had quietly *recorded* the Amazon and Sahel rainfall change of every single run — and nothing had ever analyzed those numbers. Worse, the second audit found that back in v3 a rainfall comparison had been computed, had come out as a FAIL, and had simply gone unreported. Before any writeup, both had to be dealt with.
+
+So we did the cheapest experiment of the whole project: we analyzed data we already had (no new simulation time at all), with the same statistical machinery as everything else — paired tests, equivalence bounds, and a correction for the fact that we were making 40 comparisons at once (make enough comparisons and one will look "significant" by luck; the correction accounts for that).
+
+**The verdict, in three parts:**
+
+1. **No detectable rainfall harm, anywhere.** Across all three campaigns, both regions, and every controller — static pattern, PI, and all the neural variants — not a single rainfall change was distinguishable from zero, and no controller differed from the static pattern. The one nominally "significant" number in the pile (before correction) was a slight *wetting*, not a drying, and it dissolves under the correction exactly as a fluke should.
+2. **With honest bounds on what "no harm" means.** Whatever true effect exists is smaller than about 0.6–1.2 mm/day for the Amazon and 0.06–0.21 mm/day for the Sahel (at 95% confidence). The Amazon bound is honest but not tight — roughly 10–20% of its rainy-season rainfall — because a single day of regional rain fluctuates chaotically by ±3 mm/day between otherwise-identical runs. That measured noise number is itself new: it says any *future* rainfall claim needs time-averaged metrics and ensembles, exactly as the frozen rulebook already required.
+3. **The buried FAIL was a coin flip.** Re-analyzed properly, the v3 comparison that went unreported shows a difference of +0.0033 ± 0.0049 — statistically nothing, on a metric the first audit had already condemned (it carried the R4 constant-floor bug). On the cleanest subset of that data, the "failing" controller was actually numerically *better* on both regions. The sin was the silence, not any hidden harm.
+
+The books are now clean: the rulebook has a formal amendment (number 5) logging the analysis and its limits, the withdrawn rainfall gate stays withdrawn *by its own pre-registered rule* rather than by neglect, and the last known unreported result in the project's history is reported. One design note carried forward: the region boxes used for "Amazon" and "Sahel" are plain rectangles that include a sliver of Atlantic ocean, and the episodes all run January–February (Amazon wet season, Sahel dry season) — both fine for a bounded "no detectable harm" statement, both to fix before any paper leans on regional rainfall.
+
+---
+
 ## Where to look next in the codebase
 
 - **`MCB_META_AUDIT.md`** — the second audit, and (in its addenda) the full Tier-1/2/2b campaign numbers behind Parts 7–10.
@@ -333,4 +349,5 @@ Twice this project tore down its own results — and both teardowns made the fin
 - **`run_pi_imitation.py`** — the Tier-2b distillation of the PI law, including the feature-anchoring fix.
 - **`run_campaign_confirm.sh` / `run_campaign_tier2.sh` / `run_campaign_tier2b.sh`** — the gated, resumable campaign scripts exactly as run.
 - **`analyze_tier2.py` / `analyze_tier2b.py`** — the primary analyses, written and frozen before the data existed.
+- **`analyze_precip_sideeffects.py`** — the Part-12 rainfall side-effect analysis (Amendment 5; meta-audit Addendum 4).
 - **`jcm/physics/speedy/shortwave_radiation.py`** — where MCB correctly brightens cloud albedo (the R6 fix).

@@ -501,6 +501,49 @@ Artifacts: `diya:mcb_experiments_gpu/{tier2b_eval.pkl, tier2b_eval_analysis.pkl,
 t2b_imitation_gate.pkl, t2b_imitation_s5*.pkl, t2b_finetuned_s5*, ics_t2b_eval}`,
 `campaign_tier2b.log`; local copies in the session scratchpad (`tier2b/`).
 
+## Addendum 4 — Retrospective precipitation side-effect analysis (2026-08-07)
+
+Closes the two §2.4 precipitation gaps: the per-(IC, member, arm) `amazon_mm_day` / `sahel_mm_day`
+values recorded by every Tier-1/2/2b evaluation but never aggregated, and the v3 legacy Gate 3 that
+was computed FAIL and went unreported. Protocol and status (exploratory, not confirmatory — the
+recorded quantity is a day-60 snapshot, not the §3-registered interval mean) are frozen as
+PREREGISTRATION.md Amendment 5; analysis in `analyze_precip_sideeffects.py` (+ tests), zero new
+GPU-hours.
+
+**Headline: no detectable rainfall side-effect anywhere, and G5 stays WITHDRAWN by its own rule.**
+Across all three campaigns (n=20 fresh ICs each), both regions, and every arm — static, PI,
+BPTT-trained, imitation, fine-tuned — no regional precipitation change is distinguishable from
+zero after Holm correction (24-test family, min raw p = 0.044 → Holm p = 0.965; the one nominal
+hit was a Tier-2 *wetting*, direction opposite to harm). No controller differs from static on
+either region (16-test family, all n.s.). The §3 resolvability rule therefore keeps G5 withdrawn;
+what the data support instead are equivalence bounds:
+
+| Campaign | Amazon |effect| bound @95% | Sahel |effect| bound @95% |
+|---|---|---|
+| Tier-1 (k=8) | 0.64–0.76 mm/day | 0.06–0.07 mm/day |
+| Tier-2 (k=4) | 0.60–1.21 mm/day | 0.10–0.18 mm/day |
+| Tier-2b (k=4) | 0.56–0.87 mm/day | 0.08–0.21 mm/day |
+
+Measured per-run snapshot chaos noise: **2.7–3.3 mm/day (Amazon), 0.4–0.8 mm/day (Sahel)** — the
+first quantified precip noise floor in the project, and the quantitative reason any future precip
+gate needs the registered interval-mean metric plus micro-ensembles (a single-day regional snapshot
+carries ~½ σ of pure weather at k=4–8). Context for the bounds: Jan–Feb episodes put the Amazon box
+in wet season (several mm/day climatology — the bounds are ~10–20% of the regional mean, honest but
+not tight) and the Sahel box in dry season (near-zero climatology — the tight bounds partly reflect
+that). Masks are lat-lon boxes not intersected with land (some Atlantic cells in both).
+
+**v3 breach closed.** The legacy Gate 3 rule was "stage5's weighted regional precip penalty ≤
+stage4-warmstart's" — bare means over all 20 ICs (train and held-out mixed), no significance test,
+on the R4-floored softplus metric this audit's predecessor had already deprecated. It evaluated
+FALSE (1.23e-3 vs 1.07e-3) and was never reported. Reanalysis: the paired difference is
++0.0033 ± 0.0049 (p_t = 0.51, p_w = 0.50) — a coin flip inside noise; on the held-out split alone,
+stage5 is numerically (not significantly) better than the control on BOTH regions (Amazon
+−0.0024 ± 0.0064, p = 0.72; Sahel −0.0014 ± 0.0012, p = 0.25). The unreported FAIL concealed no
+real effect; the breach was in the non-reporting, not in any hidden harm.
+
+Artifacts: `diya:mcb_experiments_gpu/{confirmatory_eval.pkl, tier2_eval.pkl, tier2b_eval.pkl,
+eval_v3.pkl}` (pulled locally to `mcb_experiments_gpu/`), output `precip_sideeffects.json`.
+
 ## Appendix B — Provenance
 
 - Raw artifacts pulled 2026-07-29 from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/` (eval_final/v2/v3,

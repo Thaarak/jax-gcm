@@ -300,3 +300,45 @@ raw-scale nuisance inputs made the wide-range regression unoptimizable); (c) new
 pins fidelity at the measured operating point. The PI-vs-static replication observed at the gate
 (12.1 vs 19.8 mK on the validation ICs, fresh η stream) is noted as corroborating Tier-2's headline
 on an independent draw. Gate threshold, hypotheses, splits, and η streams unchanged.
+
+### Amendment 5 — retrospective precipitation side-effect analysis (logged 2026-08-07; exploratory,
+no new GPU data)
+
+**What.** `run_confirmatory_eval.py` recorded per-(IC, member, arm) Amazon and Sahel precipitation
+changes (`amazon_mm_day` / `sahel_mm_day`, day-60 snapshot vs the paired baseline) in every
+Tier-1/2/2b campaign, but nothing ever aggregated or reported them (meta-audit §2.4). This
+amendment logs their first analysis (`analyze_precip_sideeffects.py` + tests, committed with this
+amendment; JSON output `precip_sideeffects.json`).
+
+**Status: exploratory, not confirmatory.** (a) The recorded quantity is a single-day snapshot; the
+§3-registered metric is an interval mean, which was never implemented in the recording path — so G5
+cannot be scored as registered from this data. (b) The eval ICs were already consumed by each
+campaign's primary analyses; this is a different variable on the same runs. No confirmatory claim
+is made from this analysis.
+
+**Protocol (fixed before results were seen — the analysis script is the protocol).** Per-IC pooling
+identical to the frozen Tier-2/2b analyses (mean over members, then over seeds); paired t + exact
+Wilcoxon + TOST equivalence bounds from `jcm.mcb.gates_stats`; two Holm families (all 24 one-sample
+arm-vs-zero tests; all 16 arm-vs-static comparisons); per-run precip chaos sd estimated from the
+within-(arm, IC) micro-ensemble spread.
+
+**§3 resolvability verdict: NOT RESOLVABLE — G5 remains WITHDRAWN.** In every campaign and both
+regions the static arm is statistically indistinguishable from the do-nothing constant (0 mm/day)
+after Holm (min raw p = 0.044 → Holm p = 0.965). Equivalence bounds govern instead: any true
+regional effect of any arm is within |0.56–1.21| mm/day (Amazon) and |0.06–0.21| mm/day (Sahel) at
+95%. Measured per-run snapshot chaos sd: 2.7–3.3 mm/day (Amazon), 0.4–0.8 mm/day (Sahel).
+
+**Breach closure (Amendment-1 scope).** The v3 legacy Gate 3 ("stage5 weighted region-precip
+penalty ≤ stage4-warmstart, bare means over all 20 ICs, no significance test, R4-floored softplus
+metric") was computed FALSE (1.23e-3 vs 1.07e-3) and went unreported. Now reported. Honest
+reanalysis: the paired difference is +0.0033 ± 0.0049 (p_t = 0.51, p_w = 0.50) — a coin flip inside
+noise on a metric the 2026-07-12 audit had already deprecated; on held-out ICs alone stage5 is
+numerically (not significantly) BETTER on both regions.
+
+**Known caveats, disclosed.** Region masks are plain lat-lon boxes not intersected with the land
+mask (`jcm/mcb/mcb_regions.py`), so "Amazon" includes some Atlantic cells at T31; episodes span
+Jan–Feb (Amazon wet season; Sahel dry season, which partly explains the tight Sahel bounds).
+
+**Forward rule (binding on any future precipitation gate).** Before any controller comparison on
+precipitation may be scored: (1) implement and record the §3 interval-mean metric; (2) measure the
+precip noise floor at the experiment's horizon; (3) intersect the region masks with the land mask.
