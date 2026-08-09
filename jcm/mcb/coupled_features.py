@@ -59,12 +59,14 @@ class CoupledFeatureConfig(NamedTuple):
             conditions and seasons, enabling state-dependent behavior at
             the very first control interval. Default False preserves the
             11-feature layout of existing checkpoints.
-        include_nino_box: Include the absolute Nino3.4 box-mean SST minus
-            300 K (ENSO experiment). The imposed pacemaker anomaly is
-            applied identically to a rollout and its paired baseline, so
-            every PAIRED feature sees exactly zero of it by construction —
-            this absolute box observation is the only channel through
-            which the controller can see the ENSO state. Appended at the
+        include_nino_box: Include the PAIRED Nino3.4 box-mean SST anomaly
+            (current minus baseline at the same step). In the ENSO
+            experiment the baseline is the member's no-ENSO no-MCB control
+            (also the pacemaker's relaxation reference), so this feature
+            reads the realized imposed anomaly nearly directly: zero
+            without ENSO, ~A(t) under the pacemaker (which pins box SST
+            regardless of MCB, so MCB contamination is suppressed). The
+            controller's clean ENSO observation channel. Appended at the
             END so existing checkpoints expand via expand_policy_input.
             Default False preserves existing layouts.
 
@@ -391,16 +393,16 @@ def extract_coupled_features(
         sh_sst = _regional_mean(sst, sh_mask)
         features.append(nh_sst - sh_sst)
 
-    # --- Absolute Nino3.4 box SST (ENSO experiment; appended at END for
+    # --- Paired Nino3.4 box anomaly (ENSO experiment; appended at END for
     # expand_policy_input checkpoint compatibility) ---
     if config.include_nino_box:
         from jcm.mcb.enso import NINO34_LAT_BOUNDS, NINO34_LON_BOUNDS
         sst = coupled_carry["ocn"]["state"].sea_surface_temperature
         nino_mask = create_region_mask(
             grid, NINO34_LAT_BOUNDS, NINO34_LON_BOUNDS)
-        # Subtract the ~300 K reference BEFORE averaging (same float32
-        # cancellation guard as the global absolute-SST feature above).
-        features.append(_regional_mean(sst - 300.0, nino_mask))
+        nino_now = _regional_mean(sst, nino_mask)
+        nino_base = _regional_mean(baseline.sst, nino_mask)
+        features.append(nino_now - nino_base)
 
     return jnp.array(features)
 
@@ -431,7 +433,7 @@ def get_coupled_feature_dim(config: CoupledFeatureConfig = CoupledFeatureConfig(
     if config.include_absolute_sst:
         dim += 2  # global-mean SST offset + NH-SH hemispheric difference
     if config.include_nino_box:
-        dim += 1  # absolute Nino3.4 box-mean SST offset
+        dim += 1  # paired Nino3.4 box-mean SST anomaly
     return dim
 
 

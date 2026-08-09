@@ -223,14 +223,17 @@ class TestTerrainActivation(unittest.TestCase):
 
 
 class TestNinoBoxFeature(unittest.TestCase):
-    """Tests for the absolute Nino3.4 box feature (ENSO experiment, fc14)."""
+    """Tests for the paired Nino3.4 box anomaly feature (ENSO fc14)."""
 
     @classmethod
     def setUpClass(cls):
         cls.coords = get_speedy_coords()
 
-    def _extract(self, carry, config, time_fraction=0.0):
-        baseline = CoupledBaseline.from_coupled_carry(carry, self.coords)
+    def _extract(self, carry, config, baseline_carry=None,
+                 time_fraction=0.0):
+        baseline = CoupledBaseline.from_coupled_carry(
+            baseline_carry if baseline_carry is not None else carry,
+            self.coords)
         return extract_coupled_features(
             carry, baseline, self.coords, config, time_fraction=time_fraction
         )
@@ -253,21 +256,22 @@ class TestNinoBoxFeature(unittest.TestCase):
         self.assertEqual(f14.shape, (14,))
         self.assertTrue(jnp.array_equal(f14[:13], f13))
 
-    def test_uniform_sst_value(self):
-        """On uniform 302 K SST the feature is 302 - 300 = 2."""
+    def test_zero_without_enso(self):
+        """Paired against its own state the anomaly is exactly zero."""
         carry = make_fake_carry(self.coords, sst_value=302.0)
         f14 = self._extract(
             carry, CoupledFeatureConfig(include_absolute_sst=True,
                                         include_nino_box=True))
-        self.assertAlmostEqual(float(f14[13]), 2.0, places=4)
+        self.assertEqual(float(f14[13]), 0.0)
 
     def test_sees_box_anomaly_not_far_field(self):
-        """A +2 K anomaly inside the box moves the feature by ~+2; the same
-        anomaly in the Atlantic moves it not at all.
+        """A +2 K box anomaly vs baseline reads ~+2; an Atlantic anomaly
+        of the same size reads 0.
         """
         from jcm.mcb.enso import EnsoConfig, nino_pattern
         shape = self.coords.horizontal.nodal_shape
         base = jnp.full(shape, 300.0)
+        baseline_carry = make_fake_carry(self.coords, sst_field=base)
         core = (nino_pattern(self.coords.horizontal,
                              EnsoConfig(taper_lat_deg=1e-6,
                                         taper_lon_deg=1e-6)) >= 0.999)
@@ -276,7 +280,7 @@ class TestNinoBoxFeature(unittest.TestCase):
 
         carry_box = make_fake_carry(
             self.coords, sst_field=base + 2.0 * core)
-        f_box = self._extract(carry_box, cfg)
+        f_box = self._extract(carry_box, cfg, baseline_carry=baseline_carry)
         self.assertAlmostEqual(float(f_box[13]), 2.0, places=3)
 
         atlantic = nino_pattern(
@@ -285,7 +289,7 @@ class TestNinoBoxFeature(unittest.TestCase):
                        taper_lon_deg=1e-6)) >= 0.999
         carry_atl = make_fake_carry(
             self.coords, sst_field=base + 2.0 * atlantic)
-        f_atl = self._extract(carry_atl, cfg)
+        f_atl = self._extract(carry_atl, cfg, baseline_carry=baseline_carry)
         self.assertAlmostEqual(float(f_atl[13]), 0.0, places=4)
 
     def test_checkpoint_expansion_13_to_14_is_identity_on_old_features(self):

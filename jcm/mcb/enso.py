@@ -176,6 +176,94 @@ def wrap_step_fn_with_enso(
     return enso_step_fn
 
 
+def make_enso_pi_policy_fn(
+    enso_effect_per_K: float = 0.0525,
+    gain_max: float = 4.0,
+    ff_weight: float = 1.0,
+    dsst_idx: int = 0,
+    time_idx: int = 10,
+    nino_idx: int = 13,
+):
+    """Classical feedforward + proportional controller for the ENSO task.
+
+    The honest hand-designed yardstick (Kravitz/MacMartin / Lee et al. 2025
+    style: feedforward on the observed disturbance plus feedback on the
+    tracking error), stateless per control interval. Features are paired
+    against the NO-ENSO control baseline, so:
+
+      features[dsst_idx] = realized global dSST (MCB effect + ENSO effect),
+      features[time_idx] = time fraction in [0, 1],
+      features[nino_idx] = realized Nino3.4 box anomaly ~ A(t).
+
+    Command = pattern * gain with
+
+      gain = clip(1 + err / (|target| * (1 - min(tfrac, 0.9)))       # FB
+                    + ff_weight * enso_effect_per_K * nino / |target|,  # FF
+                  0, gain_max)
+      err  = realized - target * tfrac        # ramp on-track reference
+
+    The feedback term is the Tier-2 deadbeat structure (close the remaining
+    error in the remaining time; per-unit-gain final response = target,
+    because the rescaled static pattern is calibrated to deliver the target
+    at gain 1). The feedforward term pre-compensates the expected
+    horizon-matched ENSO warming: ``enso_effect_per_K`` is the measured
+    GMST effect at the METRIC horizon per K of commanded box anomaly
+    (scoping 2026-08-08: +105 mK per 2 K at 180 d tail-60 -> 0.0525);
+    the proportional term cleans up timing mismatch between the ENSO and
+    MCB response lags.
+
+    params: {"pattern": (ix, il) rescaled static pattern, "target": float}
+    """
+    def pi_policy_fn(params, features):
+        pattern = params["pattern"]
+        target = params["target"]
+        realized = features[dsst_idx]
+        tfrac = features[time_idx]
+        nino = features[nino_idx]
+        abs_target = jnp.abs(target)
+        err = realized - target * tfrac                  # >0 = too warm
+        g_fb = err / (abs_target * (1.0 - jnp.minimum(tfrac, 0.9)))
+        g_ff = ff_weight * enso_effect_per_K * nino / abs_target
+        gain = jnp.clip(1.0 + g_fb + g_ff, 0.0, gain_max)
+        return pattern * gain
+
+    return pi_policy_fn
+
+
+def make_enso_ff_mean_policy_fn(
+    amp_mean: float,
+    enso_effect_per_K: float = 0.0525,
+    ramp_days: float = 30.0,
+    horizon_days: float = 180.0,
+    gain_max: float = 4.0,
+    time_idx: int = 10,
+):
+    """Open-loop mean-feedforward schedule (the fair non-feedback control).
+
+    Compensates the EXPECTED disturbance — the mean of the hidden amplitude
+    distribution — on the standard pacemaker ramp, reading only the time
+    feature. This is the Kravitz et al. (2014)-style "mis-specified
+    feedforward": correct on average, wrong for every actual draw, and
+    structurally unable to adapt. Distinguishes "feedback works" from "any
+    schedule works" (per-episode randomized amplitudes are what a fixed
+    schedule cannot track).
+
+    params: {"pattern": (ix, il) rescaled static pattern, "target": float}
+    """
+    def ff_policy_fn(params, features):
+        pattern = params["pattern"]
+        target = params["target"]
+        tfrac = features[time_idx]
+        nino_expected = amp_mean * jnp.minimum(
+            1.0, tfrac * horizon_days / ramp_days)
+        gain = jnp.clip(
+            1.0 + enso_effect_per_K * nino_expected / jnp.abs(target),
+            0.0, gain_max)
+        return pattern * gain
+
+    return ff_policy_fn
+
+
 def box_mean_weights(grid, pattern: jnp.ndarray,
                      area_weights: jnp.ndarray,
                      core_threshold: float = 0.999) -> jnp.ndarray:

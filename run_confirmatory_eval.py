@@ -65,6 +65,14 @@ from jcm.mcb.coupled_controller import (
 )
 from jcm.mcb.coupled_features import compute_baseline_trajectory
 from jcm.mcb.coupled_loss import region_precip_change_mm_day
+from jcm.mcb.enso import (
+    EnsoConfig,
+    box_mean_weights,
+    make_enso_ff_mean_policy_fn,
+    make_enso_pi_policy_fn,
+    nino_pattern,
+    wrap_step_fn_with_enso,
+)
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
 from jcm.mcb.gates import cooling_gate, improvement_gate
 from jcm.mcb.gates_stats import paired_report
@@ -99,6 +107,16 @@ FEATURE_CONFIGS = {
     # widened-deployment efficiency probe: how much cooling per unit forcing
     # do the cells OUTSIDE the optimized pattern deliver?
     "uniform": CoupledFeatureConfig(),
+    # ENSO experiment (Amendment 6): 14-feature layout with the paired
+    # Nino3.4 box anomaly appended (the controller's ENSO observation).
+    "fc14": CoupledFeatureConfig(include_absolute_sst=True,
+                                 include_nino_box=True),
+    # Classical feedforward+proportional yardstick on the rescaled pattern.
+    "pi-enso": CoupledFeatureConfig(include_absolute_sst=True,
+                                    include_nino_box=True),
+    # Open-loop mean-feedforward schedule (fair non-feedback control):
+    # compensates the MEAN hidden amplitude, reads only time.
+    "ff-mean": CoupledFeatureConfig(),
 }
 
 # fc11 feature indices the PI controller reads (see coupled_features.py):
@@ -191,6 +209,22 @@ def parse_args():
                         "draw is skewed high (mean 1.07, 13/20 above 1), "
                         "flattering the PI arm and starving the NN's "
                         "low-eta direction.")
+    p.add_argument("--enso-mode", choices=["off", "randomized", "fixed"],
+                   default="off",
+                   help="Amendment 6: impose a pacemaker El Nino on every "
+                        "ARM rollout (never the baseline — the no-ENSO "
+                        "baseline defines the target). 'randomized' draws a "
+                        "hidden per-IC amplitude ~ U[range]; 'fixed' uses "
+                        "the range midpoint for every IC.")
+    p.add_argument("--enso-amp-range", type=float, nargs=2,
+                   default=(0.5, 2.0), metavar=("LO", "HI"))
+    p.add_argument("--enso-seed", type=int, default=940)
+    p.add_argument("--enso-antithetic", action="store_true",
+                   help="Mirror amplitude draws around the range midpoint "
+                        "(exact mean, balanced halves — same rationale as "
+                        "--efficacy-antithetic).")
+    p.add_argument("--enso-ramp-days", type=float, default=30.0)
+    p.add_argument("--enso-tau-days", type=float, default=5.0)
     p.add_argument("--output", required=True)
     return p.parse_args()
 
@@ -220,7 +254,7 @@ def parse_arms(arm_specs):
     return arms
 
 
-def build_arm(arm, policy, coords, target_cooling):
+def build_arm(arm, policy, coords, target_cooling, enso_amp_mean=None):
     """Build one arm; returns (policy_fn, params, feature_config)."""
     fc = FEATURE_CONFIGS[arm["kind"]]
     dim = get_coupled_feature_dim(fc)
@@ -233,6 +267,16 @@ def build_arm(arm, policy, coords, target_cooling):
         pattern = jnp.asarray(stage1["best_pattern"])
         params = {"pattern": pattern, "target": float(target_cooling)}
         return make_pi_policy_fn(), params, fc
+    if arm["kind"] in ("pi-enso", "ff-mean"):
+        with open(arm["path"], "rb") as f:
+            stage1 = pickle.load(f)
+        pattern = jnp.asarray(stage1["best_pattern"])
+        params = {"pattern": pattern, "target": float(target_cooling)}
+        if arm["kind"] == "pi-enso":
+            return make_enso_pi_policy_fn(), params, fc
+        assert enso_amp_mean is not None, "ff-mean arm requires --enso-mode"
+        return make_enso_ff_mean_policy_fn(amp_mean=enso_amp_mean), \
+            params, fc
     if arm["kind"] == "uniform":
         level = float(arm["path"])
         shape = coords.horizontal.nodal_shape
@@ -346,10 +390,13 @@ def main():
         hidden_dims=(256, 256),
         max_perturbation=args.max_perturbation,
     )
+    enso_amp_mean = (sum(args.enso_amp_range) / 2.0
+                     if args.enso_mode != "off" else None)
     arm_params = {}
     for arm in arms:
         policy_fn, params, fc = build_arm(arm, policy, coords,
-                                          args.target_cooling)
+                                          args.target_cooling,
+                                          enso_amp_mean=enso_amp_mean)
         config = CoupledControllerConfig(
             control_interval_steps=args.control_interval,
             total_steps=args.days,
@@ -380,6 +427,36 @@ def main():
               f"{[round(e, 3) for e in efficacies]}")
     else:
         efficacies = [1.0] * n_ics
+
+    # Amendment 6 ENSO draws: one hidden amplitude per IC (an episode
+    # property), shared by every arm and member of that IC (paired design).
+    if args.enso_mode == "randomized":
+        lo, hi = args.enso_amp_range
+        enso_rng = np.random.default_rng(args.enso_seed)
+        if args.enso_antithetic:
+            half = enso_rng.uniform(lo, hi, (n_ics + 1) // 2)
+            anti = (lo + hi) - half
+            enso_amps = [float(x)
+                         for pair in zip(half, anti) for x in pair][:n_ics]
+        else:
+            enso_amps = [float(x) for x in enso_rng.uniform(lo, hi, n_ics)]
+        print(f"ENSO randomization ON: A ~ U[{lo}, {hi}] "
+              f"(seed {args.enso_seed}"
+              f"{', antithetic' if args.enso_antithetic else ''}): "
+              f"{[round(a, 3) for a in enso_amps]}")
+    elif args.enso_mode == "fixed":
+        enso_amps = [float(sum(args.enso_amp_range) / 2.0)] * n_ics
+        print(f"ENSO fixed amplitude: {enso_amps[0]} K on every IC")
+    else:
+        enso_amps = [0.0] * n_ics
+
+    enso_pattern = None
+    nino_w = None
+    if args.enso_mode != "off":
+        enso_pattern = nino_pattern(coords.horizontal) * ocean_mask
+        nino_w = box_mean_weights(coords.horizontal, enso_pattern,
+                                  area_weights)
+
     arm_names = [a["name"] for a in arms]
     # per-arm (n_ics, k) member-level metrics
     cells = {name: {"dsst_10d": np.full((n_ics, k), np.nan),
@@ -387,13 +464,14 @@ def main():
                     "amazon_mm_day": np.full((n_ics, k), np.nan),
                     "sahel_mm_day": np.full((n_ics, k), np.nan),
                     "mean_mcb_forcing": np.full((n_ics, k), np.nan),
-                    "mean_loss": np.full((n_ics, k), np.nan)}
+                    "mean_loss": np.full((n_ics, k), np.nan),
+                    "nino_realized_final": np.full((n_ics, k), np.nan)}
              for name in arm_names}
 
     results = {
         "config": vars(args), "arms": arms, "manifest_ic_dir": args.ic_dir,
         "ic_entries": [e for e, _, _ in ics], "cells": cells,
-        "efficacies": efficacies,
+        "efficacies": efficacies, "enso_amps": enso_amps,
     }
     out_path = Path(args.output)
     t_campaign = time.time()
@@ -408,10 +486,26 @@ def main():
                     carry, member_seed, args.member_perturb_amp)
             # Regenerate the paired baseline for THIS member IN THIS PROCESS
             # (cached cross-program baselines carry ~0.01 K mismatch).
+            # Under --enso-mode the baseline stays UNWRAPPED (no ENSO): it
+            # is the no-ENSO control that defines the target AND the
+            # pacemaker's relaxation reference.
             t0 = time.time()
             member_baseline = compute_baseline_trajectory(
                 member_carry, step_fn, num_steps=args.days, coords=coords)
             t_base = time.time() - t0
+            step_fn_transform = None
+            if args.enso_mode != "off":
+                member_t0 = float(member_carry["ocn"]["state"].sim_time)
+                enso_cfg = EnsoConfig(
+                    amplitude=enso_amps[i],
+                    ramp_days=args.enso_ramp_days,
+                    relax_tau_days=args.enso_tau_days,
+                )
+                step_fn_transform = (
+                    lambda sf, _cfg=enso_cfg, _t0=member_t0,
+                    _ref=member_baseline.sst:
+                    wrap_step_fn_with_enso(sf, enso_pattern, _cfg, _ref,
+                                           _t0))
             for name in arm_names:
                 arm_policy_fn, params, config = arm_params[name]
                 t0 = time.time()
@@ -427,6 +521,7 @@ def main():
                     config=config,
                     tail_mean_days=args.tail_days,
                     efficacy=efficacies[i],
+                    step_fn_transform=step_fn_transform,
                 )
                 mtr = out["metrics"]
                 c = cells[name]
@@ -441,10 +536,17 @@ def main():
                 c["sahel_mm_day"][i, m] = float(region_precip_change_mm_day(
                     out["final_carry"], base_final.precipitation, coords,
                     area_weights, region="sahel"))
+                if args.enso_mode != "off":
+                    final_sst = (out["final_carry"]["ocn"]["state"]
+                                 .sea_surface_temperature)
+                    c["nino_realized_final"][i, m] = float(jnp.sum(
+                        (final_sst - member_baseline.sst[args.days])
+                        * nino_w))
                 print(f"  IC {entry['index']:02d} m{m} {name:>10}: "
                       f"dSST10d {mtr['final_sst_change_10d']:+.4f} "
                       f"(snap {mtr['final_sst_change']:+.4f}, "
-                      f"eta {efficacies[i]:.3f}) "
+                      f"eta {efficacies[i]:.3f}, "
+                      f"A {enso_amps[i]:.2f}) "
                       f"[base {t_base:.0f}s, eval {time.time() - t0:.0f}s]",
                       flush=True)
                 t_base = 0.0  # only report baseline time once per member

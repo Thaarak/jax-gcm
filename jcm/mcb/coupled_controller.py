@@ -244,6 +244,7 @@ def create_coupled_control_step(
     config: CoupledControllerConfig,
     ocean_mask: jnp.ndarray,
     collect_sst_weights: jnp.ndarray = None,
+    step_fn_transform: Callable = None,
 ) -> Callable:
     """Create a single coupled control step function.
 
@@ -269,6 +270,13 @@ def create_coupled_control_step(
             ocean-mean SST (CoupledControlStep.sst_ocean_mean) so evaluation
             can form the pre-registered final-10-day time-mean dSST. Leave
             None in training (no extra state saved under BPTT).
+        step_fn_transform: Optional wrapper applied to the coupler step
+            function (step_fn -> step_fn), e.g. the ENSO pacemaker
+            (jcm.mcb.enso.wrap_step_fn_with_enso). Applies to the POLICY
+            rollout only — whether the paired baseline gets the same
+            treatment is the caller's experiment-design decision (for the
+            ENSO experiment it does NOT: the baseline is the no-ENSO
+            control that defines the target).
 
     Returns:
         Function (carry, policy_params, interval_idx) -> CoupledControlStep.
@@ -276,6 +284,8 @@ def create_coupled_control_step(
     """
     # Get coupler step function
     step_fn = create_coupled_step_fn(coupler, workflow, jitted=True)
+    if step_fn_transform is not None:
+        step_fn = step_fn_transform(step_fn)
 
     def control_step(
         carry: dict,
@@ -376,6 +386,7 @@ def unroll_coupled_with_policy(
     config: CoupledControllerConfig = CoupledControllerConfig(),
     collect_sst: bool = False,
     efficacy=1.0,
+    step_fn_transform: Callable = None,
 ) -> Tuple[jnp.ndarray, dict, Any]:
     """Unroll coupled simulation with neural network control.
 
@@ -399,6 +410,9 @@ def unroll_coupled_with_policy(
         efficacy: Per-episode MCB efficacy factor (Tier-2 experiment):
             applied perturbation = efficacy x clipped command. Scalar
             (float or traced jnp scalar); unobserved by the policy.
+        step_fn_transform: Optional step-function wrapper for the policy
+            rollout (see create_coupled_control_step), e.g. the ENSO
+            pacemaker.
 
     Returns:
         Tuple of:
@@ -425,6 +439,7 @@ def unroll_coupled_with_policy(
         config=config,
         ocean_mask=ocean_mask,
         collect_sst_weights=collect_sst_weights,
+        step_fn_transform=step_fn_transform,
     )
 
     # Optionally wrap with checkpointing for memory efficiency
@@ -583,6 +598,7 @@ def evaluate_coupled_policy(
     config: CoupledControllerConfig = CoupledControllerConfig(),
     tail_mean_days: int = 10,
     efficacy=1.0,
+    step_fn_transform: Callable = None,
 ) -> dict:
     """Evaluate a trained policy and return detailed metrics.
 
@@ -623,6 +639,7 @@ def evaluate_coupled_policy(
         config=config,
         collect_sst=collect_sst,
         efficacy=efficacy,
+        step_fn_transform=step_fn_transform,
     )
 
     num_intervals = config.total_steps // config.control_interval_steps

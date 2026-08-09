@@ -211,6 +211,67 @@ class WrapStepFnTest(unittest.TestCase):
         self.assertFalse(bool(jnp.any(jnp.isnan(g))))
 
 
+class EnsoPiSurrogateTest(unittest.TestCase):
+    """Validate the ENSO-PI law on a linear-slab surrogate plant.
+
+    Plant: 12 control intervals (180 d / 15 d). Per-interval MCB increment
+    = gain * target / 12 (so constant gain 1 delivers the target as a ramp,
+    matching the rescaled static calibration). ENSO adds a ramped warming
+    reaching (A / 2) * 0.105 K by episode end (the measured 180 d tail-60
+    effect at commanded 2 K), onset-delayed like the real response.
+    """
+
+    N_INT = 12
+    ENSO_180D_EFFECT_AT_2K = 0.105
+    TARGET = -0.1
+
+    def _run(self, policy_gain_fn, amp):
+        t_final = 0.0
+        for i in range(self.N_INT):
+            tfrac = i / self.N_INT
+            # ENSO warming realized so far (30-day onset, then ramp)
+            enso_now = (self.ENSO_180D_EFFECT_AT_2K * (amp / 2.0)
+                        * max(0.0, (i - 2) / (self.N_INT - 2)))
+            realized = t_final + enso_now
+            nino = amp * min(1.0, i / 2.0)     # 30-day pacemaker ramp
+            gain = policy_gain_fn(realized, tfrac, nino)
+            t_final += gain * self.TARGET / self.N_INT
+        enso_final = self.ENSO_180D_EFFECT_AT_2K * (amp / 2.0)
+        return t_final + enso_final            # metric vs no-ENSO baseline
+
+    def _pi_gain(self, realized, tfrac, nino):
+        from jcm.mcb.enso import make_enso_pi_policy_fn
+        fn = make_enso_pi_policy_fn()
+        feats = np.zeros(14)
+        feats[0], feats[10], feats[13] = realized, tfrac, nino
+        out = fn({"pattern": jnp.ones((1, 1)), "target": self.TARGET},
+                 jnp.asarray(feats))
+        return float(out[0, 0])
+
+    def test_static_misses_by_enso_effect(self):
+        final = self._run(lambda r, t, n: 1.0, amp=2.0)
+        self.assertAlmostEqual(final - self.TARGET,
+                               self.ENSO_180D_EFFECT_AT_2K, places=6)
+
+    def test_pi_tracks_across_amplitudes(self):
+        for amp in (0.5, 1.0, 2.0):
+            static_err = abs(self._run(lambda r, t, n: 1.0, amp)
+                             - self.TARGET)
+            pi_err = abs(self._run(self._pi_gain, amp) - self.TARGET)
+            self.assertLess(pi_err, 0.25 * static_err,
+                            f"amp {amp}: PI {pi_err:.4f} vs static "
+                            f"{static_err:.4f}")
+
+    def test_no_enso_pi_stays_near_gain_one(self):
+        """With zero ENSO the PI must not disturb an on-track episode."""
+        final = self._run(self._pi_gain, amp=0.0)
+        self.assertLess(abs(final - self.TARGET), 0.005)
+
+    def test_gain_clipped_nonnegative(self):
+        g = self._pi_gain(realized=-0.5, tfrac=0.5, nino=-2.0)
+        self.assertGreaterEqual(g, 0.0)
+
+
 class BoxMeanWeightsTest(unittest.TestCase):
     def test_weights_normalized_and_core_only(self):
         grid = get_speedy_coords().horizontal

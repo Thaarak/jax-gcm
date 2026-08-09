@@ -358,3 +358,47 @@ EXPLORATORY instrument calibration (like the Tier-1 noise floor): no gates, no h
 its ICs/outputs will not be reused for any confirmatory claim. The ENSO experiment itself will be
 frozen as a numbered amendment (arms, hypotheses, splits, n x k, horizon) BEFORE any gated GPU
 campaign, informed by these calibration numbers.
+
+### Amendment 6 — ENSO feedback experiment (frozen 2026-08-08, BEFORE any gated ENSO GPU campaign)
+
+**Question.** Can a feedback controller demonstrably cancel the global temperature effect of imposed
+ENSO variability while delivering the MCB cooling target — the loop no published study has closed
+(Lee et al. 2025 GRL is feedforward+PI against warming; Wan 2026 / Xing 2025 are open-loop)?
+
+**Design (all constants below are calibration-measured, 2026-08-08 scoping runs; exploratory
+pickles `enso_scoping.pkl`, `mcb_authority_scoping.pkl`).**
+- Episodes: **180 days**, control interval 15 d (12 decisions), daily coupling. Registered metric:
+  **final-60-day time-mean global-ocean dSST vs the member's NO-ENSO no-MCB baseline**; target
+  −0.1 K. The baseline (regenerated in-process per member) doubles as the pacemaker's relaxation
+  reference. Measured at this horizon/window: El Nino(2 K) GMST effect **+105 mK**, chaos floor
+  **13 mK**, actuator ceiling (uniform cap 0.09) **−0.64 K** (3× the required −0.21 K; the cap
+  will not bind), dose linearity 1.05.
+- Disturbance: pacemaker El Nino (`jcm/mcb/enso.py`: relaxation, tau 5 d, tapered Nino3.4 mask,
+  30-day ramp then hold; phase from sim_time), applied to ARM rollouts only, never the baseline.
+  Hidden per-IC amplitude **A ~ U[0.5, 2.0] K, seed 940, antithetic**; shared across arms and
+  members (paired). **La Nina excluded**: measured response is weak and non-monotonic
+  (−0.026 ± 0.040 K at −2 K, vs +0.242 ± 0.040 K at +2 K) — an asymmetry reported as a finding.
+- Arms: **static** (Tier-1 pattern × **0.3668** = 0.10/0.2726, the measured 180-d rescale);
+  **ffmean** (open-loop schedule compensating the MEAN amplitude 1.25 K — the Kravitz-2014-style
+  mis-specified feedforward, the fair non-feedback control); **pienso** (classical feedforward +
+  proportional law, `make_enso_pi_policy_fn`, enso_effect_per_K = 0.0525 measured); **imitation_s62/
+  s63/s64** (fc14 MLP distilled from the pienso law — 3 seeds per the ≥3-seed rule; feature 13 =
+  paired Nino3.4 box anomaly). **No BPTT anywhere**: gradients through 180-d rollouts diverge
+  (grad norms 1e7–1e13 at 180 d, meta-audit) — a pre-stated exclusion, and Tier-2b showed the
+  imitation pipeline needs none.
+- ICs: fresh set seed0 **7000** (6 train + 20 held-out, decorr 30 d, horizon 180). Train split
+  only for gates/probes; held-out only for the single final evaluation. k = **4** members
+  (member-seed0 77000). Efficacy uncertainty OFF (one axis at a time; the eta × ENSO composition
+  is a separate future amendment).
+- Gates (each stops the campaign, in order): **G-cal** static without ENSO on train ICs lands in
+  [−0.12, −0.08]; **G-manip** static under fixed A = 2.0 misses by > 0.05 K; **G-imit**
+  distillation fidelity mean|err| < 0.002 albedo (per Amendment 4) AND on train ICs (amp seed 941,
+  a stream never reused) the imitation arm's mean miss ≤ 1.5× pienso's.
+- Hypotheses and decision rules are the pre-committed `analyze_enso.py` (+ tests), verbatim:
+  primary **H6 pienso-vs-static** and **H7 imitation-vs-static** (Holm over the pair, paired t
+  governs, direction-gated, Wilcoxon co-reported); secondary imitation-vs-pienso (+TOST),
+  pienso-vs-ffmean, ffmean-vs-static, per-seed, amplitude-stratified H7. All runs reported.
+- Power: expected static mean miss ≈ 0.0525 × E[A] ≈ 66 mK vs a ~4–5 mK paired comparison s.e.
+  (per-run paired sd ~33 mK, k=4, n=20) — the design is deliberately overpowered; the interesting
+  quantities are the residual misses and the imitation-vs-pienso equivalence bound.
+- Cost: ~3.5 GPU-h (`run_campaign_enso.sh`, gated and resumable).
