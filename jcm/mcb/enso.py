@@ -198,6 +198,7 @@ def make_enso_pi_policy_fn(
     enso_effect_per_K: float = 0.0525,
     gain_max: float = 4.0,
     ff_weight: float = 1.0,
+    fb_weight: float = 1.0,
     reference_scale: float = 1.0,
     dsst_idx: int = 0,
     time_idx: int = 10,
@@ -235,6 +236,16 @@ def make_enso_pi_policy_fn(
     ramp reference so a perfect tracker scores ``target`` on a
     tail-AVERAGED metric instead of structurally undershooting it.
 
+    ``fb_weight`` scales the feedback term. It exists because ABLATING the
+    feedforward term while holding fb_weight at the value chosen when
+    feedforward was carrying the disturbance produces a DETUNED strawman: a
+    surrogate sweep shows a purely reactive controller improving from +12.5
+    to +1.8 mK/K as fb_weight goes 1 -> 6, i.e. retuning that one constant
+    nearly closes the gap to the anticipating law. Any feedforward-ablation
+    comparison must therefore tune fb_weight for BOTH arms (Amendment 7
+    revision 2); otherwise it repeats the Amendment-6 error of beating a
+    comparator that was never given its best setting.
+
     Note the actuator FLOOR: gain is clipped below at 0, so a cold (La Nina)
     anomaly larger than |target| / enso_effect_per_K cannot be compensated
     even by spraying nothing. Amendment 7 sizes its amplitude range to sit
@@ -250,7 +261,7 @@ def make_enso_pi_policy_fn(
         nino = features[nino_idx]
         abs_target = jnp.abs(target)
         err = realized - target * tfrac                  # >0 = too warm
-        g_fb = err / (abs_target * (1.0 - jnp.minimum(tfrac, 0.9)))
+        g_fb = fb_weight * err / (abs_target * (1.0 - jnp.minimum(tfrac, 0.9)))
         g_ff = ff_weight * enso_effect_per_K * nino / abs_target
         gain = jnp.clip(1.0 + g_fb + g_ff, 0.0, gain_max)
         return pattern * gain

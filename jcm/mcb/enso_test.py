@@ -285,3 +285,56 @@ class BoxMeanWeightsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FbWeightTest(unittest.TestCase):
+    """fb_weight (Amendment 7 rev 2): the feedback gain must be tunable.
+
+    Ablating the feedforward term while freezing fb_weight at the value
+    chosen when feedforward carried the disturbance produces a DETUNED
+    strawman comparator — the Amendment-6 error in mirror image. These tests
+    pin the knob's existence, its default, and the direction of its effect.
+    """
+
+    def _gain(self, ff, fb, nino, realized, tfrac=0.5):
+        from jcm.mcb.enso import make_enso_pi_policy_fn, tail_reference_scale
+        fn = make_enso_pi_policy_fn(enso_effect_per_K=0.0547, fb_weight=fb,
+                                    ff_weight=1.0,
+                                    reference_scale=tail_reference_scale(180, 60))
+        f = jnp.zeros(14).at[0].set(realized).at[10].set(tfrac).at[13].set(nino)
+        params = {"pattern": jnp.ones((1, 1)), "target": -0.1}
+        if ff == 0:
+            fn = make_enso_pi_policy_fn(enso_effect_per_K=0.0, fb_weight=fb,
+                                        reference_scale=tail_reference_scale(180, 60))
+        return float(fn(params, f)[0, 0])
+
+    def test_default_fb_weight_is_one(self):
+        """Defaults must reproduce the Amendment-7 controller exactly."""
+        from jcm.mcb.enso import make_enso_pi_policy_fn
+        import inspect
+        sig = inspect.signature(make_enso_pi_policy_fn)
+        self.assertEqual(sig.parameters["fb_weight"].default, 1.0)
+
+    def test_fb_weight_scales_the_error_response(self):
+        """Doubling fb_weight doubles the error-driven part of the gain."""
+        base = self._gain(ff=0, fb=1.0, nino=0.0, realized=-0.02)
+        doubled = self._gain(ff=0, fb=2.0, nino=0.0, realized=-0.02)
+        self.assertAlmostEqual(doubled - 1.0, 2.0 * (base - 1.0), places=5)
+
+    def test_zero_fb_weight_leaves_pure_feedforward(self):
+        """fb_weight=0 with feedforward on isolates anticipation."""
+        g = self._gain(ff=1, fb=0.0, nino=1.0, realized=-0.05)
+        self.assertGreater(g, 1.0)          # FF still acts
+        g0 = self._gain(ff=1, fb=0.0, nino=0.0, realized=-0.05)
+        self.assertAlmostEqual(g0, 1.0, places=5)   # no error response
+
+    def test_feedforward_ablation_alone_is_a_weaker_controller(self):
+        """The finding that made rev 2 necessary: at fb=1 an ablated arm
+        under-responds, and raising fb_weight recovers the response.
+        """
+        realized = -0.02          # behind schedule (too warm)
+        g_ff = self._gain(ff=1, fb=1.0, nino=1.5, realized=realized)
+        g_ab = self._gain(ff=0, fb=1.0, nino=1.5, realized=realized)
+        g_ab_t = self._gain(ff=0, fb=4.0, nino=1.5, realized=realized)
+        self.assertGreater(g_ff, g_ab)          # ablation weakens it
+        self.assertGreater(g_ab_t, g_ab)        # retuning recovers response

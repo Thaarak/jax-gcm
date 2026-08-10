@@ -562,3 +562,74 @@ not different from static => the surrogates are wrong and the Nino term is doing
 All three outcomes are reportable; none is a failure.
 
 **Cost:** ~1.5 GPU-h (3 arms x 20 ICs x k=4 at 180 d, baselines shared).
+
+### Amendment 7, revision 2 — the ANTICIPATION ablation, with a tuned comparator
+### (frozen 2026-08-10, SUPERSEDES revision 1, BEFORE any ablation GPU run)
+
+Revision 1 is withdrawn UNRUN. A pre-run design review found that the ablation it specified would
+have manufactured a win from a detuned comparator — the Amendment-6 error in mirror image — and
+three further defects. All were reproduced independently before acting on them.
+
+**Why revision 1 was withdrawn.** Its comparator `blindfb` was the pi-enso law with the
+feedforward term deleted while the FEEDBACK gain stayed frozen at the value chosen when
+feedforward was carrying the disturbance. A surrogate sweep of that single constant (transcribed
+from `make_enso_pi_policy_fn`) shows a purely reactive controller improving from +12.5 mK/K at
+fb_weight 1 to +1.8 at fb_weight 6 — i.e. retuning one number nearly closes the gap to the
+anticipating law's +1.5. Testing against fb_weight = 1 would have produced a "significant" result
+that says nothing except that we detuned the opponent.
+
+**Three further corrections, all logged rather than silently fixed.**
+1. *The signed slope is sign-degenerate.* Amendment 7's pienso slope of +2.6 mK/K is a
+   CANCELLATION: hinge fit gives warm +11.2 and cold -11.0 (imitation +6.2 / -2.5). A signed
+   contrast credits a controller for wrong-signed error. A sign-agnostic co-primary (RMS_A) and a
+   mandatory hinge report are added. Measured RMS_A: static 52.6, pienso 16.3, imitation 12.0 mK —
+   the rejection is real (69-77%) but smaller than "95%" implied.
+2. *The committed inference did not exist.* `analyze_enso7.py` cannot score this campaign and the
+   repo had no wild-bootstrap/HC3 code and no slope-TOST, so revision 1's promised inference was
+   unimplemented. `analyze_enso8.py` (+ 10 tests) is frozen with this amendment.
+3. *The proposed amplitude seed was lucky.* Seed 960 sits at the 99.3rd percentile of design-matrix
+   spread over 5000 seeds (Saa 38.3 vs median 22.0). Randomness is removed entirely.
+
+**Design.**
+- **Amplitudes: DETERMINISTIC, no seed.** n/2 mirrored pairs at |A_j| = A_max*sqrt((j-0.5)/(n/2)),
+  A_max = 1.8273 K (frozen from `enso7_plant.json`, not recomputed). Exactly zero mean, no draw
+  luck, Saa = 40.07 vs a median random draw's 22.0 (slope s.e. x0.74 for free). Sign-symmetric, so
+  the pooled estimand is comparable with Amendment 7.
+- **n = 24 held-out ICs (12 mirrored pairs) + 6 train, fresh set seed0 9000, horizon 180, k = 4.**
+  Fresh because the Amendment-7 held-out ICs have now carried ~22 reported statistics, and because
+  fresh ICs additionally give an INDEPENDENT REPLICATION of H8/H9.
+- **fb_weight tuning, train ICs only, before any held-out rollout:** grid
+  fb in {1, 1.5, 2, 3, 4, 6} for BOTH the reactive law (ff=0) and the anticipating law (ff=1),
+  k = 2, 6 train ICs. Selection: minimise RMS_A; ties to the SMALLER fb. Both selected values are
+  frozen and the full sweep is reported. Tuning only the comparator would make superiority
+  conservative but equivalence anti-conservative, and equivalence is the likely landing zone.
+- **Arms:** `static`; `pienso` (ff=1, fb=1 — unchanged, for continuity and H8 replication);
+  `blindfb` (ff=0, fb=1 — the untuned arm, DESCRIPTIVE ONLY, never a hypothesis comparator);
+  `blindfb_t` (ff=0, fb=FBb — **the H10 comparator**); `ffonly` (ff=1, fb=0 — pure anticipation,
+  giving the additivity check); `imitation_s72` (one seed; pooling three moved the s.e. only
+  4.9 -> 4.7 mK/K because the residual is chaos common to all three — seed chosen by lowest index,
+  registered as an index rule).
+- **Inference:** Rademacher wild bootstrap under the null with HC3 standard errors, on BOTH the
+  signed slope and RMS_A; Holm over the two co-primaries; direction-gated; slope equivalence bounds
+  on any null. All runs reported.
+
+**H10 (pre-stated):** anticipation — the Nino3.4 feedforward term — reduces disturbance
+sensitivity beyond a RETUNED reactive controller, i.e. the paired slope (pienso - blindfb_t) on A
+is negative, and/or its RMS_A difference is negative.
+
+**Interpretation grid, pre-stated; every outcome is reportable and none is a failure.**
+(i) H10 significant on both co-primaries => anticipation carries genuine control value beyond
+reaction; the headline may say the controller exploits its observation of the disturbance.
+(ii) H10 null with a tight equivalence bound => a well-tuned reactive controller matches an
+anticipating one at this horizon; the headline becomes "feedback rejects the disturbance, and
+OBSERVING it adds no measurable benefit once the reactive gain is tuned" — which is more useful for
+deployment (it says what must be measured) and is the outcome the surrogates predict.
+(iii) The two co-primaries disagree (signed slope vs RMS_A) => report both and treat the
+cancellation structure in the hinge fit as the finding.
+(iv) blindfb_t not better than blindfb => the tuning grid was inadequate; report and do not claim
+H10 either way.
+(v) blindfb_t not better than static => the surrogates are wrong and the feedforward term is doing
+all the work; H10 becomes trivially true and must be reported as such.
+
+**Cost:** tuning sweep ~35 min (12 arms x 6 train ICs x k=2, baselines shared); final eval ~2.1 h
+(6 arms x 24 ICs x k=4, baselines shared). **Total ~2.7 GPU-h.**

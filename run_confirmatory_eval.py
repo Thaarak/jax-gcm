@@ -220,6 +220,14 @@ def parse_args():
     p.add_argument("--enso-amp-range", type=float, nargs=2,
                    default=(0.5, 2.0), metavar=("LO", "HI"))
     p.add_argument("--enso-seed", type=int, default=940)
+    p.add_argument("--enso-amp-design", choices=["random", "deterministic"],
+                   default="random",
+                   help="'deterministic' (Amendment 7 rev 2) replaces the RNG "
+                        "with n/2 mirrored pairs at |A_j| = A_max*sqrt("
+                        "(j-0.5)/(n/2)): exactly zero mean, no draw luck, and "
+                        "~1.8x the design-matrix spread of a median random "
+                        "draw (slope s.e. x0.74). Uses --enso-amp-range's "
+                        "upper bound as A_max; --enso-seed is then unused.")
     p.add_argument("--enso-antithetic", action="store_true",
                    help="Mirror amplitude draws around the range midpoint "
                         "(exact mean, balanced halves — same rationale as "
@@ -244,14 +252,19 @@ def parse_arms(arm_specs):
         # A pi-enso arm may carry a per-arm feedforward gain as KIND@FF
         # (e.g. pi-enso@0 = the ENSO-blind outcome-feedback ablation of
         # Amendment 7 revision 1). Everything else is unchanged.
-        ff_override = None
+        ff_override = fb_override = None
         if len(parts) == 3 and "@" in parts[1]:
-            base, _, ffs = parts[1].partition("@")
+            base, _, rest = parts[1].partition("@")
             if base == "pi-enso":
+                bits = rest.split("@")
+                if len(bits) > 2:
+                    raise SystemExit(f"Bad KIND in '{spec}': pi-enso@FF[@FB]")
                 try:
-                    ff_override = float(ffs)
+                    ff_override = float(bits[0])
+                    if len(bits) == 2:
+                        fb_override = float(bits[1])
                 except ValueError:
-                    raise SystemExit(f"Bad feedforward gain in '{spec}'")
+                    raise SystemExit(f"Bad gain in '{spec}'")
                 parts[1] = base
         if len(parts) != 3 or parts[1] not in FEATURE_CONFIGS:
             raise SystemExit(
@@ -268,7 +281,8 @@ def parse_arms(arm_specs):
         elif not Path(path).exists():
             raise SystemExit(f"--arm {name}: path does not exist: {path}")
         arms.append({"name": name, "kind": kind, "path": path,
-                     "ff_override": ff_override})
+                     "ff_override": ff_override,
+                     "fb_override": fb_override})
     names = [a["name"] for a in arms]
     if len(set(names)) != len(names):
         raise SystemExit(f"Duplicate arm names: {names}")
@@ -296,8 +310,10 @@ def build_arm(arm, policy, coords, target_cooling, enso_amp_mean=None,
         params = {"pattern": pattern, "target": float(target_cooling)}
         if arm["kind"] == "pi-enso":
             ff = arm.get("ff_override")
+            fb = arm.get("fb_override")
             return make_enso_pi_policy_fn(
                 enso_effect_per_K=(enso_effect_per_k if ff is None else ff),
+                fb_weight=(1.0 if fb is None else fb),
                 reference_scale=reference_scale), params, fc
         assert enso_amp_mean is not None, "ff-mean arm requires --enso-mode"
         return make_enso_ff_mean_policy_fn(
@@ -465,7 +481,17 @@ def main():
 
     # Amendment 6 ENSO draws: one hidden amplitude per IC (an episode
     # property), shared by every arm and member of that IC (paired design).
-    if args.enso_mode == "randomized":
+    if args.enso_mode == "randomized" and args.enso_amp_design == "deterministic":
+        a_max = float(max(abs(x) for x in args.enso_amp_range))
+        m = n_ics // 2
+        mags = a_max * np.sqrt((np.arange(1, m + 1) - 0.5) / m)
+        enso_amps = [float(x) for pair in zip(mags, -mags) for x in pair]
+        enso_amps = enso_amps[:n_ics]
+        print(f"ENSO DETERMINISTIC design: {m} mirrored pairs, A_max {a_max}, "
+              f"mean {np.mean(enso_amps):+.3e}, "
+              f"Saa {float(((np.array(enso_amps) - np.mean(enso_amps))**2).sum()):.2f}: "
+              f"{[round(a, 3) for a in enso_amps]}")
+    elif args.enso_mode == "randomized":
         lo, hi = args.enso_amp_range
         enso_rng = np.random.default_rng(args.enso_seed)
         if args.enso_antithetic:
