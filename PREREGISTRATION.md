@@ -402,3 +402,56 @@ pickles `enso_scoping.pkl`, `mcb_authority_scoping.pkl`).**
   (per-run paired sd ~33 mK, k=4, n=20) — the design is deliberately overpowered; the interesting
   quantities are the residual misses and the imitation-vs-pienso equivalence bound.
 - Cost: ~3.5 GPU-h (`run_campaign_enso.sh`, gated and resumable).
+
+### Amendment 6 POST-MORTEM (logged 2026-08-09, AFTER the campaign and its audit) — and the
+### specification for the corrected re-run (Amendment 7, to be frozen before any new GPU spend)
+
+The Amendment-6 campaign executed exactly as registered (verified: horizon, interval, metric, cap,
+n=20 held-out ICs 6-25, k=4, arms, amplitude streams 940 eval / 941 gates, zero train-heldout
+overlap, no BPTT, `analyze_enso.py` unmodified since the freeze). Its pre-registered primaries
+came out at 8 sigma. A five-lens adversarial audit then showed **the primaries are degenerate**
+(MCB_META_AUDIT.md Addendum 5). Four design errors, all mine, all logged here rather than quietly
+fixed:
+
+1. **La Nina was excluded on an off-horizon measurement.** The justification ("weak, non-monotonic
+   cold response") came from the 365-day / tail-90 scoping numbers (+241 vs -27 mK). At the
+   registered 180-day / tail-60 horizon the same scoping data show near-symmetry (+104.5 vs
+   -98.7 mK). Excluding it made the disturbance one-sided, so its MEAN was non-zero, so a single
+   retuned scalar gain on the ENSO-blind pattern absorbs it: a leave-one-out-tuned blind arm
+   scores 31.4 mK vs pienso 30.5 (p = 0.85). H6/H7 could not have failed.
+2. **Plant constants were measured on the wrong variable.** `enso_effect_per_K = 0.0525` came from
+   atmospheric global-mean surface air temperature; the registered metric is global-ocean dSST,
+   whose measured sensitivity is 0.0716 K/K (1.36x). This crippled the ffmean control arm
+   (correctly specified it scores 27.5 not 52.7 mK, and pienso's advantage becomes +3.0 mK,
+   p = 0.58), and it is the likely source of the target shortfall.
+3. **The control law's reference does not match the scored metric.** The deadbeat law regulates
+   INSTANTANEOUS dSST onto a ramp reaching target at day 180; the metric averages days 121-180. A
+   perfect tracker therefore scores -0.0836 K — a structural +16.4 mK miss (observed A-independent
+   miss: pienso +16.6 mK). Most of the "no arm hits the target" outcome is this, not physics.
+4. **The registered endpoint cannot measure the phenomenon.** With an unreachable target and a
+   one-sided disturbance, no per-IC value crosses the target, so |dSST - target| is exactly linear
+   and the primaries reduce to "which arm cooled more". Disturbance rejection — the actual
+   question — was never a registered endpoint.
+
+Also to correct: the "chaos floor 13 mK" in Amendment 6 was a 3-dof estimate from one base IC; the
+realized per-run figure is 35-40 mK (open-loop arms) / ~18 mK (feedback arms), so the power
+calculation was optimistic by ~1.8x in s.e. And a gate (G-imit) already showed the target was
+unreachable before the held-out run; the campaign proceeded anyway.
+
+**Amendment 7 specification (binding on the re-run; freeze before any GPU spend):**
+- **PRIMARY endpoint = disturbance sensitivity**, the slope of per-IC error on the hidden
+  amplitude (mK per K of Nino3.4), tested as a paired slope difference against the blind
+  comparator. It is invariant to any constant recalibration, so it cannot be gamed by retuning.
+  Mean |miss| is demoted to a secondary, explicitly bias-contaminated, metric.
+- **Zero-mean disturbance:** A ~ U[-2, +2] K (El Nino AND La Nina), antithetic. This removes the
+  mean-offset degeneracy by construction.
+- **Registered control arm: the retuned ENSO-blind constant gain**, tuned leave-one-IC-out. Any
+  feedback claim must beat it.
+- **Plant constants re-derived on the registered metric** (ocean dSST, >= 6 ICs, k >= 4), not on
+  GMST and not from n=1 IC; ffmean rebuilt with the corrected constant.
+- **Control-law reference matched to the scored window** (regulate the tail-60 mean, not the
+  instantaneous ramp), so a perfect controller can actually score 0.
+- **Gates:** k >= 4 (a k=2 gate produced a >120 mK outlier here); and the gate must require the
+  ARM UNDER TEST, not only the comparator, to land in band.
+- Everything else (fresh ICs, micro-ensembles, >= 3 seeds, held-out separation, no BPTT, Holm,
+  TOST bounds, all runs reported) carries over unchanged.

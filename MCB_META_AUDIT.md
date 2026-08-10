@@ -544,6 +544,152 @@ real effect; the breach was in the non-reporting, not in any hidden harm.
 Artifacts: `diya:mcb_experiments_gpu/{confirmatory_eval.pkl, tier2_eval.pkl, tier2b_eval.pkl,
 eval_v3.pkl}` (pulled locally to `mcb_experiments_gpu/`), output `precip_sideeffects.json`.
 
+## Addendum 5 — ENSO campaign results, and the audit that overturned its headline (2026-08-08/09)
+
+The Amendment-6 ENSO campaign ran clean (~3.5 h, all gates passed) and its pre-registered
+primaries came out overwhelmingly significant. A five-lens adversarial verification then
+established that **the primaries are degenerate** and the honest result is a different quantity
+entirely. Every claim below was independently recomputed from the raw member-level cells; where
+the audit and the campaign disagree, the audit wins. Artifacts: `enso_eval.pkl`,
+`enso_eval_analysis.pkl`, `enso_eval_mechanism.pkl`, `enso_{gcal,gmanip,gimit}.pkl`,
+`enso_scoping.pkl`, `mcb_authority_scoping.pkl`.
+
+**What ran.** 180-day episodes, 12 control decisions, registered metric = final-60-day mean
+global-ocean dSST vs a paired NO-ENSO baseline, target −0.1 K. A relaxation pacemaker imposed an
+El Nino of hidden per-episode amplitude A ~ U[0.5, 2.0] K on the arm rollouts only. Arms: static
+(ENSO-blind), ffmean (open-loop schedule compensating the mean amplitude), pienso (classical
+feedforward + deadbeat proportional), imitation x3 seeds (fc14 MLP distilled from pienso). n = 20
+fresh held-out ICs (seed0 7000, indices 6–25), k = 4; gates used the disjoint train ICs 0–5 and a
+separate amplitude stream (941 vs 940). No BPTT.
+
+**Reported result (all arithmetic verified correct, scipy vs the repo's stats agreeing to machine
+precision):** mean |miss| static 87.8, ffmean 52.7, pienso 30.5, imitation 29.1 mK; H6
+pienso-vs-static −57.3 mK (Holm p = 4.6e-8); H7 imitation-vs-static −58.7 mK (Holm p = 3.3e-8);
+imitation-vs-pienso null (equivalence < 4.6 mK); pienso-vs-ffmean −22.2 mK (p = 0.0033). H6/H7
+survive every robustness attack (worst leave-one-out p = 1.7e-7; bootstrap CI [−69.9, −44.7] mK;
+the unregistered snapshot metric strengthens them). The numbers are right. The *inference* is not.
+
+### 5.1 The primaries are degenerate — an ENSO-BLIND controller ties the feedback controllers
+
+Fit a blind counterfactual: the same static pattern at one retuned scalar gain, carrying no ENSO
+information whatsoever, with its gain tuned leave-one-IC-out (no test-set peeking) and its chaos
+residual held fixed (dose scales the MCB response, not the weather noise). It scores **31.4 mK**,
+statistically tied with pienso (30.5; diff −0.9 mK, p = 0.85) and with imitation (29.1; −2.3 mK,
+p = 0.67). The registered mean-|miss| metric therefore **cannot distinguish adaptive feedback from
+a better-tuned open loop.**
+
+The mechanism is the metric's blindness to overshoot combined with a one-sided disturbance. Not
+one of the 20 per-IC values for static, pienso or any imitation seed crosses the target (ffmean
+2/20), so |dSST − target| is exactly linear and H6/H7 are algebraically identical to a paired test
+on raw dSST — "which arm cooled more". Because the imposed El Nino always warms, its **mean** is
+non-zero, and compensating that mean by a constant is sufficient. H6/H7 were guaranteed at design
+time: static's structural bias is ~4.8x the minimum detectable effect. This is the mirror image of
+the Tier-1 finding that a null was baked into the design — here a **win** was baked in.
+
+### 5.2 Root cause: excluding La Nina, on a justification measured at the wrong horizon
+
+Amendment 6 excluded La Nina because the scoping run showed a weak, non-monotonic cold response.
+That measurement was taken at **365 days / tail-90** (El Nino +241 mK vs La Nina −27 mK). At the
+campaign's **own registered horizon**, 180 days / tail-60, the scoping data show a near-symmetric
+response: **El Nino +104.5 mK, La Nina −98.7 mK.** The exclusion was not justified at the horizon
+actually used, and it is the design-level cause of §5.1: a zero-mean disturbance would have left
+no mean offset for a constant gain to absorb, making H6/H7 genuine tests of adaptation.
+
+### 5.3 The one non-tautological comparison does not survive either
+
+pienso-vs-ffmean (−22.2 mK, p = 0.0033) rests on ffmean having been handed the wrong plant
+constant. `enso_effect_per_K = 0.0525` was measured on atmospheric **global-mean surface air
+temperature**, while the registered metric is **global-ocean dSST**, whose campaign-measured
+sensitivity is **0.0716 K/K — 1.36x larger**. Re-specifying ffmean in metric space moves it from
+52.7 to 27.5 mK and erases pienso's advantage: **+3.0 mK, p = 0.58.** Consistently, the as-run
+advantage lives entirely in the high-amplitude half (−45.0 mK, p = 8.6e-5) and is exactly null in
+the low half (+0.7 mK, p = 0.89) — the fingerprint of a one-sided gain deficit, not of per-episode
+adaptivity. **The claim "feedback beats a mis-specified feedforward schedule" must be withdrawn**
+and restated narrowly: feedback is *robust to* a 36% plant-model error that cripples an open loop.
+
+### 5.4 The residual miss is a law/metric mismatch, not physics
+
+No arm reaches the target, and this is not an authority or lag limitation (the cap never binds;
+dose linearity 1.05; 3x headroom). The deadbeat law regulates the **instantaneous** dSST onto a
+linear ramp reaching the target at day 180, while the metric averages days 121–180. A perfect
+tracker of that reference scores −0.1 x mean(t/180) = **−0.0836 K, a structural +16.4 mK miss.**
+Observed A-independent level: pienso −0.0834 K (+16.6 mK), imitation −0.0881 K (+11.9 mK). The
+prediction matches to 0.2 mK. Fixing the reference to the tail-mean is a few lines.
+
+Relatedly, the "~20 mK shared calibration deficit" is **not established**: the G-cal gate (6 train
+ICs) gives static-without-ENSO at −0.0803 K, but the campaign's own 20-IC extrapolation to A = 0
+gives −0.1016 ± 0.0118 K. Two disjoint IC sets disagree by 21 mK. Either way it does not inflate
+H6/H7 (it cancels in the paired difference; H6 moves from −57.3 to −56.6 mK when re-scored at the
+achievable target).
+
+### 5.5 What survives: disturbance rejection
+
+Regress each arm's per-IC error on the hidden amplitude. The slope is the arm's sensitivity to the
+disturbance, and **no blind arm at any gain can change it** (verified: gains 1.0–3.0 leave static's
+slope at +71.6 to +76.5 mK/K). This measure is immune to the mean-offset degeneracy, to the
+calibration dispute, and to the |·| linearity:
+
+| Arm | disturbance sensitivity (mK per K of Nino3.4) | rejection |
+|---|---|---|
+| static (blind) | +71.6 ± 8.9 | — |
+| ffmean (open-loop schedule) | +81.1 ± 8.7 | none |
+| **pienso (classical feedback)** | **+11.1 ± 4.3** | **84%** |
+| **imitation (distilled MLP, 3 seeds)** | **+13.8 ± 4.0** | **81%** |
+
+Paired slope difference pienso-vs-static: **−60.5 ± 7.6 mK/K, p = 2.6e-7.** The residual
+amplitude dependence is itself significant (+11.1 ± 4.3, p = 0.019), so rejection is 84%, not
+complete. Cross-episode dispersion falls 34.8 → 9.2 mK (F = 14.3, p = 3e-7) to the chaos floor
+(8.9 mK), i.e. essentially all amplitude-driven variance is gone. Note that **ffmean rejects
+nothing** (+81.1, indistinguishable from static): compensating the average disturbance lowers the
+mean error while leaving episode-to-episode tracking untouched. That contrast — not H6/H7 — is the
+campaign's scientific content.
+
+**Mechanism, verified directly.** The pacemaker delivered as commanded (realized-vs-commanded
+r = 0.998–0.999, slope 0.97–0.99, arm-independent). Commanded forcing tracks the hidden amplitude
+at r = +0.91 (pienso) and +0.86–0.89 (imitation seeds), and is exactly constant for static and
+ffmean. Extrapolated to A = 0 the feedback arms command static's own dose (0.0095 vs 0.0097), so
+they are not simply dosing more. The distilled networks match the hand law within ±2.9–4.6 mK —
+the fourth independent replication that imitation transfers a classical law faithfully and does
+not exceed it.
+
+### 5.6 Other audited findings
+
+- **The chaos floor was understated ~3x.** Amendment 6 assumed 13 mK/run (a 3-dof estimate from
+  one base IC); the campaign's realized per-run figure is 35–40 mK for open-loop arms and ~18 mK
+  for feedback arms, making the realized comparison s.e. 1.8x the design assumption. This did not
+  threaten the 8-sigma primaries but is why the one interesting comparison landed at ~3.4 sigma.
+- **Both statistical traps this project has fallen into before are absent**: the analysis clusters
+  at the IC level (a run-level s.e. would have been 1.4–1.6x too small) and applies |·| after
+  member averaging, not before.
+- **A pre-run gate already showed the target was unreachable** (G-imit: pienso at −0.062 K) and the
+  campaign proceeded regardless. Future amendments must gate on the arm under test landing in
+  band, not only the comparator.
+- **k = 2 gates are one bad draw from a wrong verdict**: one G-cal no-ENSO static run landed at
+  +0.0243 K, a >120 mK excursion. Gates should use k >= 4.
+- **Precipitation** (now available for 180-day episodes with a large disturbance): no Amazon or
+  Sahel effect survives correction for any arm, consistent with Addendum 4.
+- Pre-registration compliance was otherwise exact: horizon, interval, metric, cap, n, k, arms,
+  amplitude streams (940 eval / 941 gates), held-out/train IC separation (zero overlap), no BPTT,
+  and `analyze_enso.py` unmodified since the freeze commit.
+
+### 5.7 Honest status
+
+**Retracted:** "a feedback controller significantly outperforms static deployment under ENSO
+variability" (H6/H7 — degenerate; a retuned blind gain ties it) and "feedback beats a
+mean-feedforward schedule" (pienso-vs-ffmean — an artifact of a wrong-variable constant).
+
+**Supported:** *classical and distilled feedback controllers reject ~81–84% of an imposed ENSO's
+effect on global-mean ocean temperature (slope +71.6 → +11.1 mK/K, p = 2.6e-7), while an open-loop
+schedule rejects none — and the distilled neural controller matches the classical law to within
+±3 mK.* This is a real, mechanism-verified, non-degenerate result, and it is the first closed-loop
+MCB-against-interannual-variability measurement in the literature.
+
+**The corrected experiment is cheap** (~4 GPU-h) and is specified in the Amendment 6 post-mortem
+in PREREGISTRATION.md: include La Nina (zero-mean disturbance, killing the mean-offset
+degeneracy), re-derive the plant constants on the registered metric, fix the deadbeat reference to
+the tail window, pre-register disturbance sensitivity as the PRIMARY endpoint, and add the
+retuned-blind-gain arm as a registered control.
+
 ## Appendix B — Provenance
 
 - Raw artifacts pulled 2026-07-29 from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/` (eval_final/v2/v3,
