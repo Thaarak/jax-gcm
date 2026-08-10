@@ -514,3 +514,51 @@ off lands in [-0.12, -0.08]; **G-arm** — new, from the Amendment-6 lesson — 
 
 **Analysis:** the pre-committed `analyze_enso7.py` (+ tests), frozen with this amendment.
 **Cost:** ~4 GPU-h (`run_campaign_enso7.sh`, gated and resumable).
+
+### Amendment 7, revision 1 — the ENSO-blind outcome-feedback ablation (frozen 2026-08-10,
+### AFTER the Amendment-7 eval but BEFORE the ablation arm is run)
+
+The Amendment-7 campaign passed both primaries (H8/H9) and, unlike Amendment 6, its result is NOT
+reproducible by rescaling a blind controller. But the adversarial audit identified that H8/H9 as
+registered compare feedback against an OPEN-LOOP arm, and therefore test "feedback of any kind vs
+no feedback" — NOT whether OBSERVING ENSO helps. Feature 0 (the realized global-ocean dSST anomaly
+against the no-ENSO baseline) already carries the ENSO signal, so a controller with no Nino
+observation can reject the disturbance through ordinary outcome feedback. Two independent surrogate
+calculations (mine and the auditor's, agreeing) put such an arm at 12-18 mK/K, i.e. ~63-77%
+rejection versus the observed 95%, and passing H8 at p ~ 1e-5. Registering that arm now, before
+running it.
+
+Two further audit findings are logged here and will be reported as corrections rather than
+re-litigated: (a) the `blind_loo` control is slope-identical to static BY the invariance theorem
+that motivates it, so it demonstrates the endpoint's non-gameability by rescaling but is NOT an
+independent competitor — the "every feedback claim must beat it" framing is withdrawn; (b) the
+slope residuals are strongly heteroscedastic (static's error sd grows 25 -> 71 mK across the
+amplitude range while pienso's is flat at 9 -> 11), so OLS p-values are anti-conservative:
+HC3/wild-bootstrap inference gives p ~ 5e-5 for H8/H9 rather than 2e-9/3.8e-8. All Amendment-7
+p-values on the primary endpoint are hereby superseded by their wild-bootstrap values.
+
+**New arm.** `blindfb` = the identical pi-enso law with its feedforward gain set to ZERO
+(`--arm blindfb=pi-enso@0=<pattern>`), i.e. deadbeat outcome feedback on the realized dSST and time
+only, with the Nino3.4 observation contributing nothing. It is otherwise byte-identical to the
+pienso arm.
+
+**Run design.** One new evaluation containing `static`, `pienso` and `blindfb` together, so all
+three are paired WITHIN one process (avoiding the ~16 mK cross-process chaos offset), on the SAME
+held-out ICs (indices 6-25 of ics_enso7), the SAME amplitude stream (seed 950, antithetic, range
++/-1.827) and the SAME member seeds as the Amendment-7 eval. Nothing else changes.
+
+**Hypothesis H10 (pre-stated, direction-gated, wild-bootstrap inference):** the Nino3.4 observation
+reduces disturbance sensitivity beyond outcome feedback alone — i.e. the paired slope
+(pienso - blindfb) on A is negative. Secondary: blindfb vs static (does outcome feedback alone
+reject?), and the same contrasts on mean |miss|, with TOST bounds if null.
+
+**Interpretation grid, pre-stated.** (i) H10 significant => the ENSO observation carries genuine
+incremental control value, and the headline may say the controller exploits its observation of the
+disturbance. (ii) H10 null with a tight equivalence bound => outcome feedback explains the
+rejection and the headline must be stated as "feedback rejects the disturbance; observing it adds
+no measurable benefit at this horizon" — a cleaner and more surprising result than the original
+framing, and one that materially changes what a deployment would need to measure. (iii) blindfb
+not different from static => the surrogates are wrong and the Nino term is doing all the work.
+All three outcomes are reportable; none is a failure.
+
+**Cost:** ~1.5 GPU-h (3 arms x 20 ICs x k=4 at 180 d, baselines shared).

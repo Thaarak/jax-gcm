@@ -1,0 +1,16 @@
+{
+  "mu_mcb_per_unit_gain": -0.24028651416301727,
+  "mu_se": 0.00903036886303936,
+  "enso_effect_per_K": 0.05472637340426445,
+  "enso_se": 0.002332694884543501,
+  "rescale": 0.4161698393616761,
+  "amplitude_floor_K": 1.8272725521440762,
+  "n_rollouts": 24,
+  "days": 180,
+  "tail_days": 60,
+  "split": "train",
+  "num_ics": 6,
+  "members": 4,
+  "probe_amp": 1.4,
+  "metric": "final_tail_mean_ocean_dSST"
+}

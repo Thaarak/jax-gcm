@@ -241,6 +241,18 @@ def parse_arms(arm_specs):
     arms = []
     for spec in arm_specs:
         parts = spec.split("=")
+        # A pi-enso arm may carry a per-arm feedforward gain as KIND@FF
+        # (e.g. pi-enso@0 = the ENSO-blind outcome-feedback ablation of
+        # Amendment 7 revision 1). Everything else is unchanged.
+        ff_override = None
+        if len(parts) == 3 and "@" in parts[1]:
+            base, _, ffs = parts[1].partition("@")
+            if base == "pi-enso":
+                try:
+                    ff_override = float(ffs)
+                except ValueError:
+                    raise SystemExit(f"Bad feedforward gain in '{spec}'")
+                parts[1] = base
         if len(parts) != 3 or parts[1] not in FEATURE_CONFIGS:
             raise SystemExit(
                 f"Bad --arm '{spec}': expected NAME=KIND=PATH with KIND in "
@@ -255,7 +267,8 @@ def parse_arms(arm_specs):
                     f"got '{path}'")
         elif not Path(path).exists():
             raise SystemExit(f"--arm {name}: path does not exist: {path}")
-        arms.append({"name": name, "kind": kind, "path": path})
+        arms.append({"name": name, "kind": kind, "path": path,
+                     "ff_override": ff_override})
     names = [a["name"] for a in arms]
     if len(set(names)) != len(names):
         raise SystemExit(f"Duplicate arm names: {names}")
@@ -282,8 +295,9 @@ def build_arm(arm, policy, coords, target_cooling, enso_amp_mean=None,
         pattern = jnp.asarray(stage1["best_pattern"])
         params = {"pattern": pattern, "target": float(target_cooling)}
         if arm["kind"] == "pi-enso":
+            ff = arm.get("ff_override")
             return make_enso_pi_policy_fn(
-                enso_effect_per_K=enso_effect_per_k,
+                enso_effect_per_K=(enso_effect_per_k if ff is None else ff),
                 reference_scale=reference_scale), params, fc
         assert enso_amp_mean is not None, "ff-mean arm requires --enso-mode"
         return make_enso_ff_mean_policy_fn(
