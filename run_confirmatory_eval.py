@@ -71,6 +71,7 @@ from jcm.mcb.enso import (
     make_enso_ff_mean_policy_fn,
     make_enso_pi_policy_fn,
     nino_pattern,
+    tail_reference_scale,
     wrap_step_fn_with_enso,
 )
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
@@ -225,6 +226,13 @@ def parse_args():
                         "--efficacy-antithetic).")
     p.add_argument("--enso-ramp-days", type=float, default=30.0)
     p.add_argument("--enso-tau-days", type=float, default=5.0)
+    p.add_argument("--enso-effect-per-k", type=float, default=0.0525,
+                   help="Feedforward gain of the pi-enso/ff-mean laws: the "
+                        "ENSO effect per K of Nino3.4 anomaly. Amendment 7 "
+                        "requires this be measured on the REGISTERED metric "
+                        "(run_calibrate_enso_plant.py); the Amendment-6 "
+                        "default 0.0525 was measured on atmospheric GMST and "
+                        "under-scaled the ocean-dSST response by 1.36x.")
     p.add_argument("--output", required=True)
     return p.parse_args()
 
@@ -254,7 +262,8 @@ def parse_arms(arm_specs):
     return arms
 
 
-def build_arm(arm, policy, coords, target_cooling, enso_amp_mean=None):
+def build_arm(arm, policy, coords, target_cooling, enso_amp_mean=None,
+              enso_effect_per_k=0.0525, reference_scale=1.0):
     """Build one arm; returns (policy_fn, params, feature_config)."""
     fc = FEATURE_CONFIGS[arm["kind"]]
     dim = get_coupled_feature_dim(fc)
@@ -273,10 +282,13 @@ def build_arm(arm, policy, coords, target_cooling, enso_amp_mean=None):
         pattern = jnp.asarray(stage1["best_pattern"])
         params = {"pattern": pattern, "target": float(target_cooling)}
         if arm["kind"] == "pi-enso":
-            return make_enso_pi_policy_fn(), params, fc
+            return make_enso_pi_policy_fn(
+                enso_effect_per_K=enso_effect_per_k,
+                reference_scale=reference_scale), params, fc
         assert enso_amp_mean is not None, "ff-mean arm requires --enso-mode"
-        return make_enso_ff_mean_policy_fn(amp_mean=enso_amp_mean), \
-            params, fc
+        return make_enso_ff_mean_policy_fn(
+            amp_mean=enso_amp_mean,
+            enso_effect_per_K=enso_effect_per_k), params, fc
     if arm["kind"] == "uniform":
         level = float(arm["path"])
         shape = coords.horizontal.nodal_shape
@@ -392,11 +404,20 @@ def main():
     )
     enso_amp_mean = (sum(args.enso_amp_range) / 2.0
                      if args.enso_mode != "off" else None)
+    # Amendment 7: the control law's ramp reference is stretched so a perfect
+    # tracker scores the target on the TAIL-AVERAGED metric rather than
+    # structurally undershooting it (Addendum 5, +16.4 mK).
+    reference_scale = tail_reference_scale(args.days, args.tail_days)
+    print(f"pi-enso reference scale (tail-{args.tail_days} on {args.days} d): "
+          f"{reference_scale:.4f} | enso_effect_per_K "
+          f"{args.enso_effect_per_k:.5f}")
     arm_params = {}
     for arm in arms:
         policy_fn, params, fc = build_arm(arm, policy, coords,
                                           args.target_cooling,
-                                          enso_amp_mean=enso_amp_mean)
+                                          enso_amp_mean=enso_amp_mean,
+                                          enso_effect_per_k=args.enso_effect_per_k,
+                                          reference_scale=reference_scale)
         config = CoupledControllerConfig(
             control_interval_steps=args.control_interval,
             total_steps=args.days,

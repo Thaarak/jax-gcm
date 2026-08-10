@@ -25,6 +25,7 @@ The pacemaker is pure JAX (jit/scan/grad-safe).
 from typing import NamedTuple, Tuple
 
 import jax.numpy as jnp
+import numpy as np
 
 
 # Nino3.4 box (single source of truth — the pacemaker, the realized index,
@@ -176,10 +177,28 @@ def wrap_step_fn_with_enso(
     return enso_step_fn
 
 
+def tail_reference_scale(days: int, tail_days: int) -> float:
+    """Ramp-reference correction for a tail-averaged scoring metric.
+
+    A deadbeat law that drives the INSTANTANEOUS anomaly along a linear ramp
+    to ``target`` at day ``days`` is scored by a metric that averages the
+    final ``tail_days``. A perfect tracker of that ramp therefore scores
+    ``target * f`` with f = mean(t/days) over the tail window — a structural
+    miss of (1-f)*|target| that no control authority can remove (measured in
+    the Amendment-6 campaign: predicted +16.4 mK, observed +16.6 mK).
+
+    Returns 1/f, the factor by which the law's reference must be scaled so
+    that a perfect tracker scores exactly ``target``.
+    """
+    t = np.arange(days - tail_days + 1, days + 1, dtype=float)
+    return float(1.0 / np.mean(t / days))
+
+
 def make_enso_pi_policy_fn(
     enso_effect_per_K: float = 0.0525,
     gain_max: float = 4.0,
     ff_weight: float = 1.0,
+    reference_scale: float = 1.0,
     dsst_idx: int = 0,
     time_idx: int = 10,
     nino_idx: int = 13,
@@ -206,17 +225,26 @@ def make_enso_pi_policy_fn(
     error in the remaining time; per-unit-gain final response = target,
     because the rescaled static pattern is calibrated to deliver the target
     at gain 1). The feedforward term pre-compensates the expected
-    horizon-matched ENSO warming: ``enso_effect_per_K`` is the measured
-    GMST effect at the METRIC horizon per K of commanded box anomaly
-    (scoping 2026-08-08: +105 mK per 2 K at 180 d tail-60 -> 0.0525);
-    the proportional term cleans up timing mismatch between the ENSO and
-    MCB response lags.
+    horizon-matched ENSO effect; ``enso_effect_per_K`` MUST be measured on
+    the same variable the metric scores (Amendment-6 post-mortem: a value
+    measured on atmospheric GMST under-scaled the ocean-dSST response by
+    1.36x and crippled the open-loop control arm). The proportional term
+    cleans up timing mismatch between the ENSO and MCB response lags.
+
+    ``reference_scale`` (see tail_reference_scale) stretches the internal
+    ramp reference so a perfect tracker scores ``target`` on a
+    tail-AVERAGED metric instead of structurally undershooting it.
+
+    Note the actuator FLOOR: gain is clipped below at 0, so a cold (La Nina)
+    anomaly larger than |target| / enso_effect_per_K cannot be compensated
+    even by spraying nothing. Amendment 7 sizes its amplitude range to sit
+    exactly at that floor.
 
     params: {"pattern": (ix, il) rescaled static pattern, "target": float}
     """
     def pi_policy_fn(params, features):
         pattern = params["pattern"]
-        target = params["target"]
+        target = params["target"] * reference_scale
         realized = features[dsst_idx]
         tfrac = features[time_idx]
         nino = features[nino_idx]

@@ -455,3 +455,62 @@ unreachable before the held-out run; the campaign proceeded anyway.
   ARM UNDER TEST, not only the comparator, to land in band.
 - Everything else (fresh ICs, micro-ensembles, >= 3 seeds, held-out separation, no BPTT, Holm,
   TOST bounds, all runs reported) carries over unchanged.
+
+### Amendment 7 — corrected ENSO experiment (frozen 2026-08-09, BEFORE any Amendment-7 GPU run)
+
+Supersedes Amendment 6, whose four design errors are documented in the post-mortem above and in
+MCB_META_AUDIT.md Addendum 5. Same scientific question — can feedback cancel the global-mean
+temperature effect of imposed ENSO variability while delivering the MCB target? — with a design
+that can actually answer it.
+
+**PRIMARY ENDPOINT (changed): disturbance sensitivity.** The slope of each arm's signed per-IC
+error on the hidden amplitude A, in mK per K of Nino3.4, tested as a PAIRED slope (regress the
+per-IC difference arm-minus-static on A; test the slope against zero). Rationale: rescaling a
+non-adaptive controller by any constant shifts its mean error but leaves its slope EXACTLY
+unchanged (unit-tested), so this endpoint cannot be satisfied by retuning. Mean |dSST - target|
+is retained only as an explicitly bias-contaminated secondary.
+
+**Hypotheses** (Holm over the primary pair, direction-gated; paired t governs; Wilcoxon
+co-reported; TOST bounds on nulls; all runs reported):
+- **H8:** pienso's disturbance sensitivity is lower than static's.
+- **H9:** the pooled imitation arms' sensitivity is lower than static's.
+Secondary: each arm vs the blind control on BOTH endpoints; imitation vs pienso (slope and mean,
+with equivalence bounds); per-seed; warm/cold stratification (pre-stated because the actuator
+floor is one-sided).
+
+**Registered control arm — the retuned ENSO-BLIND gain.** Computed, not simulated: the static arm
+rescaled by one constant gain chosen leave-one-IC-out, under the physical model
+dSST = g*mu + s*A + chaos (chaos does NOT scale with dose). This is the best any blind controller
+could do, and it TIED the feedback arms on Amendment 6's endpoint. Any feedback claim must beat it.
+
+**Disturbance: zero-mean.** A ~ U[-A_max, +A_max] (El Nino AND La Nina), antithetic, seed 950
+(gates use 951). A_max = min(|target| / s, 2.0) with s measured in step 2 below — i.e. sized to the
+actuator floor, since gain is clipped below at 0 and a cold anomaly beyond |target|/s cannot be
+compensated even by spraying nothing. With the expected s this gives A_max ~ 1.4 K, a zero-mean
+disturbance with ~1.9x the amplitude spread of Amendment 6 (better slope power). La Nina is
+INCLUDED: the Amendment-6 exclusion rested on a 365 d / tail-90 measurement, whereas at this
+campaign's 180 d / tail-60 horizon the scoping data show near-symmetry (+104.5 / -98.7 mK).
+
+**Plant constants measured in METRIC SPACE** (`run_calibrate_enso_plant.py`, train ICs only,
+k=4, on the registered final-60-day mean ocean dSST): mu = MCB authority per unit gain (sets the
+pattern rescale = target/mu) and s = ENSO sensitivity (sets the law's feedforward gain). Amendment
+6 used 0.0525 measured on atmospheric GMST from one base state; the campaign-measured ocean-dSST
+value was 0.0716 (1.36x), which crippled its open-loop arm.
+
+**Control-law reference matched to the scored window.** The law's ramp reference is scaled by
+`tail_reference_scale(180, 60) = 1.1960` so a perfect tracker scores the target rather than
+structurally undershooting by (1-f)|target| = 16.4 mK.
+
+**Arms:** static (rescaled, ENSO-blind), pienso (corrected law), imitation_s72/s73/s74 (fc14
+distilled from the corrected law). ffmean is DROPPED — with a zero-mean disturbance a
+mean-feedforward schedule is identically the static arm, and its Amendment-6 role is taken by the
+blind-gain control. No BPTT.
+
+**ICs and gates:** fresh set seed0 8000 (6 train + 20 held-out, horizon 180), k=4 everywhere
+(Amendment 6's k=2 gates produced a >120 mK outlier). Gates, in order: **G-cal** static with ENSO
+off lands in [-0.12, -0.08]; **G-arm** — new, from the Amendment-6 lesson — the ARM UNDER TEST
+(pienso) must itself land in band on train ICs before any held-out spend; distillation fidelity
+< 0.002 albedo as in Amendment 4.
+
+**Analysis:** the pre-committed `analyze_enso7.py` (+ tests), frozen with this amendment.
+**Cost:** ~4 GPU-h (`run_campaign_enso7.sh`, gated and resumable).

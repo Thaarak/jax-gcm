@@ -35,7 +35,7 @@ import numpy as np
 import optax
 
 from jcm.mcb import CoupledFeatureConfig, MCBPolicyMLP, get_coupled_feature_dim
-from jcm.mcb.enso import make_enso_pi_policy_fn
+from jcm.mcb.enso import make_enso_pi_policy_fn, tail_reference_scale
 from jcm.mcb.train import save_checkpoint
 from run_confirmatory_eval import _PI_DSST_IDX, _PI_TIME_IDX, make_pi_policy_fn
 
@@ -78,6 +78,15 @@ def parse_args():
                         "{f11_lo, f11_hi, f12_lo, f12_hi} nuisance-feature "
                         "envelopes (Tier-2b lesson: measure, never guess). "
                         "Default: the Tier-2b 60-day anchors.")
+    p.add_argument("--enso-effect-per-k", type=float, default=0.0525,
+                   help="pi-enso only: feedforward gain, measured on the "
+                        "REGISTERED metric (Amendment 7).")
+    p.add_argument("--reference-days", type=int, default=None,
+                   help="pi-enso only: episode length for the tail-reference "
+                        "correction (with --reference-tail).")
+    p.add_argument("--reference-tail", type=int, default=None,
+                   help="pi-enso only: scoring tail window; the distilled law "
+                        "then targets the tail MEAN, not the final day.")
     p.add_argument("--acceptance", type=float, default=0.002,
                    help="Mean |NN - PI| albedo error bound (Amendment 4).")
     p.add_argument("--output", required=True)
@@ -181,8 +190,19 @@ def distill(pattern, args, log_every=500):
         output_shape=pattern.shape, hidden_dims=(256, 256),
         max_perturbation=args.max_perturbation,
     )
-    pi_fn = (make_enso_pi_policy_fn() if law == "pi-enso"
-             else make_pi_policy_fn())
+    if law == "pi-enso":
+        ref_days = getattr(args, "reference_days", None)
+        ref_tail = getattr(args, "reference_tail", None)
+        ref_scale = (tail_reference_scale(ref_days, ref_tail)
+                     if ref_days and ref_tail else 1.0)
+        pi_fn = make_enso_pi_policy_fn(
+            enso_effect_per_K=getattr(args, "enso_effect_per_k", 0.0525),
+            reference_scale=ref_scale)
+        print(f"  distilling pi-enso: enso_effect_per_K="
+              f"{getattr(args, 'enso_effect_per_k', 0.0525):.5f}, "
+              f"reference_scale={ref_scale:.4f}")
+    else:
+        pi_fn = make_pi_policy_fn()
     pi_params = {"pattern": jnp.asarray(pattern),
                  "target": float(args.target_cooling)}
     cap = args.max_perturbation
@@ -255,6 +275,9 @@ def main():
     save_checkpoint(params, args.output, metadata={
         "mode": "pi-imitation",
         "law": args.law,
+        "enso_effect_per_k": getattr(args, "enso_effect_per_k", None),
+        "reference_days": getattr(args, "reference_days", None),
+        "reference_tail": getattr(args, "reference_tail", None),
         "seed": args.seed,
         "stage1": args.stage1,
         "target_cooling": args.target_cooling,
