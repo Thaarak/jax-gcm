@@ -258,7 +258,9 @@ def parse_arms(arm_specs):
             if base == "pi-enso":
                 bits = rest.split("@")
                 if len(bits) > 2:
-                    raise SystemExit(f"Bad KIND in '{spec}': pi-enso@FF[@FB]")
+                    raise SystemExit(
+                        f"Bad KIND in '{spec}': pi-enso@FF[@FB], where FF and "
+                        f"FB are WEIGHTS (0 = ablate, 1 = designed strength)")
                 try:
                     ff_override = float(bits[0])
                     if len(bits) == 2:
@@ -309,10 +311,16 @@ def build_arm(arm, policy, coords, target_cooling, enso_amp_mean=None,
         pattern = jnp.asarray(stage1["best_pattern"])
         params = {"pattern": pattern, "target": float(target_cooling)}
         if arm["kind"] == "pi-enso":
+            # KIND@FF[@FB]: FF and FB are WEIGHTS on the feedforward and
+            # feedback terms, not raw coefficients. @0 ablates a term, @1
+            # leaves it at its designed strength (the measured
+            # --enso-effect-per-k for feedforward). Treating FF as a raw
+            # coefficient once made "@1" mean a gain 18x the measured value.
             ff = arm.get("ff_override")
             fb = arm.get("fb_override")
             return make_enso_pi_policy_fn(
-                enso_effect_per_K=(enso_effect_per_k if ff is None else ff),
+                enso_effect_per_K=enso_effect_per_k,
+                ff_weight=(1.0 if ff is None else ff),
                 fb_weight=(1.0 if fb is None else fb),
                 reference_scale=reference_scale), params, fc
         assert enso_amp_mean is not None, "ff-mean arm requires --enso-mode"

@@ -187,3 +187,50 @@ class PiControllerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PiEnsoWeightSemanticsTest(unittest.TestCase):
+    """KIND@FF[@FB] must be WEIGHTS, not raw coefficients.
+
+    Regression test for the Amendment 7 rev 2 tuning-sweep bug: `@1` was
+    read as enso_effect_per_K = 1.0 — 18x the measured 0.05473 — so the
+    'anticipating' arms ran wildly over-aggressive (RMS_A 87 vs 16 mK, and
+    a sign-flipped slope). @1 must mean 'designed strength'.
+    """
+
+    def _fn(self, spec_kind, ff_measured=0.05473):
+        import pickle
+        import jax.numpy as jnp
+        import numpy as np
+        from run_confirmatory_eval import build_arm
+        from jcm.mcb import MCBPolicyMLP
+        pat = "mcb_experiments_gpu/stage1/stage1_optimized_pattern.pkl"
+        with open(pat, "rb") as f:
+            shape = np.asarray(pickle.load(f)["best_pattern"]).shape
+
+        class C:
+            class horizontal:
+                nodal_shape = shape
+        policy = MCBPolicyMLP(output_shape=shape, hidden_dims=(8,),
+                              max_perturbation=0.09)
+        from run_confirmatory_eval import parse_arms
+        parsed = parse_arms([f"t={spec_kind}={pat}"])[0]
+        fn, params, _ = build_arm(parsed, policy, C, -0.1,
+                                  enso_effect_per_k=ff_measured,
+                                  reference_scale=1.196)
+        feats = jnp.zeros(14).at[0].set(-0.02).at[10].set(0.5).at[13].set(1.5)
+        return float(jnp.mean(fn(params, feats)))
+
+    def test_at_one_equals_plain_pi_enso(self):
+        """pi-enso@1@1 must be IDENTICAL to plain pi-enso."""
+        self.assertAlmostEqual(self._fn("pi-enso@1@1"),
+                               self._fn("pi-enso"), places=12)
+
+    def test_at_zero_ablates_feedforward(self):
+        """pi-enso@0 must command strictly less under a warm anomaly."""
+        self.assertLess(self._fn("pi-enso@0"), self._fn("pi-enso"))
+
+    def test_ff_weight_is_not_a_raw_coefficient(self):
+        """The bug: @1 read as enso_effect_per_K=1.0 was ~18x too strong."""
+        self.assertLess(self._fn("pi-enso@1@1"),
+                        1.5 * self._fn("pi-enso@0@1"))

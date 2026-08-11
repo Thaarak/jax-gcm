@@ -9,8 +9,13 @@
 # fb=1 vs +1.8 at fb=6). So both laws get their gain tuned here, on TRAIN
 # ICs only, by the registered rule: minimise RMS_A, ties to the SMALLER gain.
 #
-# Cost: ICs ~12 min; sweep (9 arms x 6 train ICs x k=2, baselines shared)
-# ~35 min. TOTAL ~45 min. Idempotent — rerun to resume.
+# Cost: ICs ~12 min (already done on a rerun); sweep (9 arms x 6 train ICs
+# x k=2, baselines shared) ~35 min. Idempotent — rerun to resume.
+#
+# v2: the first sweep was INVALID — KIND@FF was read as a raw
+# enso_effect_per_K, so "@1" meant a feedforward gain of 1.0 K/K, 18x the
+# measured 0.05473. FF/FB are now WEIGHTS (0 = ablate, 1 = designed
+# strength) and a regression test pins pi-enso@1@1 == plain pi-enso.
 CONTAINER=aeon-vllm
 ts() { date +%H:%M:%S; }
 step() { echo ""; echo "[$(ts)] ========== $1 =========="; }
@@ -50,8 +55,8 @@ else
 fi
 
 step "2/2 Feedback-gain sweep on TRAIN ICs (ff=0 reactive, ff=1 anticipating)"
-if [ -f $E/enso8_tune.pkl ]; then
-  echo "  $E/enso8_tune.pkl exists — skip"
+if [ -f $E/enso8_tune_v2.pkl ]; then
+  echo "  $E/enso8_tune_v2.pkl exists — skip"
 else
   $PY run_confirmatory_eval.py --ic-dir $ICS --split train \
     --arm b1=pi-enso@0@1=$PAT \
@@ -68,9 +73,9 @@ else
     --max-perturbation $CAP --enso-effect-per-k $FF \
     --enso-mode randomized --enso-amp-design deterministic \
     --enso-amp-range -$AMAX $AMAX \
-    --output $E/enso8_tune.pkl || { echo "SWEEP FAILED"; exit 1; }
+    --output $E/enso8_tune_v2.pkl || { echo "SWEEP FAILED"; exit 1; }
 fi
 
 echo ""
-echo "[$(ts)] TUNING SWEEP DONE -> $E/enso8_tune.pkl"
+echo "[$(ts)] TUNING SWEEP DONE -> $E/enso8_tune_v2.pkl"
 echo "Next: pull it and apply the registered selection rule before the eval."
