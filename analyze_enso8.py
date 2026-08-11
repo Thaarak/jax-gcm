@@ -174,9 +174,27 @@ def analyze(results, target=-0.1, n_boot=20000):
             "mean_signed_mK": float(e.mean() * 1000),
         }
 
-    # PRIMARY — H10: does anticipation beat the TUNED reactive controller?
-    # Comparator is blindfb_t (feedforward ablated, feedback gain retuned on
-    # train ICs). blindfb (untuned) is descriptive only.
+    # PRIMARY — H10: does anticipation beat the BEST reactive controller?
+    # The comparator is whichever reactive-ladder arm (feedforward ablated,
+    # feedback gain varied) scores best ON THIS held-out data. Selecting the
+    # comparator on the test set INFLATES it, which biases against H10 — the
+    # conservative direction — and removes any "the opponent was detuned"
+    # objection. Revision 2's train-tuned comparator was abandoned because
+    # the train sweep put the optimum at the grid edge with overlapping CIs.
+    reactive = sorted(a for a in err if a.startswith("b"))
+    anticip = sorted(a for a in err if a.startswith("p"))
+    if reactive:
+        best_r = min(reactive, key=lambda a: rms_a(err[a]))
+        out["comparator"] = {
+            "selected": best_r, "rule": "min RMS_A on held-out (conservative)",
+            "ladder": {a: rms_a(err[a]) * 1000 for a in reactive}}
+        err["blindfb_t"] = err[best_r]
+    if anticip:
+        best_p = min(anticip, key=lambda a: rms_a(err[a]))
+        out["anticipating"] = {
+            "selected": best_p,
+            "ladder": {a: rms_a(err[a]) * 1000 for a in anticip}}
+        err["pienso"] = err[best_p]
     def pair(a, b, key):
         if a not in err or b not in err:
             return None
