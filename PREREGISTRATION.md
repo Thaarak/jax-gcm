@@ -675,3 +675,69 @@ and any H10 result must be reported as an UPPER BOUND on the value of anticipati
 estimate of it.
 
 **Cost:** ~3.1 GPU-h.
+
+### Amendment 8 — a GROWING disturbance (frozen 2026-08-12, BEFORE any GPU spend)
+
+**The transient-CO2 experiment is NOT run, and this records why.** The dormant CO2 path was
+enabled, plumbed (`setup_coupled_model(co2_rate=, co2_year_ref=)`), and verified live — rate-0 and
+rate-2000 rollouts are bit-identical on days 1-2 and diverge from day 3, so the forcing does reach
+the ocean. It was then rejected on a STRUCTURAL ground found in design review and confirmed by
+inspection: `increase_co2` lives in the `Parameters` closure on `SpeedyPhysics`, so it is present in
+BOTH the arm rollout and its paired no-MCB baseline (`run_confirmatory_eval.py:563` passes the same
+`step_fn` to `compute_baseline_trajectory`; the ENSO pacemaker escapes this only because it is
+applied through `step_fn_transform` to the arm alone). The registered metric is a paired difference
+and every controller input is a paired anomaly, so a CO2 trend cancels to EXACTLY zero in the score
+and in the controller's only input. The experiment was guaranteed to measure nothing — the Tier-1
+"null baked in" failure. Secondarily, longwave band 1 is already near-opaque at the reference
+absorptivity (column optical depth 6.0), so the forcing saturates around a 2x multiplier and can
+reverse under a stratospheric inversion; "amplify the rate to substitute for a longer run" is false.
+Making CO2 usable would require threading the rate through the carry AND running unforced baselines
+— a different experiment, not a fix. The plumbing and `run_co2_scoping.py` are kept as a record.
+
+**A correction to the previous framing, also recorded.** Amendment 7's disturbance was described as
+a bounded oscillation. It is not: `EnsoConfig.period_days` defaults to 0, so A(t) ramps over 30 days
+and then HOLDS at full amplitude for the remaining 150. The 85-89% rejection result is already
+**persistent-step** rejection. The genuine untested increment is step (type-0) -> **monotonically
+growing ramp** (type-1) — the case where classical control predicts proportional action leaves a
+steady-state error — and the existing pacemaker delivers it by setting the ramp to the full episode.
+Unlike CO2 it is applied to arms only, so the disturbance is visible in score and input alike.
+
+**Question.** Does closed-loop rejection, and the Amendment-7-revision-3 finding that OBSERVING the
+disturbance is worth nothing, survive when the disturbance never stops growing?
+
+**Design.** Identical to the previous campaign except `--enso-ramp-days 180` (ramp across the whole
+episode) and n, so any difference is attributable to the disturbance SHAPE. 180-day episodes
+(the 365-day alternative was rejected: measured paired tail-mean sd 32.2 mK at 180 d versus
+85.2 mK at 365 d, with 184 mK of control drift). n = 32 held-out ICs (16 mirrored pairs, fresh set
+seed0 10000 — the enso7/enso8 held-out sets are exhausted), k = 4, deterministic zero-mean
+amplitude design with A_max set to the measured actuator floor.
+
+**Arms.** `static` (manipulation check); reactive ladder `b6`, `b12` (feedforward ablated, feedback
+gain varied — comparator = best ON HELD-OUT, conservative, per revision 3); anticipating ladder
+`p1`, `p15` (feedforward weight 1.0 and 1.5); `imitation_s72`. The FF LADDER is mandatory, not
+decorative: under a ramp the feedforward term reads the INSTANTANEOUS index while the tail-window
+index is f*A with f = 0.8361, so the plant slope must be fed as `s_ramp / f`; feeding the raw slope
+would under-dose feedforward by 16% and MANUFACTURE an H10 null — confirming the previous headline
+by detuning the arm under test, this project's recurring failure mode pointed at confirmation bias.
+The ladder makes the conclusion robust to that constant.
+
+**Endpoints and inference.** Unchanged from `analyze_enso8.py`: disturbance sensitivity (paired
+slope on the hidden amplitude, invariant to constant rescaling) co-primary with the sign-agnostic
+RMS_A, wild-bootstrap/HC3 inference, hinge warm/cold reporting, slope equivalence bounds.
+
+**Freeze gate before the eval:** the measured actuator floor A_max must land in 2.5-5.0 K. Above
+5 K the disturbance is no longer ENSO-shaped and the framing must become "a generic tropical SST
+trend" rather than ENSO.
+
+**Interpretation grid, pre-stated.** (i) Rejection holds AND observing still adds nothing => the
+previous finding generalises from a step to a growing trend; the deployment implication (measure
+what you control, not what disturbs it) strengthens materially. (ii) Rejection holds but the
+anticipating arms now BEAT the reactive ones => the type-1 prediction is confirmed: a growing
+disturbance is exactly where anticipation earns its keep, and the previous null was specific to a
+bounded disturbance. (iii) Rejection degrades sharply for ALL arms => a growing disturbance exceeds
+what this actuator can track, which is a real limit worth reporting. (iv) Reactive and anticipating
+both fail while static does not => something is wrong with the ramp plumbing; report, do not claim.
+All four are reportable.
+
+**Cost:** scoping 0.3 + ICs 0.4 + calibration 0.5 + eval 5.5 = **~6.7 GPU-h**. No new code: every
+flag already exists.
