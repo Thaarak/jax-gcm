@@ -690,6 +690,133 @@ degeneracy), re-derive the plant constants on the registered metric, fix the dea
 the tail window, pre-register disturbance sensitivity as the PRIMARY endpoint, and add the
 retuned-blind-gain arm as a registered control.
 
+## Addendum 6 — The corrected ENSO experiment, and what observing a disturbance is worth (2026-08-09/12)
+
+Addendum 5 retracted the first ENSO campaign's headline as degenerate and specified the fix. This
+addendum reports the corrected campaign (Amendment 7), the audit that trimmed ITS claims, and the
+follow-up ablation (Amendment 7 revisions 1-3) that answers the question the campaign could not.
+It also CORRECTS a diagnosis in Addendum 5 itself. Every number was recomputed independently from
+the raw member-level cells.
+
+### 6.1 Amendment 7: the degeneracy is closed
+
+The four Amendment-6 defects were fixed: a zero-mean disturbance (El Nino AND La Nina), plant
+constants measured on the registered metric, the control law's reference matched to the scored
+window, and disturbance SENSITIVITY (the slope of per-IC error on the hidden amplitude) as the
+primary endpoint — a quantity exactly invariant to constant rescaling.
+
+It worked. The calibration deficit vanished (static with ENSO off reached −0.0992 K vs −0.0803),
+every arm landed in the target band, and the registered blind control — the static pattern at one
+leave-one-out-tuned gain — came in slope-identical to static (+48.7 vs +47.9), as the invariance
+theorem requires, and NO LONGER matched the feedback arms: pienso beat it by −46.1 mK/K on the
+primary endpoint and by −28.8 mK on mean error. **The Amendment-6 escape route is closed.**
+
+Results (n=20, k=4): sensitivity static +47.9, pienso +2.6, imitation +4.8 mK/K; H8 −45.3 and
+H9 −43.1 mK/K. Two corrections the audit forced, both adopted:
+
+- **The p-values were inflated.** Slope residuals are strongly heteroscedastic (static's error sd
+  grows 25 → 71 mK across the amplitude range; pienso's is flat 9 → 11). Under HC3 / wild-bootstrap
+  inference H8 and H9 are **p ≈ 5e-5, not 2e-9 / 3.8e-8.** Still decisive; five orders less extreme.
+  All Amendment-7 OLS p-values on the primary endpoint are superseded by their bootstrap values.
+- **The signed slope overstates rejection.** pienso's +2.6 mK/K is a CANCELLATION: warm branch
+  +11.2, cold branch −11.0 (imitation +6.2 / −2.5). On the sign-agnostic RMS_A the arms score
+  static 52.6, pienso 16.3, imitation 12.0 mK — rejection of **69-77%**, not the ~95% the signed
+  number implies. RMS_A is co-primary from here on.
+
+The `blind_loo` control is also withdrawn as an independent hurdle: it is slope-identical to static
+BY the theorem that motivates it (r = 0.99994), so it demonstrates the endpoint is not gameable by
+rescaling — worth having — but it was never a competitor. "Every feedback claim must beat it" is
+withdrawn.
+
+### 6.2 The open question, and why the obvious test would have been rigged
+
+H8/H9 compare feedback against OPEN LOOP, so they show "feedback beats no feedback" — not that
+observing ENSO matters. The realized global-ocean anomaly (feature 0) already carries the ENSO
+signal, so a controller with no Nino observation can reject the disturbance by ordinary outcome
+feedback. The natural ablation — the same law with its feedforward term deleted — was pre-registered
+(revision 1) and then **withdrawn UNRUN**, because a design review showed it would have been a
+strawman: the surviving feedback gain had been chosen while feedforward was carrying the
+disturbance. A surrogate sweep of that single constant moves a purely reactive controller from
++12.5 mK/K at gain 1 to +1.8 at gain 6.
+
+The train-IC tuning sweep confirmed it empirically and then failed on its own terms: RMS_A fell
+monotonically to the EDGE of the grid (23.1 / 18.5 / 16.0 / 15.0 / 15.3 / **9.5** mK over gains
+1 → 6) with overlapping bootstrap CIs, so no gain could be declared optimal. Revision 3 therefore
+put a LADDER of reactive gains into the held-out evaluation and defined the comparator as whichever
+scored best ON THE HELD-OUT DATA — test-set selection that INFLATES the comparator, biasing against
+the hypothesis, and foreclosing any "the opponent was detuned" objection.
+
+(One implementation fault was caught by the sweep and is logged: the arm grammar read `@1` as a raw
+`enso_effect_per_K` of 1.0 — 18x the measured 0.05473 — so the first sweep's anticipating arms
+over-sprayed (RMS_A 69-87 mK, slope flipped to −38). Caught on TRAIN climates, fixed, and pinned by
+a regression test asserting `pi-enso@1@1` is bit-identical to plain `pi-enso`.)
+
+### 6.3 The answer: observing the disturbance is worth nothing measurable
+
+Held-out evaluation, n = 24 fresh ICs (seed0 9000), k = 4, deterministic zero-mean amplitude design
+(12 mirrored pairs, |A| 0.373 → 1.789 K, Saa 40.07 — 1.8x a median random draw's spread, so every
+slope s.e. is 0.74x for free):
+
+| Arm | sensitivity (mK/K) | RMS_A (mK) | rejection |
+|---|---|---|---|
+| static (open loop) | +55.3 ± 2.9 | 76.6 | — |
+| **b6 — reactive, NO Nino observation** | **+8.3 ± 1.1** | **12.9** | **85%** |
+| p2 — anticipating (feedforward on Nino) | +7.9 ± 1.5 | 14.6 | 86% |
+| imitation (distilled MLP) | +5.8 ± 1.5 | 18.5 | 89% |
+
+**H10 is NULL.** Anticipation versus the best reactive controller: slope **−0.4 ± 1.3 mK/K
+(p = 0.71), equivalence bound |effect| < 2.7 mK/K** — under 5% of the 55.3 mK/K disturbance — and on
+RMS_A **+1.7 mK (p = 0.22)**, i.e. anticipation is if anything slightly WORSE. The null survives
+every pairing of comparator and anticipating arm (p = 0.16-0.91), leave-one-climate-out (min
+p = 0.32), and the unregistered snapshot metric (p = 0.98).
+
+**Amendment 7 replicates on climates it never saw:** static +55.3, the Amendment-7 controller +8.5,
+imitation +5.8 mK/K; versus static, −46.8 and −49.4 mK/K, both p < 1.2e-4.
+
+**Rejection is large but incomplete.** Every feedback arm retains a significant residual
+sensitivity (+5.8 to +8.3 mK/K, p ≤ 1.4e-3), so 85-89% is the honest figure, not "essentially all".
+
+**And the redesign was decisive, not fussy.** On train climates an untuned reactive arm scored
+RMS_A 23.1 mK against the anticipating law's 6.4 — an apparently large anticipation benefit. On
+held-out, with the reactive gain tuned, the ordering reverses (12.9 vs 14.6). The originally
+proposed comparison would have produced a significant "anticipation wins" result that was entirely
+an artifact of the comparator's gain.
+
+### 6.4 Correction to Addendum 5
+
+Addendum 5 attributed the Amendment-6 open-loop arm's handicap to a constant measured on the wrong
+variable (0.0525 from atmospheric GMST versus a "true" 0.0716 on ocean dSST, a 1.36x error). **That
+diagnosis was wrong.** The Amendment-7 plant calibration, measured directly on the registered metric
+with symmetric probes, gives **0.0547 ± 0.0023** — close to the original 0.0525. The real cause is
+that the ENSO response is significantly **NONLINEAR**: a quadratic fit gives +13.6 ± 3.7 mK/K²
+(p = 0.002), with a warm-side slope of +81.5 mK/K against a cold-side +14.2, so Amendment 6's
+warm-only amplitude range sampled a steeper branch. The CONCLUSION stands (that arm did
+under-compensate in that campaign, where the local slope really is ~0.0716); the mechanism was
+misidentified. The genuine calibration error in Amendment 6 was the MCB authority, whose rescale
+had been derived from a different base state (0.3668 against the correctly measured 0.4162).
+
+### 6.5 Honest status of the ENSO arc
+
+**Supported.** Closed-loop control rejects **85-89%** of an imposed ENSO's effect on global-mean
+ocean temperature (static +55.3 → +5.8 to +8.3 mK/K, p < 1.2e-4), replicated on two independent
+fresh IC sets, with the mechanism verified (commanded forcing tracks the hidden amplitude at
+r = 0.86-0.97; pacemaker fidelity r = 0.999) and a residual that is real rather than zero. The
+distilled neural controller matches the classical law — now the fifth such replication.
+
+**Newly supported, and the more useful finding.** **Observing the disturbance adds nothing
+measurable once the reactive gain is tuned: |effect| < 2.7 mK/K, under 5% of the disturbance.**
+What matters is closing the loop on the realized outcome, not measuring the driver. For a
+deployment that inverts the instrumentation priority — it says invest in measuring what you are
+controlling, not in forecasting what is perturbing it.
+
+**Not supported / withdrawn.** Amendment 6's H6/H7 (degenerate); its pienso-vs-ffmean claim
+(mis-specified comparator); Amendment 7's OLS p-values (superseded by bootstrap); "~95% rejection"
+(a signed-slope cancellation; 69-89% by the sign-agnostic measure); and `blind_loo` as an
+independent hurdle.
+
+Artifacts: `enso7_{eval,plant,gcal,garm}`, `enso8_tune_v2.pkl`, `enso8_eval{,_analysis}.pkl`,
+`analyze_enso7.py`, `analyze_enso8.py`, `analyze_enso_mechanism.py`.
+
 ## Appendix B — Provenance
 
 - Raw artifacts pulled 2026-07-29 from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/` (eval_final/v2/v3,

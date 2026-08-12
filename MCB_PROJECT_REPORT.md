@@ -2,13 +2,13 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation (Part 14).*
 
 ---
 
 ## The one-paragraph version
 
-We tried to teach a small AI to fight global warming inside a computer simulation of Earth's climate. The specific idea is **Marine Cloud Brightening (MCB)**: making low ocean clouds slightly whiter so they reflect more sunlight and cool the planet a little. We built the AI as a "controller" that watches the simulated climate and decides where and how much to brighten clouds, aiming to cool the ocean by a small target amount without wrecking rainfall in sensitive places like the Amazon. Along the way we discovered — twice — that our own results couldn't be trusted: an earlier version of the work was riddled with bugs and wishful statistics, and even the careful rebuild turned out to be measuring a 5-thousandths-of-a-degree signal with an instrument that jittered by 15, in an experiment accidentally designed so the AI could never win. So we tore it down twice, fixed the measurement, and finally gave the controller a problem worth solving: uncertainty about how strongly the cloud-seeding actually works. **The honest ending, in three acts:** the corrected method *does* find a good, on-target cloud-brightening plan (now confirmed with real statistical power); under realistic uncertainty a feedback controller *demonstrably* beats the fixed plan — our strongest statistical result, and finally the project's founding claim; but the winning neural controller got every bit of its skill by *imitating a hundred-year-old control-engineering formula* — training it through the climate simulation itself, the project's founding bet, never worked, and we measured exactly why. That's a real, defensible, and genuinely interesting scientific ending — just not the one we set out to find. **Then we did it a third time.** We gave the controller a genuine climate disturbance to fight — an artificial El Nino — and got the best-looking numbers of the whole project, only for our own audit to show the test had been rigged by our design once more: because we imposed only warm events, a blind controller that simply sprayed harder by a fixed amount scored just as well. What survived that teardown is narrower and sturdier than the headline it replaced: the feedback controllers genuinely cancel about 84% of the El Nino's effect on global temperature — something no fixed schedule does at all — which appears to be the first time anyone has closed a control loop on cloud brightening against real year-to-year climate variability.
+We tried to teach a small AI to fight global warming inside a computer simulation of Earth's climate. The specific idea is **Marine Cloud Brightening (MCB)**: making low ocean clouds slightly whiter so they reflect more sunlight and cool the planet a little. We built the AI as a "controller" that watches the simulated climate and decides where and how much to brighten clouds, aiming to cool the ocean by a small target amount without wrecking rainfall in sensitive places like the Amazon. Along the way we discovered — twice — that our own results couldn't be trusted: an earlier version of the work was riddled with bugs and wishful statistics, and even the careful rebuild turned out to be measuring a 5-thousandths-of-a-degree signal with an instrument that jittered by 15, in an experiment accidentally designed so the AI could never win. So we tore it down twice, fixed the measurement, and finally gave the controller a problem worth solving: uncertainty about how strongly the cloud-seeding actually works. **The honest ending, in three acts:** the corrected method *does* find a good, on-target cloud-brightening plan (now confirmed with real statistical power); under realistic uncertainty a feedback controller *demonstrably* beats the fixed plan — our strongest statistical result, and finally the project's founding claim; but the winning neural controller got every bit of its skill by *imitating a hundred-year-old control-engineering formula* — training it through the climate simulation itself, the project's founding bet, never worked, and we measured exactly why. That's a real, defensible, and genuinely interesting scientific ending — just not the one we set out to find. **Then we did it twice more.** We gave the controller a genuine climate disturbance to fight — an artificial El Niño — and got the best-looking numbers of the whole project, only for our own audit to show the test had been rigged by our design once again: because we imposed only warm events, a blind controller that simply sprayed harder by a fixed amount scored just as well. We rebuilt it, and this time the controllers genuinely cancel **85–89%** of the El Niño's effect — replicated on two independent sets of fresh climates, and apparently the first time anyone has closed a control loop on cloud brightening against real year-to-year climate variability. Then we asked the sharper question: does the controller actually need to *watch* the El Niño? It does not. One that never looks at the Pacific does just as well, because the ocean temperature it is already measuring carries the signal by itself — a more useful answer than the win we set out to claim, and one we only reached by noticing that the obvious version of that experiment would have been rigged in our favour too.
 
 ---
 
@@ -299,13 +299,14 @@ Tier 2's diagnosis suggested its own remedy. If the neural network fails only be
 - **Training the controller *through the simulation*.** BPTT through 60-day chaotic rollouts neither discovered the feedback law from scratch (Tier 2: trained networks ≈ static, significantly worse than PI) nor improved it when handed it on a plate (Tier 2b: fine-tuning ≈ imitation, within ±2.4 mK). The measured mechanism: ~12–17 mK of per-run chaos noise buries the gradient signal at any practical budget.
 - **Both generations of wishful results.** The original Stages 1–5 dissolved under the first audit (seven root causes); the rebuild's own consolation claims — the "halved loss," the zero noise floor, the "generalizing improvement direction" — dissolved under the second. What survived is what was pre-registered, replicated, and adversarially re-derived.
 
-## The five significant results
+## The six significant results
 
 1. **Confirmatory positive (Tier 1):** the gradient-optimized static pattern hits the target on fresh climates, −0.1023 ± 0.0014 K.
 2. **Significant bounded negative (Tier 1):** with nothing to correct, feedback of any kind is worth less than 4.5 mK — and the design analysis explains why (a ~6 mK ceiling).
 3. **Classical feedback halves the efficacy-uncertainty error (Tier 2, replicated 3×):** 20 → 10 mK, p = 0.0006 — while directly-trained neural controllers fail to realize the same gain (a measured training failure, not an information limit).
 4. **An imitation-initialized neural controller significantly beats static deployment (Tier 2b):** −11.6 mK, p = 0.00025 — with fine-tuning contributing provably nothing beyond the imitation.
-5. **Feedback rejects ~84% of an imposed El Nino's effect on global temperature (Part 13):** disturbance sensitivity falls from 71.6 to 11.1 mK per K of Niño3.4 (p = 3×10⁻⁷) for the classical law and to 13.8 for the distilled network, while an open-loop schedule rejects *none*. This replaced that campaign's own pre-registered headline, which the audit showed a retuned blind controller could match.
+5. **Feedback rejects 85–89% of an imposed El Niño's effect on global temperature (Parts 13–14):** disturbance sensitivity falls from 55.3 to 5.8–8.3 mK per K of Niño3.4 (p < 1.2×10⁻⁴), replicated on two independent sets of fresh climates, while an open-loop plan rejects none. This replaced the first ENSO campaign's own pre-registered headline, which the audit showed a retuned blind controller could match.
+6. **Observing the disturbance is worth nothing measurable (Part 14):** a controller that never sees the Niño index matches one that does — effect −0.4 ± 1.3 mK/K, bounded under 2.7 mK/K, less than 5% of the disturbance. What matters is closing the loop on the realized outcome, not measuring the driver.
 
 ## The one-sentence headline
 
@@ -459,6 +460,92 @@ control loop on marine cloud brightening against real interannual climate variab
 
 ---
 
+# Part 14 — What the thermostat actually needs to see
+
+Part 13 ended with a corrected experiment and one nagging gap. The controllers were rejecting most
+of an artificial El Niño's warming — but the pre-registered test had compared them against a
+controller that did **nothing at all**. Beating "no control" only shows that control works. It says
+nothing about the more interesting question: **does it help to *watch* the El Niño?**
+
+That question matters practically. A real deployment could either monitor the Pacific and act on
+what it sees coming, or ignore the forecast and simply react to the temperature it is trying to
+hold. The first is more expensive and more fragile. Which one you need is a design decision worth
+knowing.
+
+## Why the obvious experiment would have cheated
+
+The natural test is to take the controller apart: keep the half that reacts to the error, delete
+the half that watches the Pacific, and see how much worse it does. We nearly ran exactly that, and
+it would have been rigged in our favour.
+
+The reason is subtle and worth understanding, because it's the same shape of mistake as Parts 7 and
+13. The controller has two knobs: how hard it reacts to error, and how much it trusts its El Niño
+observation. Those knobs were set *together* — the reaction knob was turned down low precisely
+because the watching knob was doing much of the work. Delete the watching half and leave the
+reaction knob where it was, and you haven't built "the same controller without foresight." You've
+built a controller with its remaining knob set wrong. Our own simulation said so: retuning that one
+number takes the reactive controller from clearly worse to essentially equal.
+
+So before the real experiment, we ran a cheap one on practice climates to find each controller's
+best setting. That sweep did two useful things. It confirmed the concern — the untuned reactive
+controller looked far worse than it really was — and it caught a bug of mine, where a "1" in a
+configuration string was being read as a physical constant eighteen times too large. Both were
+caught on practice data, before anything that counts.
+
+The sweep then failed on its own terms: the reactive controller kept improving all the way to the
+largest setting we tried, so we couldn't honestly name a best one. Rather than keep hunting, we
+changed the rules in the safest possible direction — put a *range* of settings into the real
+experiment and let the opponent be whichever one performed best **on the very data used to judge**.
+That deliberately flatters the opponent. If our controller still won, nobody could say we had
+handicapped its rival.
+
+## The answer: watching the Pacific buys nothing
+
+| Controller | drift per unit of El Niño | rejected |
+|---|---|---|
+| Fixed plan (no control) | 55.3 | — |
+| **Reacts to error only — never sees the El Niño** | **8.3** | **85%** |
+| Watches the El Niño *and* reacts | 7.9 | 86% |
+| Neural network (taught by imitation) | 5.8 | 89% |
+
+All three controllers cancel roughly six-sevenths of the disturbance. And the difference between
+watching and not watching is **−0.4 ± 1.3**, statistically indistinguishable from zero — with the
+effect bounded below 2.7, under 5% of the disturbance being fought. On the second, cancellation-proof
+measure the watching controller is *slightly worse*. The null holds however we pair the arms, holds
+when any single climate is dropped, and holds on an alternative metric.
+
+The finding, plainly: **a controller that never looks at the Pacific does just as well as one that
+does.** The realized ocean temperature — the thing it is already measuring in order to know whether
+it's on target — turns out to carry the El Niño's signature all by itself. Watching the driver adds
+nothing once you are properly reacting to the outcome.
+
+That is genuinely useful, and more actionable than the win we set out to claim. It says a deployment
+should invest in measuring **what it is controlling**, not in forecasting **what is disturbing it**.
+
+Two honest limits. The rejection is large but *not* complete — every controller keeps a small,
+statistically real residual, so 85–89% is the number, not "essentially all". And the earlier
+experiment's headline of "95%" was too generous: it came from a signed measure in which
+under-correcting warm events and over-correcting cold ones partly cancel. Corrected, the same
+experiment shows 69–77%.
+
+The good news alongside it: the Part 13 result **replicated** on twenty-four climates it had never
+seen, at the same strength.
+
+## Three teardowns later
+
+This is the fourth time the project has dismantled a result of its own, and the pattern has become
+almost mechanical: the more decisive a finding looks, the harder we now hunt for the design choice
+that guaranteed it. In Part 7 a null was baked in. In Part 13 a win was. Here a win *would* have
+been, and we caught it before spending the compute rather than after publishing the claim.
+
+What is left standing is smaller than "AI controls the climate" and considerably more solid: a
+feedback controller — classical, or a neural network that learned by copying one — cancels most of
+a hidden El Niño's effect on global temperature; the neural version matches the hundred-year-old
+formula and never beats it, now five times over; and the ability to *observe* the disturbance,
+which sounded essential, is worth nothing you can measure.
+
+---
+
 ## Where to look next in the codebase
 
 - **`MCB_META_AUDIT.md`** — the second audit, and (in its addenda) the full Tier-1/2/2b campaign numbers behind Parts 7–10.
@@ -472,5 +559,6 @@ control loop on marine cloud brightening against real interannual climate variab
 - **`analyze_tier2.py` / `analyze_tier2b.py`** — the primary analyses, written and frozen before the data existed.
 - **`jcm/mcb/enso.py` / `run_enso_scoping.py` / `analyze_enso.py`** — the ENSO pacemaker, its calibration run, and the frozen Amendment-6 analysis (Part 13).
 - **`analyze_enso_mechanism.py`** — the post-hoc disturbance-rejection analysis that produced Part 13's surviving result.
+- **`analyze_enso8.py`** — Part 14's pre-committed analysis: wild-bootstrap/HC3 inference, the sign-agnostic RMS_A endpoint, and the held-out comparator selection.
 - **`analyze_precip_sideeffects.py`** — the Part-12 rainfall side-effect analysis (Amendment 5; meta-audit Addendum 4).
 - **`jcm/physics/speedy/shortwave_radiation.py`** — where MCB correctly brightens cloud albedo (the R6 fix).
