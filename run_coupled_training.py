@@ -23,6 +23,7 @@ from pathlib import Path
 import flax
 import jax
 import jax.numpy as jnp
+import numpy as np
 import jax_datetime as jdt
 
 # JCM imports
@@ -117,7 +118,8 @@ TERRAIN_NC = "jcm/data/bc/t30/clim/terrain.nc"
 FORCING_NC = "jcm/data/bc/t30/clim/forcing.nc"
 
 
-def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=False):
+def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=False,
+                        co2_rate=0.0, co2_year_ref=2000):
     """Set up the coupled atmosphere-ocean model.
 
     Args:
@@ -149,10 +151,35 @@ def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=Fal
     # Create atmosphere model (no static MCB - will be dynamic from policy).
     # Passing terrain= is the one wiring point that actually activates
     # orography in the dynamics and land-surface physics in SPEEDY.
+    # Transient CO2 (dormant until now). forcing.py computes
+    #   ablco2 = ablco2_ref * exp(increase_co2 * 0.005 * (model_year + tyear
+    #                             - co2_year_ref))
+    # so `increase_co2`, though declared bool, acts as a continuous ramp-rate
+    # multiplier. co2_year_ref MUST be set to the start year: its 1950 default
+    # against a 2000 start would apply an instant x1.28 absorptivity step
+    # rather than a ramp from zero.
+    physics = None
+    if co2_rate:
+        import dataclasses
+        from jcm.physics.speedy.params import Parameters
+        from jcm.physics.speedy.speedy_physics import SpeedyPhysics
+        base = Parameters.default()
+        forcing_params = dataclasses.replace(
+            base.forcing,
+            increase_co2=float(co2_rate),
+            co2_year_ref=int(co2_year_ref),
+        )
+        physics = SpeedyPhysics(
+            parameters=dataclasses.replace(base, forcing=forcing_params))
+        print(f"  transient CO2 ENABLED: rate {co2_rate} "
+              f"(x{float(np.exp(co2_rate * 0.005)):.4f} ablco2 per year), "
+              f"ref year {forcing_params.co2_year_ref}")
+
     atm_model = jcm.model.Model(
         start_date=start_datetime,
         coords=coords,
         terrain=terrain if realistic_terrain else None,
+        physics=physics,
     )
 
     # Surface forcing: over realistic terrain, supply real land-surface
