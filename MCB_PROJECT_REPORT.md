@@ -2,7 +2,7 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation (Part 14).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15).*
 
 ---
 
@@ -299,14 +299,15 @@ Tier 2's diagnosis suggested its own remedy. If the neural network fails only be
 - **Training the controller *through the simulation*.** BPTT through 60-day chaotic rollouts neither discovered the feedback law from scratch (Tier 2: trained networks ≈ static, significantly worse than PI) nor improved it when handed it on a plate (Tier 2b: fine-tuning ≈ imitation, within ±2.4 mK). The measured mechanism: ~12–17 mK of per-run chaos noise buries the gradient signal at any practical budget.
 - **Both generations of wishful results.** The original Stages 1–5 dissolved under the first audit (seven root causes); the rebuild's own consolation claims — the "halved loss," the zero noise floor, the "generalizing improvement direction" — dissolved under the second. What survived is what was pre-registered, replicated, and adversarially re-derived.
 
-## The six significant results
+## The seven significant results
 
 1. **Confirmatory positive (Tier 1):** the gradient-optimized static pattern hits the target on fresh climates, −0.1023 ± 0.0014 K.
 2. **Significant bounded negative (Tier 1):** with nothing to correct, feedback of any kind is worth less than 4.5 mK — and the design analysis explains why (a ~6 mK ceiling).
 3. **Classical feedback halves the efficacy-uncertainty error (Tier 2, replicated 3×):** 20 → 10 mK, p = 0.0006 — while directly-trained neural controllers fail to realize the same gain (a measured training failure, not an information limit).
 4. **An imitation-initialized neural controller significantly beats static deployment (Tier 2b):** −11.6 mK, p = 0.00025 — with fine-tuning contributing provably nothing beyond the imitation.
 5. **Feedback rejects 85–89% of an imposed El Niño's effect on global temperature (Parts 13–14):** disturbance sensitivity falls from 55.3 to 5.8–8.3 mK per K of Niño3.4 (p < 1.2×10⁻⁴), replicated on two independent sets of fresh climates, while an open-loop plan rejects none. This replaced the first ENSO campaign's own pre-registered headline, which the audit showed a retuned blind controller could match.
-6. **Observing the disturbance is worth nothing measurable (Part 14):** a controller that never sees the Niño index matches one that does — effect −0.4 ± 1.3 mK/K, bounded under 2.7 mK/K, less than 5% of the disturbance. What matters is closing the loop on the realized outcome, not measuring the driver.
+6. **Observing the disturbance is worth nothing measurable (Parts 14–15):** a controller that never sees the Niño index matches one that does — bounded under 2.7 mK/K against a disturbance that levels off, and under 2.9 mK/K against one that never stops growing, in both cases under 5% of the disturbance. What matters is closing the loop on the realized outcome, not measuring the driver.
+7. **A growing disturbance is materially harder to reject (Part 15):** the uncancelled share rises from ~15% to ~33% of the disturbance — the penalty classical control predicts for a trend — though this is a cross-campaign contrast rather than a paired test.
 
 ## The one-sentence headline
 
@@ -546,6 +547,93 @@ which sounded essential, is worth nothing you can measure.
 
 ---
 
+# Part 15 — The experiment we couldn't run, and the one we ran instead
+
+## Setting out to add greenhouse warming
+
+The obvious next step was carbon dioxide. Every result so far fought a disturbance that eventually
+levels off; real greenhouse warming doesn't. And the simulator turned out to have a CO2 knob built
+in that nobody in this project had ever switched on.
+
+Switching it on took an afternoon, and it worked — I could show the model warming. Then, planning
+how to measure it, the whole thing collapsed for a reason that had nothing to do with CO2 physics.
+
+**The measurement is built as a comparison.** Every result in this report comes from running the
+climate twice — once with cloud brightening, once without — and subtracting. That subtraction is
+what removes the model's own drift and leaves only what the intervention did. But the CO2 setting
+lives in the *model*, not in the *intervention*, so it would have applied to **both** runs. Subtract
+them and the greenhouse warming vanishes exactly: not reduced, not noisy — mathematically zero. And
+because the controller also sees only differences, it wouldn't even have noticed the warming it was
+supposed to fight.
+
+We would have spent a day of computing to measure a quantity guaranteed in advance to be zero. It's
+the same trap as Part 7, where the answer was fixed by the design before any simulation ran. This
+time it was caught while planning, at a cost of nothing.
+
+(There was a second, independent reason, which would have killed it anyway: the model's greenhouse
+band is already nearly opaque, so turning the knob harder stops adding warming and eventually
+*reverses* it. The trick I'd planned — crank it up to squeeze five years of warming into one — was
+never available.)
+
+## The question survived, and got sharper
+
+Losing CO2 forced a useful re-examination, and turned up something embarrassing. I had been
+describing the El Niño disturbance as an *oscillation* — something that swings up and comes back
+down. It never did. Looking at the actual configuration, it ramps up over a month and then **holds
+steady** for the remaining five. Everything we had concluded was already about a disturbance that
+arrives and stays.
+
+So the untested case was never "persistent versus temporary". It was **steady versus
+still-growing** — and that distinction has real teeth in control theory. A controller that reacts to
+error can settle out a disturbance that stops changing. Against one that keeps growing, it is
+permanently chasing: by the time it corrects for where the world was, the world has moved further.
+
+That we could test immediately, by making the imposed disturbance grow across the whole episode
+instead of levelling off. No new physics, no new code — one setting.
+
+## Two answers
+
+**First: a growing disturbance really is harder.** The share the controllers fail to cancel rises
+from about a seventh to about a third. That is the predicted penalty, and it is not subtle. (Fair
+warning on this one: it compares two campaigns run on different climates rather than a head-to-head
+test, so treat it as a solid indication rather than a precise measurement.)
+
+**Second, and this is the one that matters: watching the disturbance still buys nothing.**
+
+| Controller | drift per unit disturbance | cancelled |
+|---|---|---|
+| Fixed plan | 35.5 | — |
+| **Reacts to error only — never watches** | **11.7** | **67%** |
+| Watches the disturbance and reacts | 12.8 | 64% |
+| Neural network | 12.3 | 65% |
+
+The controller that watches is, if anything, slightly *worse* — the difference is +1.1 ± 1.1,
+indistinguishable from zero and bounded under 2.9. The blind controller is also the only one that
+actually lands on target (−0.1004 against a −0.1 goal).
+
+This was the case where anticipation had the strongest theoretical claim to being necessary, and it
+still isn't. The finding from Part 14 doesn't just repeat — it survives the harder test.
+
+One guard worth mentioning, because it nearly bit. Under a growing disturbance the watching
+controller needs its sensitivity constant scaled up by about 20%, and feeding the raw measured value
+would have weakened it by 16% — producing a null that merely reflected our own miscalibration and
+conveniently confirming what we'd already published. So the campaign ran the watching controller at
+two different strengths. The stronger one did better, exactly as expected, and still lost.
+
+## Where that leaves it
+
+Across a disturbance that arrives and stays, and one that never stops growing, the same answer holds:
+**closing the loop on the temperature you're trying to control is what matters; measuring the thing
+pushing it around adds nothing you can detect.** For anyone designing such a system, that's a
+statement about where to spend the instrumentation budget.
+
+What a growing disturbance does cost is accuracy — a third of it goes uncancelled instead of a
+seventh. Since anticipation isn't the fix, the honest next question is whether explicit *integral*
+action is. The expectation should be modest: the control law already has integral-like structure,
+and the simulated ocean is itself close to an integrator.
+
+---
+
 ## Where to look next in the codebase
 
 - **`MCB_META_AUDIT.md`** — the second audit, and (in its addenda) the full Tier-1/2/2b campaign numbers behind Parts 7–10.
@@ -559,6 +647,7 @@ which sounded essential, is worth nothing you can measure.
 - **`analyze_tier2.py` / `analyze_tier2b.py`** — the primary analyses, written and frozen before the data existed.
 - **`jcm/mcb/enso.py` / `run_enso_scoping.py` / `analyze_enso.py`** — the ENSO pacemaker, its calibration run, and the frozen Amendment-6 analysis (Part 13).
 - **`analyze_enso_mechanism.py`** — the post-hoc disturbance-rejection analysis that produced Part 13's surviving result.
-- **`analyze_enso8.py`** — Part 14's pre-committed analysis: wild-bootstrap/HC3 inference, the sign-agnostic RMS_A endpoint, and the held-out comparator selection.
+- **`analyze_enso8.py`** — the pre-committed analysis for Parts 14-15: wild-bootstrap/HC3 inference, the sign-agnostic RMS_A endpoint, and the held-out comparator selection.
+- **`run_campaign_ramp.sh`** — Part 15's growing-disturbance campaign; **`run_co2_scoping.py`** and the `co2_rate` plumbing are kept as the record of the CO2 route that could not work.
 - **`analyze_precip_sideeffects.py`** — the Part-12 rainfall side-effect analysis (Amendment 5; meta-audit Addendum 4).
 - **`jcm/physics/speedy/shortwave_radiation.py`** — where MCB correctly brightens cloud albedo (the R6 fix).

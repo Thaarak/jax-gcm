@@ -817,6 +817,93 @@ independent hurdle.
 Artifacts: `enso7_{eval,plant,gcal,garm}`, `enso8_tune_v2.pkl`, `enso8_eval{,_analysis}.pkl`,
 `analyze_enso7.py`, `analyze_enso8.py`, `analyze_enso_mechanism.py`.
 
+## Addendum 7 — A growing disturbance: harder to reject, but still not worth watching (2026-08-12)
+
+Amendment 8. Two results, one expected and one not. Every number recomputed independently from the
+raw member-level cells; artifacts `ramp_eval{,_analysis}.pkl`, `ramp_plant.json`,
+`ramp_scoping.pkl`.
+
+### 7.1 The transient-CO2 experiment was not run, and why that is the right call
+
+The dormant CO2 path was enabled, plumbed and verified LIVE (rate-0 and rate-2000 rollouts are
+bit-identical on days 1-2, then diverge from day 3 — the atmosphere warms before flux reaches the
+ocean). It was rejected on a STRUCTURAL ground: `increase_co2` lives in the `Parameters` closure on
+`SpeedyPhysics`, so it applies to BOTH the arm rollout and its paired no-MCB baseline
+(`run_confirmatory_eval.py:563` passes the same `step_fn` to `compute_baseline_trajectory`; the
+pacemaker escapes this only by going through `step_fn_transform` to the arm alone). Since the
+registered metric is a paired difference and every controller input is a paired anomaly, a CO2
+trend cancels to EXACTLY zero in the score and in the controller's only input. The experiment was
+guaranteed to measure nothing — Tier-1's "null baked in", reproduced. Independently, longwave band 1
+is already near-opaque at the reference absorptivity (column optical depth 6.0), so the forcing
+saturates near a 2x multiplier and can reverse; amplifying the rate to compensate for a short
+horizon is not available. Also logged: the default `co2_year_ref = 1950` against a 2000 start
+applies a **+28.4% instant absorptivity step**, so anyone enabling the flag naively would study a
+shock while believing they studied a trend.
+
+### 7.2 A correction: the previous disturbance was never an oscillation
+
+Addendum 6 described the ENSO disturbance as bounded and oscillatory. It is not.
+`EnsoConfig.period_days` defaults to 0, so A(t) ramps over 30 days and then HOLDS at full amplitude
+for the remaining 150. **The 85-89% figure is persistent-STEP rejection.** The untested increment is
+step (type-0) -> monotonically growing RAMP (type-1) — the case where classical control predicts
+proportional action leaves a steady-state error — delivered by the existing pacemaker at
+`--enso-ramp-days 180`, arm-only and therefore visible. No new code was required.
+
+### 7.3 Design
+
+n = 32 fresh held-out ICs (seed0 10000), k = 4, 180-day episodes, deterministic zero-mean amplitude
+design (16 mirrored pairs, |A| 0.51-2.84 K, Saa **133.6** — 3.3x the previous campaign's 40.1, so
+slope standard errors are 0.55x). Measured under the ramp: MCB authority mu, and ENSO slope
+s_ramp = 0.0346 K/K (63% of the step campaign's 0.0547 — the ramp is genuinely a weaker
+per-unit-amplitude disturbance, not a relabelled step). Actuator floor A_max = 2.89 K, inside the
+pre-registered 2.5-5.0 K gate.
+
+One trap was designed around explicitly: the feedforward term reads the INSTANTANEOUS index while
+the scored tail index is 0.8361*A, so the plant slope must be fed as s_ramp/0.8361 (verified in the
+run: 0.04138 = 0.0346 x 1.196). Feeding the raw slope would have under-dosed the anticipating arm by
+16% and MANUFACTURED the null — confirming the project's own previous headline by detuning the arm
+under test. A feedforward LADDER (weights 1.0 and 1.5) was carried so the conclusion cannot hinge on
+that constant.
+
+### 7.4 Results
+
+| Arm | sensitivity (mK/K) | RMS_A (mK) | rejected | mean dSST |
+|---|---|---|---|---|
+| static (open loop) | +35.5 ± 1.5 | 76.0 | — | −0.0844 |
+| **b6 — reactive, NO observation** | **+11.7 ± 0.8** | **25.2** | **67%** | **−0.1004** |
+| b12 — reactive, higher gain | +11.7 ± 0.8 | 25.5 | 67% | −0.0993 |
+| p1 — anticipating (ff 1.0) | +14.2 ± 1.3 | 33.7 | 60% | −0.0916 |
+| p15 — anticipating (ff 1.5) | +12.8 ± 0.9 | 29.0 | 64% | −0.0928 |
+| imitation (distilled MLP) | +12.3 ± 1.0 | 29.6 | 65% | −0.0885 |
+
+**Result 1 — a growing disturbance is materially harder.** The unrejected residual rises from
+**15% of the disturbance under a step to 33% under a ramp** (85% -> 67% rejection). This is the
+type-1 penalty classical control predicts, and it is large. CAVEAT, stated plainly: this is a
+CROSS-CAMPAIGN contrast (different IC sets, different amplitude ranges), normalised by the rejection
+fraction; it is not a paired test and should be reported as such.
+
+**Result 2 — and anticipation STILL does not help.** Best anticipating vs best reactive:
+**+1.1 ± 1.1 mK/K (p = 0.28), equivalence bound 2.9 mK/K**; on RMS_A **+3.8 mK (p = 0.12)** — i.e.
+anticipation is null to marginally WORSE. Robust to leave-one-climate-out (min p = 0.10) and to the
+unregistered snapshot metric (p = 0.63). At the designed feedforward weight it is significantly
+worse (p1 vs the reactive ladder: +2.5 mK/K, p = 0.045-0.051); the ladder shows more feedforward
+helps the anticipating arm (p15 beats p1) but never enough to beat pure outcome feedback.
+
+This is pre-stated outcome (i), and it strengthens the previous finding rather than merely repeating
+it: **observing the disturbance is worth nothing even when the disturbance never stops growing**
+(bound 2.9 mK/K here, 2.7 there). The best arm on every measure is the one that never looks at the
+disturbance at all, and it is also the only arm that lands on target (−0.1004 against −0.1).
+
+### 7.5 What this adds
+
+The deployment implication from Addendum 6 — measure what you are controlling, not what is
+disturbing it — survives the harder case and is now demonstrated against both a persistent step and
+an unbounded ramp. What a growing disturbance DOES cost is accuracy: a third of it goes unrejected
+rather than a seventh. Since anticipation is not the remedy, the natural next question is whether
+explicit INTEGRAL action is — noting that the deadbeat law already carries integral-like structure
+and that the plant itself (slab e-folding ~350 d against a 180 d horizon) is close to an integrator,
+so the honest expectation is a small effect.
+
 ## Appendix B — Provenance
 
 - Raw artifacts pulled 2026-07-29 from `diya:~/workspace/jax-gcm/mcb_experiments_gpu/` (eval_final/v2/v3,
