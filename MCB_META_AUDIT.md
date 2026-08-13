@@ -811,7 +811,8 @@ controlling, not in forecasting what is perturbing it.
 
 **Not supported / withdrawn.** Amendment 6's H6/H7 (degenerate); its pienso-vs-ffmean claim
 (mis-specified comparator); Amendment 7's OLS p-values (superseded by bootstrap); "~95% rejection"
-(a signed-slope cancellation; 69-89% by the sign-agnostic measure); and `blind_loo` as an
+(a signed-slope cancellation; 69.0-83.2% by the sign-agnostic RMS measure — the "89%" was itself
+a signed value, caught in paper prep); and `blind_loo` as an
 independent hurdle.
 
 Artifacts: `enso7_{eval,plant,gcal,garm}`, `enso8_tune_v2.pkl`, `enso8_eval{,_analysis}.pkl`,
