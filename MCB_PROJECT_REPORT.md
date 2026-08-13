@@ -315,10 +315,31 @@ Tier 2's diagnosis suggested its own remedy. If the neural network fails only be
 
 ## What's still open (honestly)
 
-- **The corrected ENSO experiment.** Part 13's design errors have a specified, ~4-GPU-hour fix (Amendment 7): include La Niña so the disturbance averages to zero, measure the controller's constants on the quantity actually scored, and register disturbance *sensitivity* as the primary endpoint. Until it runs, the 84% rejection stands but the "does adapting per episode beat a correctly-tuned schedule?" question is formally open.
-- **Can learning ever exceed the classical law?** The low-efficacy "recruit more area" trend (p = 0.053) is the natural next experiment — it needs either more test climates or a design that isolates the cap-limited episodes. Four independent replications now say imitation *matches* the classical law and never beats it.
-- **The idealized observer.** All feedback controllers here read a noiseless measurement of the realized cooling, computed against a paired counterfactual baseline — something no real deployment could have. Adding observation noise is the external-validity test still to run.
-- **Scope.** Everything holds for one season, one ocean state, a slab ocean with no currents, a 60-day horizon, an in-model forcing at or beyond published MCB feasibility, and with the model's stratocumulus-analog cloud deck unperturbed. These are statements about control and optimization in a differentiable climate model — not deployment guidance for real MCB.
+*(This list was written after Part 11 and has been updated as later parts closed items; see
+Parts 12–15 for what happened to each.)*
+
+- **Was the training failure just an under-resourced optimizer?** The strongest remaining objection
+  to the central negative: the trainings used small budgets and single-rollout gradients, while the
+  micro-ensemble trick that fixed *measurement* was never applied to the *gradients*. The decisive
+  experiment — micro-ensembled-gradient training plus a gradient-free search at matched cost — is
+  specified in `PAPER_PLAN.md` and is the most important run still to do.
+- **Can learning ever exceed the classical law?** Five independent replications now say imitation
+  *matches* the classical law and never beats it. The low-efficacy "recruit more area" trend
+  (p = 0.053) remains the one unexplored opening.
+- **The idealized observer.** All feedback controllers read a noiseless measurement of the realized
+  cooling against a paired counterfactual baseline — something no real deployment could have.
+  Adding observation noise is the external-validity test still to run, and it directly decides
+  whether Part 14's "watching the disturbance is redundant" survives realistic sensing.
+- **One ocean state, one start date.** Every "climate" is a small perturbation of a single
+  equilibrated state started on the same calendar day, so all statistics generalize across weather,
+  not climates. Season-staggered starting points are a five-line change and the cheapest way to
+  widen the claim.
+- **Scope.** Everything holds for a slab ocean with no currents, 60–180 day horizons, an in-model
+  forcing at or beyond published MCB feasibility, and with the model's stratocumulus-analog cloud
+  deck unperturbed — the actuator brightens the *convective* cloud population, so this is an
+  idealized ocean-albedo intervention, not MCB proper (Part 15 and `PAPER_PLAN.md` take the
+  consequence: the paper drops the MCB framing). These are statements about control and
+  optimization in a differentiable climate model — not deployment guidance.
 
 ## The scientific lesson
 
@@ -425,7 +446,9 @@ constant dose shifts your average; it cannot make you track something you cannot
 | **Neural network (imitation)** | **13.8** | **81%** |
 
 The feedback controllers cancel **more than four-fifths** of El Nino's effect on global ocean
-temperature (p = 0.0000003), and what's left of their episode-to-episode scatter is
+temperature (p < 0.0001 — the simpler p-value first computed here was later found overstated by
+Part 14's audit, because the scatter grows with the disturbance; the corrected, noise-robust value
+is what's quoted), and what's left of their episode-to-episode scatter is
 indistinguishable from the model's own chaotic weather noise. The fixed schedule, by contrast,
 rejects *nothing* — it lowers the average error while leaving the tracking untouched. That contrast
 is the actual scientific content: **compensating the average is not the same as reacting, and only
@@ -638,7 +661,7 @@ and the simulated ocean is itself close to an integrator.
 
 - **`MCB_META_AUDIT.md`** — the second audit, and (in its addenda) the full Tier-1/2/2b campaign numbers behind Parts 7–10.
 - **`MCB_IMPLEMENTATION_PLAN.md`** — the detailed engineering log of the original effort: the first audit (R1–R7), the rebuild, and campaigns v1/v2/v3.
-- **`PREREGISTRATION.md`** — the frozen rules, now with the formal amendment log (Amendments 1–4) covering every Tier-1/2/2b design decision.
+- **`PREREGISTRATION.md`** — the frozen rules, with the formal amendment log (Amendments 1–8 plus three revisions) covering every design decision from Tier 1 through the growing-ramp campaign.
 - **`jcm/mcb/gates_stats.py`** — the paired t / Wilcoxon / equivalence (TOST) statistics behind every verdict, in pure NumPy with its own test suite.
 - **`run_confirmatory_eval.py`** — the micro-ensemble evaluation harness (and the PI controller) used by all three campaigns.
 - **`run_noise_floor.py --cross-process`** — the corrected chaos-noise measurement (Part 7.2).
