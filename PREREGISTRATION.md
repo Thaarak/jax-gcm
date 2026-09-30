@@ -741,3 +741,133 @@ All four are reportable.
 
 **Cost:** scoping 0.3 + ICs 0.4 + calibration 0.5 + eval 5.5 = **~6.7 GPU-h**. No new code: every
 flag already exists.
+
+### Amendment 9 — long-horizon gradients in the coupled model: Step 0 + Experiments 1-3 (Step 0 and Experiment 1 frozen 2026-09-29, BEFORE any GPU spend; Experiments 2-3 declared here and frozen in full as revision 1 BEFORE any of their data exist)
+
+**Why a new line of work.** The 2026-09-29 review (MCB_PROJECT_REPORT.md Part 16) found that the
+planned methods paper's central claim, "gradients design, they do not train", is untested on both
+halves: the Stage-1 v2 pattern was the iteration-1 pick of a loss that was 99.5% weather noise, and
+the Tier-2 training failure confounds a 60-day horizon, a ~1.25M-parameter output and 40 updates. It
+also found a same-model competitor: Dubey, Abbot & Chattopadhyay (2026, arXiv:2609.12528) design
+interventions in atmosphere-only JAX-GCM with receding-horizon backpropagation and measure the
+gradient breakdown (gradient-vs-finite-difference correlation 0.91 / 0.87 / 0.49 at 7 / 14 / 28 d).
+With an interactive ocean, today's forcing keeps acting for months, so two-week planning is myopic.
+This amendment tests whether cutting only the atmosphere's chaotic memory, while keeping the ocean's,
+yields gradients that stay useful for months.
+
+**Estimator (Step 0, implemented and tested).** `jcm/mcb/gradient_truncation.py` stops gradients
+through `carry["atm"]["state"]` (the atmosphere's dynamical memory) at the start of every coupling
+step whose day index d satisfies d % W == 0, reading d from the OCEAN clock (never the scan index).
+It deliberately leaves `atm.derived` (the previous day's fluxes, handed to the ocean by the coupler at
+the start of the next step, and the actuator field), `atm.forcing` (SST and land temperature arriving
+from the slow components), and the ocean and land states untouched. Forward values are bit-identical
+for every W; W = full means ordinary BPTT. Unit tests against an independent forward-mode recursion
+on a toy with the coupler's exact data flow: `jcm/mcb/gradient_truncation_test.py`.
+
+**Related work to read in full before any novelty claim** (full texts were not retrievable by tool):
+Sugiura et al. 2008 (JGR, coupled 4D-Var with months-long windows: how is the atmospheric adjoint
+handled?) and Lu & Hsieh 1998 (Tellus A, coupled toy-model adjoint). Also cite: Lyu et al. 2018
+(JAMES, 2-month adjoint windows by chaos synchronization), ECCO (ocean-only adjoints), Lea et al.
+2000 / Eyink et al. 2004 (ensemble adjoint), Wang et al. 2014 (least-squares shadowing), Pires et al.
+1996 (quasi-static variational assimilation), Metz et al. 2021, Suh et al. 2022, List et al. 2024,
+the multi-step-penalty training of chaotic neural ODEs (arXiv:2407.00568), FESOM2-JAX
+(arXiv:2608.01546). Terminology rules from PAPER_PLAN.md apply: "idealized ocean cloud-albedo
+intervention", never "MCB", in any title or abstract; "weather realizations" / "macro states", never
+"climates".
+
+**Step 0: macro x micro starting states** (`run_generate_macro_ics.py`, registered plan in its
+`DEFAULT_PLAN`). Continue the equilibrated control run from `equilibrated/base_carry.pkl` and save
+16 macro states every 730 days (same season each time; macro 0 = the base carry). Branch each macro
+state into weather trajectories exactly as `run_generate_ics_independent.py` does (0.05 K seeded SST
+perturbation, 30-day decorrelation spin, paired baseline), with branch seed = 12000 + 100 * macro +
+branch and IC index = 100 * macro + branch. Roles, disjoint in (macro, branch) and with evaluation on
+macro states no other role touches:
+
+| role | macro states | branches | split | baseline horizon |
+|---|---|---|---|---|
+| `exp1` | 0-7 | 0 | heldout | 120 d |
+| `exp2_train` | 0-7 | 1 | train | 60 d |
+| `exp2_eval` | 8-15 | 0, 1 | heldout | 60 d |
+| `exp3_train` | 0-7 | 2, 3 (train); 4 (heldout = validation) | train / heldout | 60 d |
+| `exp3_eval` | 8-15 | 2, 3, 4 | heldout | 60 d |
+
+The script reports each macro state's ocean-mean SST and the anomaly pattern correlation and RMS
+difference between neighbouring macro states. These are reported, not gated: they document how
+different the ocean states really are. Micro members (0.001 K) are drawn at evaluation time by the
+harnesses, as before.
+
+**Experiment 1 — do truncated gradients match ensemble truth?** (`run_gradient_fidelity.py`,
+`analyze_gradient_fidelity.py`, both frozen with this amendment; the analysis constants at the top of
+`analyze_gradient_fidelity.py` are the registered thresholds.)
+
+* *Controls.* Five Gaussian latitude bands over the ocean, centred at 45N, 20N, 0, 20S, 45S with 10 deg
+  width (Dubey et al.'s layout), applied through the cloud-albedo actuator. Operating point
+  a0 = 0.03 in every band.
+* *Objectives* (daily series, tail mean over the final 10 days of each horizon): T0 ocean-mean SST;
+  T1 and T2 the interhemispheric and equator-to-pole Legendre contrasts over the ocean (centred, so a
+  uniform change projects on T0 only); LAND the slab-land mean temperature, which the actuator can
+  reach only through the atmosphere. Horizons 15, 30, 60, 120 d.
+* *Truth.* For each IC in `exp1` (8 ICs) and each of 4 micro members (member 0 unperturbed, members
+  1-3 perturbed 0.001 K with seed 91000 + 97 * index + m): forward rollouts at a = 0, a0, and
+  a0 +/- delta e_k with delta = 0.03 (the minus run switches that band off). The truth vector is the
+  mean over the 32 realizations of the central differences. Paired baselines cancel exactly in a
+  central difference.
+* *Estimators.* Reverse-mode Jacobians at a0 on member 0 of each IC (8 realizations) for W = 1, 7,
+  14 d and full BPTT, windows aligned to the episode start.
+* *Metrics* (per window x horizon x objective): angle between the mean estimator and the truth;
+  projection ratio; median single-realization angle; noise-to-signal ratio; sign agreement on
+  resolved components. 95% CIs from a hierarchical bootstrap (ICs, then members within IC; 2000
+  replicates, seed 2026) are primary; a flat bootstrap over realizations is reported alongside.
+* *Verdicts.* **useful** = truth resolved (SNR >= 3) AND angle CI upper < 20 deg AND ratio CI inside
+  [0.6, 1.4] AND median single-realization angle <= 45 deg. **failed** = angle CI lower > 20 deg, OR
+  ratio CI entirely outside [0.6, 1.4], OR median single-realization angle > 45 deg.
+  **inconclusive** otherwise.
+* *Primary endpoint:* T0 at 60 d. *Outcome grid and actions:* **U** truth unresolved -> add truth
+  members (no design change) and rerun the truth only. **A** some truncated W useful AND full BPTT
+  failed -> "truncation rescues the gradient"; run Experiments 2-3 with W*. **A'** some truncated W
+  useful, full BPTT inconclusive -> run Experiments 2-3 with W*; report full BPTT as inconclusive.
+  **B** full BPTT useful -> "ocean objectives keep a long gradient horizon" (a contrast with
+  Dubey et al.'s land objective); run Experiments 2-3 with full BPTT as the primary estimator and W*,
+  if any, as secondary. The old training failure is then attributed to parameterization and budget,
+  which Experiment 3 tests. **C** no estimator useful -> STOP all GPU spend on Experiments 2-3 and
+  write up the gradient-fidelity characterization.
+* *W\*:* the useful truncated window with the smallest median single-realization angle at the primary
+  endpoint; ties within 2 deg go to the larger window.
+* *Registered prediction:* at 60 d, W = 1 is `failed` on LAND or its ratio lies outside [0.5, 2]
+  (the method's domain boundary). If the LAND truth is unresolved (SNR < 3), the prediction is
+  reported as untestable. All other cells are reported without gates.
+* *Cost:* about 8 GPU-h (truth ~3.5 h: 8 ICs x 4 members x 12 rollouts of 120 d; gradients ~4.8 h:
+  8 x 4 windows x (15+30+60+120) d). The macro starting states take about 1.4 GPU-h.
+
+**Experiment 2 — can the gradient design a spatial forcing? (declared; frozen as revision 1 after
+Experiment 1).** The target is T0 = -0.1 K on the 60-day tail mean with no change in T1 or T2.
+Uniform brightening cannot meet it, because January sunlight is weighted to the southern hemisphere,
+so the design has to be spatial. Arms:
+* the gradient design with the Experiment-1 estimator;
+* a full-BPTT design;
+* the classical linear-response design solved from finite-difference sensitivities computed on
+  `exp2_train`;
+* a uniform map matched on T0.
+
+A higher-dimensional basis variant then shows how cost scales with the number of knobs. Evaluation is
+on `exp2_eval`, paired with micro-ensembles (k = 4), using the Amendment-2 statistics. Revision 1 must
+fix the objective weights, the compute budget given to each arm, the endpoints and the tests before
+any Experiment-2 rollout.
+
+**Experiment 3 — can the gradient train a controller? (declared; frozen as revision 1 after
+Experiment 1).** The task is the Tier-2 hidden-efficacy problem with a LOW-dimensional policy (at most
+~100 parameters), trained at equal GPU budget by three methods:
+* full BPTT;
+* the Experiment-1 estimator;
+* ensemble Kalman inversion (the standard derivative-free comparator).
+
+The policies are compared with the classical adaptive law and the static map on `exp3_eval`. An
+optional greedy 14-day receding-horizon arm shows what myopia costs once the ocean remembers.
+Revision 1 must fix:
+* the efficacy range, with the choice justified against the ~20x cross-model spread reported for
+  G6-1.5K-MCB;
+* the policy architecture, the budgets and the stopping rules;
+* the hypotheses and the equivalence bounds.
+
+**Posting.** Before Experiment 1 runs, this amendment and the commit hash that freezes the Step-0 and
+Experiment-1 code are posted to OSF for an independent timestamp.

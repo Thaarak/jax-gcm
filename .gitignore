@@ -168,3 +168,4 @@ notebooks/model_state.nc
 
 docs/build
 docs/source/generated
+.gstack/

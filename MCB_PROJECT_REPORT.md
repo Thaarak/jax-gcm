@@ -2,7 +2,7 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17).*
 
 ---
 
@@ -657,11 +657,388 @@ and the simulated ocean is itself close to an integrator.
 
 ---
 
+# Part 16 — A fresh-eyes review, and the two papers closest to ours
+
+On 2026-09-29 the whole project got one more end-to-end review. It re-read this report, the paper
+plan (`PAPER_PLAN.md`), the retrospective and both audits; re-checked the code and the committed
+campaign data; ran the test suite (all 216 fast tests pass); and searched the literature for anything
+published since August. The two audits had hunted for errors inside individual campaigns. This review
+asked a wider question: *if a journal reviewer read everything tomorrow, what would they say?*
+
+The answer has three parts:
+
+1. **The feedback result stands, but only with a perfect sensor.** Every controller reads the exact
+   difference between its own run and a no-brightening twin run with identical weather, a
+   measurement no real deployment could have.
+2. **"Gradients design, they do not train" has not been shown yet, on either half** (16.2 and 16.3).
+3. **Two recent papers do something very similar**, and one of them uses the same climate model (16.1).
+
+## 16.1 The two papers closest to ours
+
+**Dubey, Abbot & Chattopadhyay (2026), "Optimizing Geoengineering Interventions Using Differentiable
+Climate Models"** (arXiv:2609.12528, posted 11 September 2026; UC Santa Cruz and the University of
+Chicago) uses JAX-GCM, the same differentiable model this project is built on, to design a climate
+intervention with gradients. They warm the whole ocean by 4 K, then ask how much to cool five broad
+latitude bands of ocean (centred on 45°N, 20°N, the equator, 20°S and 45°S) so that temperatures over
+land return to the unwarmed climate. They sidestep chaos with a trick from weather forecasting and
+turbulence control called **receding-horizon control**: look only 8 to 14 days ahead, compute the
+gradient for that short stretch, apply the best cooling, run the model forward, and re-plan from
+wherever the climate actually ended up. No gradient ever spans more than two weeks. Stitched
+together, this removes 92% of the land warming over two years, holds it in a three-year run, and
+still works when the same cooling schedule is replayed in two AI climate emulators (LUCIE and
+NeuralGCM). Their supplement measures exactly the effect we ran into: their gradients agree with
+brute-force checks at 7 and 14 days (correlations 0.91 and 0.87) but only loosely at 28 days (0.49).
+Our controllers were trained on 60-day runs, twice that horizon, so our training failure is what
+their numbers predict. The differences matter, though. They set the ocean temperature directly, so
+there is no ocean that responds and no sunlight-reflecting actuator; their "controller" is an
+optimizer re-run at every step rather than a trained policy; and they test no hidden uncertainty, no
+varying disturbances and no classical feedback controller. Their own discussion lists ocean adjustment
+and radiative forcing as missing, and reports that weather noise (0.5 K² per segment) was too large to
+tell whether their time-varying schedule beats a constant one. That is precisely the kind of question
+our paired, micro-ensemble measurement was built to settle.
+
+**Quan, Koll, Lutsko & Yuval (2025), "Solar Geoengineering Strategies Based on Reinforcement
+Learning"** (*Journal of Geophysical Research: Atmospheres* 130, e2025JD044319) is the closest
+precedent for the *AI controller* half of this project. They let a **reinforcement learning**
+algorithm (an AI that learns by trial and error from a score, without any gradients through the
+climate model) decide how to distribute stratospheric aerosol in an idealized climate model. That is
+the other main sunlight-reflection idea: reflective particles high in the stratosphere instead of
+brighter clouds. They present it explicitly as an alternative to the linear feedback controllers of
+earlier work, one that includes feedback naturally. Within "several dozen" climate simulations it
+learned stable, plausible strategies, and it discovered on its own that the best strategy depends on
+when the intervention starts, which they explain with a simple energy-balance model. (The preprint
+version adds that it found the "kicking the can down the road" effect: warming can be reversed faster
+by varying the aerosol amount over time.) Their AI learned from scores alone (a **zeroth-order**
+method), whereas ours learned from gradients passed back through 60 days of chaotic weather (a
+**first-order** method), so their success next to our failure is an interesting contrast. It is not yet
+a fair one. Only their abstract was readable (the full text sits behind a website that blocks
+automated access), so we do not know how many knobs their AI turned or how long its scoring windows
+were, and both matter: scores averaged over years suppress chaos noise, and a controller with a
+handful of knobs is far easier to learn than ours, which output a whole map (about 1.25 million
+adjustable numbers) and got 40 training steps.
+
+A third paper is already in the paper plan and worth keeping in view: **Lee et al. (2025,
+*Geophysical Research Letters*)** ran the first classical feedback controller for marine cloud
+brightening, in the full CESM2 climate model. Each year it decides how much ocean area to brighten,
+the same "recruit more area" lever as Part 10's H4, and the authors report that it converged more
+slowly than intended.
+
+## 16.2 The biggest surprise: the "designed" pattern was never really designed
+
+Every campaign since Tier 1 uses one fixed brightening map: the "gradient-optimized pattern" from
+Stage 1 (`mcb_experiments_gpu/stage1_v2/stage1_optimized_pattern.pkl`). It is the static arm in every
+comparison and the map the classical and imitation controllers scale up and down. Its saved
+optimization history shows it was not produced by gradient descent in any meaningful sense:
+
+- **The kept map is the one after step 1 of 150.** It was kept because it had the lowest loss of the
+  150. That is the "luckiest of many noisy tries" selection Part 7.1 retracted for the controllers.
+- **Almost none of that loss was about cooling.** In a typical step, 99.5% of the loss was a
+  "uniformity" penalty (how patchily the ocean cooled) measured on one 60-day run from one starting
+  climate. Over 60 days chaotic weather makes the ocean patchy all by itself, so this term mostly
+  measured weather; the error against the cooling target was typically about a hundredth as large.
+  Step 1 won mainly because its weather happened to be less patchy: its loss was 2.2 standard
+  deviations below the average of the later steps.
+- **The map is a single step away from where it started.** Adam, the optimizer, moves every setting
+  by roughly one learning rate on its first step, and 85% of ocean cells sit at exactly the starting
+  value 0.02 plus or minus that step (0.05). About half of the ocean ended at 0.07 and nearly all the
+  rest at zero: a map of which way the very first gradient pointed.
+- **The optimizer then stalled.** The gradient faded from 0.13 to around 0.00000001, consistent with
+  cells being pushed outside the allowed 0–0.09 range, where they receive no gradient at all.
+
+So the Tier-1 success (−0.1023 ± 0.0014 K on 20 fresh climates) is a real property of *this map*, and
+of a first step that happened to be about the right size. It is not evidence that gradient descent
+designs good patterns. The paper plan had already demoted the result to "amplitude calibration"; the
+history says even the amplitude came from the step size, not from optimization. Neither half of the
+planned title, "Gradients Design, They Do Not Train", has been tested yet. The fix is cheap: rerun
+Stage 1 with the cooling target as the objective, averaged over several starting climates and scored
+on the registered final-10-day window, with a map whose cells cannot get permanently stuck, picked on
+held-out climates, and compared with a uniform map using the same total brightening.
+
+## 16.3 Other problems found
+
+- **The "gradients are correct" claim rests on an old check.** Parts 2, 4 and 11 lean on Stage 0's
+  single test: a 10-day run, one number (a uniform brightening level), on the *old* surface-albedo
+  actuator that the first audit replaced. It has never been repeated for the cloud-albedo actuator,
+  over 60 days, or region by region.
+- **A planned paper figure would come from the wrong run.** The paper plan builds figure F8 ("what the
+  actuator touches") and its numbers from `coupled_baseline_atm.nc`, a May 27 run from before the
+  rebuild. Its starting ocean had the same temperature all the way around each latitude and its land
+  was frozen at 288 K, so it does not show the climate the campaigns used.
+- **The simulated climate is about 3.8 K too cold.** During the 10-year settling run the ocean cooled
+  from the observed 283.9 K to about 280.1 K (simple averages over ocean grid cells). The slab ocean
+  has no **Q-flux** (the standard fixed heating term that stands in for ocean currents) and nothing
+  stops its water cooling past freezing. The paired design cancels this bias out of every comparison,
+  but any future stratocumulus experiment needs the realistic cold water off Peru and Namibia that
+  makes those clouds form.
+- **"Watching El Niño adds nothing" is partly built in.** The feedback controller's main input is the
+  average ocean temperature change, and that average *includes* the patch where the pacemaker holds El
+  Niño. By the paper plan's own arithmetic, the patch alone is 53% (steady) to 69% (growing) of the
+  whole disturbance effect. So more than half of the disturbance lands in the feedback sensor almost
+  at once, with no noise, leaving a forecast of El Niño little to add. This belongs in the catalogue of
+  self-fulfilling designs, next to Parts 7 and 13.
+- **The training failure has three causes tangled together.** The controllers were trained on 60-day
+  runs (beyond the two to four weeks over which Dubey et al. found gradients useful); they output a
+  full map with about 1.25 million adjustable numbers to learn what is essentially a one- or two-knob
+  rule; and they got 40 training steps. As it stands, the negative result means "this setup at this
+  budget", not "gradients cannot train controllers".
+- **"PI controller" is the wrong name.** The "I" in PI is integral action: a running memory of past
+  error. Neither controller keeps one. The efficacy controller estimates how strongly the spraying is
+  working and divides by that estimate (an **adaptive controller**, from the self-tuning regulators of
+  the 1970s), and the El Niño controller combines a proportional correction with a forecast term.
+  Calling them "hundred-year-old PI" will draw a control engineer's objection.
+- **Staggered start seasons will hand feedback a free win unless the fixed map is re-tuned.** The map
+  leans south and tropical (56% of its area-weighted brightening is in the southern hemisphere), was
+  tuned for January (southern summer), and sits at 0.07 against the 0.09 cap, so it can only be
+  scaled up about 1.3×. Starting in July changes how well it works. The fair opponent is a fixed map
+  re-tuned for each start month, written into the rules in advance. Done that way, seasons become a
+  natural test of "recruit more area", because *moving* the spraying beats *scaling* it.
+- **The efficacy uncertainty is small next to the real one.** Tier 2 hid a multiplier between 0.6 and
+  1.4. A 2026 multi-model protocol for cloud brightening (Hirasawa et al., GeoMIP "G6-1.5K-MCB")
+  found that the sea-salt emissions needed for the same cooling differ about 20-fold across three
+  major climate models.
+- **The "noise floor" will not look new to climate scientists.** Weather noise between runs, and
+  ensembles started from imperceptible nudges, are standard practice; the large CESM ensembles call
+  these **micro perturbations**. What this project lacks is the matching **macro** half (starts from
+  genuinely different ocean states, taken from different years of a long control run), which is the
+  paper plan's "one climate, n = 1" worry.
+
+## 16.4 What to run next
+
+Ranked by how much each experiment decides per GPU-hour. Costs are rough, scaled from the
+meta-audit's planning numbers.
+
+| # | Experiment | What it decides | ~GPU-h |
+|---|---|---|---|
+| 1 | Re-check the gradients in the current setup against brute-force finite differences, region by region, at 10, 30 and 60 days from several starting climates; also try blocking the gradient through the atmosphere so it flows only along the direct sunlight-to-ocean path | Whether the gradients are right today, and whether that direct path keeps them useful longer than in Dubey et al.'s land-temperature setup | 1–2 |
+| 2 | Rerun Stage 1 properly (16.2) and compare with a uniform map of equal total brightening | Whether "gradients design" is true at all | 3–5 |
+| 3 | Use gradients to tune only the classical controller's two knobs (the tuning sweeps already give the answer), then a controller with only a few knobs | Whether training failed because of bad gradients or because of the huge map and tiny budget | 3–5 |
+| 4 | Train with gradients cut off after 8–14 days, or through the direct path only | Whether "gradients don't train" narrows to "gradients through chaos don't train" | 4–8 |
+| 5 | Dubey-style short-horizon optimization under hidden efficacy: the optimizer's internal model assumes efficacy 1, the world doesn't; compare with the classical controller and the fixed map | Whether plan-as-you-go survives a wrong model; new, and engages Dubey et al. directly | 8–16 |
+| 6 | Starts from genuinely different oceans (one per year of a longer control run), then staggered start seasons with re-tuned fixed maps | Fixes "one climate"; sets up a real test of "recruit more area" | 6–10 |
+| 7 | A realistic sensor (the controller compares the actual temperature with a climatology, not with a same-weather twin), with the El Niño patch left out of both the sensor and the score; re-run the "watch El Niño?" test | Whether the anticipation null survives realistic sensing | 3–6 |
+
+The paper plan's own "killer experiment" (gradient training with micro-ensembles against a
+gradient-free search at the same cost) is still worth running, with two additions: run it on the
+few-knob controller as well, and include **ensemble Kalman inversion**, the climate community's
+standard gradient-free method for tuning chaotic models, next to evolution strategies.
+
+## 16.5 What it means for the paper
+
+- **Change the lead.** With Dubey et al. out, "gradients through chaos are only useful for a couple
+  of weeks" and "gradients can design an intervention in JAX-GCM" are no longer new. What is still
+  ours: an ocean that responds, a sunlight-reflecting actuator, hidden uncertainty and disturbances,
+  learned versus classical controllers, and a measurement protocol strong enough to settle the
+  question Dubey et al. could not. Lead with experiments 1–4 and the closed-loop results; keep the
+  noise floor and the catalogue of self-fulfilling designs as the methods backbone.
+- **Move quickly.** Dubey et al. name model predictive control and higher-dimensional forcing as their
+  next steps. A preprint once experiments 1–4 are done protects what is distinctly ours.
+- **Consider getting in touch** with Dubey, Abbot and Chattopadhyay (same model; experiment 5 is a
+  natural joint project) and with the MacMartin group behind Lee et al.
+- **Citations to update.** Cite the model paper (Davenport, Madan et al. 2026, "JCM v1.1",
+  *Geoscientific Model Development* 19:6451). Whittaker & Di Luca is now published (*Weather and
+  Climate Dynamics* 7:393–410, 2026). For Lee et al. 2025, a free preprint exists on ESS Open Archive
+  (doi:10.22541/essoar.172107989.92419868/v1), but it has to be downloaded by hand.
+
+## 16.6 Housekeeping
+
+- The settled base climate (`equilibrated/base_carry.pkl`) and every set of starting climates
+  (`ics_*`) exist only on the GPU machine, and every campaign depends on them. Archive them, convert
+  the pickle files to NetCDF with checksums, and deposit them (for example on Zenodo) for the
+  journal's open-data requirement.
+- Put the remaining pre-registrations on OSF, a public registry, so they carry timestamps no one
+  controls.
+- Get a human check. The same AI-assisted workflow designed, ran and audited these campaigns, and
+  several of the problems above got past more than one of its audits. Have the advisor or a colleague
+  recompute the headline numbers from the raw data with their own code, and disclose the AI
+  assistance as the journal requires.
+- Stop spending on more imitation or fine-tuning repeats (five already agree), on rainfall analyses in
+  this configuration, and on new El Niño variants until the sensor problem in 16.3 is fixed.
+
+## 16.7 What this part corrects in earlier parts
+
+This report keeps its history, so earlier parts stay as written. Read them with these corrections:
+
+- **The one-paragraph version, Part 11 (result 5) and Part 13** say the controllers cancel "85–89%"
+  of El Niño's effect, and call it "the first time anyone has closed a control loop … against real
+  year-to-year climate variability". The disturbance is a prescribed tropical temperature patch that
+  ramps up and then holds (Part 15), and more than half of its measured effect is the patch itself
+  (16.3). The paper plan's corrected figures are 85.0% steady / 67.0% growing (signed) and
+  83.2% / 66.9% (sign-agnostic).
+- **Part 11 (result 6) and Parts 14–15** say observing the disturbance is worth nothing. That holds
+  for a perfect sensor that already contains most of the disturbance (16.3), not in general.
+- **Parts 9, 11, 13 and 14** call the classical controllers "PI" and "hundred-year-old" (see 16.3).
+- **Part 10** calls H5 "the headline of the entire project". It shows the classical controller beating
+  the fixed map, reached by copying the classical controller; the paper plan already demotes it.
+- **Parts 8 and 11** say differentiable optimization designed a good static plan and that design is
+  the model's "proven value" (see 16.2).
+- **Parts 2, 4 and 11** say the gradients were tested and confirmed; that rests on the 10-day,
+  one-number check on the old actuator (16.3).
+
+> **New terms:** *Receding-horizon control* = plan only a short way ahead, act, then re-plan from
+> where you actually are. *Reinforcement learning* = an AI that learns by trial and error from a
+> score, without gradients through the model. *Zeroth-order vs first-order* = learning from scores
+> alone vs learning from gradients. *Finite differences* = the brute-force check of a gradient: nudge
+> an input, rerun, see how the output moves. *Q-flux* = a fixed heating term standing in for ocean
+> currents in a slab ocean. *Adaptive controller* = one that estimates how strongly its actuator works
+> and adjusts for it. *Macro vs micro perturbations* = starting runs from genuinely different ocean
+> states vs from the same state nudged imperceptibly.
+
+---
+
+# Part 17 — The new direction: gradients that last for months
+
+## Why this, and why now
+
+Part 16 left two facts side by side. First, the claim this project was about to publish —
+"gradients design, they do not train" — had not really been tested on either half. Second, a
+paper posted in September 2026 (Dubey, Abbot & Chattopadhyay) uses the very same model to steer a
+climate simulation with gradients, but only by never looking more than two weeks ahead, and in a
+setup with no ocean that responds.
+
+That second fact points at the opening. Think of a gradient as a long chain of "if I nudge this,
+that changes" links running backward through every simulated day. The links that pass through the
+**atmosphere** amplify noise: weather is chaotic, so after a few weeks the chain is mostly noise
+(Dubey et al. measured it: their gradients agree with brute-force checks at 7 and 14 days, and only
+loosely at 28). The links that pass through the **ocean** do the opposite — a slab ocean soaks up
+heat slowly and forgets slowly, so its links shrink gently instead of exploding. Two weeks of
+planning is fine when nothing remembers for longer than two weeks; with an ocean, today's cloud
+brightening keeps cooling the water for months, and a planner that only looks two weeks ahead is
+short-sighted.
+
+So the new question is: **can we snip the gradient's chain through the atmosphere every few days,
+keep its chain through the ocean intact, and get gradients that stay useful for months?** If yes,
+that is new (nobody we could find has shown it in a differentiable coupled climate model), it turns
+this project's biggest failure into its motivation, and it would matter to anyone building
+differentiable climate models with an ocean. If no, measuring exactly where and why it fails is
+still publishable.
+
+## Step 0 — getting everything ready (status as of 2026-09-29)
+
+Step 0 is preparation: nothing in it produces a scientific result, but every later experiment
+depends on it.
+
+- **The gradient cut** (`jcm/mcb/gradient_truncation.py`). Every W days it stops the gradient from
+  flowing back through the atmosphere's dynamical state — its memory from one day to the next — and
+  leaves everything else alone. That "everything else" matters: the coupled model hands the previous
+  day's heat flux to the ocean at the start of each day, and the cloud-brightening field itself
+  travels in the same part of the model's state, so cutting too much would silently cut the very
+  path from brightening to ocean cooling. The cut changes only the backward pass — every simulated
+  temperature is bit-for-bit identical with and without it. **Done and tested**: 14 tests check it
+  against an independent hand-derived calculation on a toy with the real model's data flow. Three
+  more tests on the real coupled model confirm three things: simulated values are bit-identical with
+  and without the cut; a window longer than the run reproduces ordinary backpropagation exactly; and
+  the same-day-only gradient still carries the direct brightening-to-cooling effect.
+- **Controls and objectives** (`jcm/mcb/band_basis.py`). Five brightening "knobs", each a band of
+  ocean around one latitude (45°N, 20°N, the equator, 20°S, 45°S — the same layout as Dubey et al., so
+  the two studies can be compared), and four things to measure: the average ocean temperature (T0),
+  the north–south difference (T1), the equator-to-pole difference (T2), and the average land
+  temperature (LAND), which the brightening can only reach *through* the atmosphere. **Done and
+  tested.** One precision problem was found and fixed on the way: averaging ~290 K numbers in the
+  model's single-precision arithmetic loses about a ten-thousandth of a degree, which matters when
+  the signals are a few hundredths, so every average now subtracts a 288 K reference first.
+- **Experiment 1's harness and analysis** (`run_gradient_fidelity.py`,
+  `analyze_gradient_fidelity.py`). The analysis — with every pass/fail threshold — is written and
+  frozen *before* any data exist, as for every campaign since Tier 1. **Done, tested on synthetic
+  data, and run end to end on a laptop** on a tiny version of the experiment. That end-to-end run
+  caught one real bug before any GPU time was spent (the model must be initialized before its step
+  function is built, or the land component has no climatology).
+- **Starting states from genuinely different oceans** (`run_generate_macro_ics.py`). Every earlier
+  campaign started from one ocean state on one calendar day ("climate n = 1", Part 7). This script
+  continues the settled control run and saves the ocean every two years — 16 different ocean states,
+  all in the same season — then branches each into independent weather runs: 80 starting states in
+  five roles (Experiment 1; design training and evaluation; controller training and evaluation), with
+  every evaluation set drawn from ocean states nothing else ever touches. **Written and tested on a
+  laptop; the full run needs the GPU (~1.4 hours).**
+- **Pre-registration** (`PREREGISTRATION.md` Amendment 9). Step 0 and Experiment 1 are frozen in
+  full; Experiments 2 and 3 are declared and get frozen in full after Experiment 1, before any of
+  their data exist. **Written; still to be posted to OSF** (a public registry that timestamps it
+  independently of this repository).
+- **Literature check.** Done. Related ideas exist — training on short windows, nudging a model's
+  weather toward observations to tame chaos (Lyu et al. 2018), averaging gradients over ensembles,
+  ocean-only gradient systems (ECCO), and a coupled data-assimilation system with months-long windows
+  (Sugiura et al. 2008) — but none cuts only the atmosphere in a differentiable coupled model and
+  checks the result against ensemble truth. Two papers still need to be read in full before any
+  novelty claim, because automated access was blocked: Sugiura et al. 2008 and Lu & Hsieh 1998.
+
+**What Step 0 still needs from a person:** approval to run `run_campaign_step0_exp1.sh` on the GPU
+machine (it stops and restarts the vLLM container exactly like every earlier campaign), posting
+Amendment 9 to OSF with its commit hash, and fetching the two papers.
+
+## Experiment 1 — does the snipped gradient match the truth?
+
+**The truth** is measured the slow, brute-force way: nudge one brightening knob up, then down, run
+the full model forward each time, and see how much the ocean temperature moves. One pair of runs is
+drowned in weather noise, so this is repeated on 32 weather runs (8 different ocean states × 4
+imperceptibly nudged copies) and averaged. **The candidates** are gradients computed with the
+atmosphere snipped every 1, 7 or 14 days, and with no snipping at all (ordinary backpropagation). All
+are compared at 15, 30, 60 and 120 days.
+
+**The pass rule** (registered): a candidate is *useful* if its direction is within 20° of the truth,
+its size is between 0.6× and 1.4× the truth's, and a single weather run's gradient is usually within
+45° (a gradient that is only right on average is no use for training). The deciding comparison is
+the average ocean temperature at 60 days. The possible outcomes, all pre-stated:
+
+- **A — snipping rescues the gradient:** some snipped version passes and ordinary backpropagation
+  fails. This is the result the new paper is built around; Experiments 2 and 3 go ahead.
+- **B — no rescue needed:** ordinary backpropagation already passes for ocean temperature. Also new
+  (a clean contrast with Dubey et al.'s land objective), and it means the old training failure came
+  from the oversized network and tiny budget — which Experiment 3 then tests.
+- **C — nothing passes:** stop spending GPU time; write up the map of where gradients break down.
+- **U — the truth itself is too noisy to judge:** add more brute-force runs and repeat the truth only.
+
+One prediction is written down in advance: the snipped gradient should *fail* on land temperature,
+because the only way the ocean brightening reaches land is through the atmosphere we snipped. Seeing
+that failure would show the method's limits are understood, not hidden.
+
+**Cost:** about 8 GPU-hours, plus 1.4 for the starting states.
+
+## Experiment 2 — can the gradient design a pattern? (after Experiment 1)
+
+The target: cool the average ocean by 0.1 K over 60 days while leaving the north–south and
+equator-to-pole temperature differences unchanged — the kind of target used in stratospheric
+aerosol studies. Brightening everything evenly cannot do it, because January sunlight falls mostly
+on the southern hemisphere, so the design has to be genuinely spatial (unlike Part 16's finding that
+the old design was really just a brightness setting). Four designs compete, judged on fresh ocean
+states: the snipped-gradient design, the ordinary-backpropagation design, the classical design that
+climate groups use today (built from brute-force sensitivities), and even brightening. A second
+round with many more knobs shows the payoff: the gradient's cost stays flat as knobs are added,
+while the brute-force approach grows with every knob.
+
+## Experiment 3 — can the gradient train a controller? (after Experiment 1)
+
+The same hidden-efficacy task as Tier 2, but with a small controller (at most about a hundred
+adjustable numbers instead of 1.25 million), trained three ways with the same GPU budget: ordinary
+backpropagation, the snipped gradient, and a standard gradient-free method (ensemble Kalman
+inversion — the climate community's usual tool for tuning chaotic models, and the fair answer to
+"why not just do what Quan et al. did?"). The trained controllers face the classical adaptive law
+and the fixed map on fresh ocean states. An optional fifth contender plans two weeks ahead the way
+Dubey et al. do, to measure what short-sightedness costs once the ocean remembers.
+
+## What success would look like — and what failure would still give us
+
+The strongest paper: Experiment 1 comes out A (or B), the gradient design matches the classical
+design at a fraction of the cost and beats even brightening, and the controller trained with the
+snipped gradient matches or beats the classical law where ordinary backpropagation failed. Even the
+weakest outcome (C) gives a measured map of when gradients through a coupled climate model can and
+cannot be trusted, which does not exist today. Whatever happens is decided by rules written down
+before the data.
+
+**Total cost:** roughly 25–35 GPU-hours across all three experiments; the first real answer
+(Experiment 1) about 1–2 weeks after the GPU run is approved.
+
+> **New terms:** *Truncation window (W)* = how many days of atmospheric history a snipped gradient
+> keeps. *Ground truth (here)* = the brute-force, many-runs answer the gradients are checked against.
+> *Macro vs micro starting states* = different ocean states from a long control run vs the same state
+> nudged imperceptibly. *OSF* = the Open Science Framework, a public registry that timestamps a
+> pre-registration so nobody can say it was written after the fact.
+
+---
+
 ## Where to look next in the codebase
 
 - **`MCB_META_AUDIT.md`** — the second audit, and (in its addenda) the full Tier-1/2/2b campaign numbers behind Parts 7–10.
 - **`MCB_IMPLEMENTATION_PLAN.md`** — the detailed engineering log of the original effort: the first audit (R1–R7), the rebuild, and campaigns v1/v2/v3.
-- **`PREREGISTRATION.md`** — the frozen rules, with the formal amendment log (Amendments 1–8 plus three revisions) covering every design decision from Tier 1 through the growing-ramp campaign.
+- **`PREREGISTRATION.md`** — the frozen rules, with the formal amendment log (Amendments 1–8 plus three revisions) covering every design decision from Tier 1 through the growing-ramp campaign, and Amendment 9 freezing Part 17's Step 0 and Experiment 1.
 - **`jcm/mcb/gates_stats.py`** — the paired t / Wilcoxon / equivalence (TOST) statistics behind every verdict, in pure NumPy with its own test suite.
 - **`run_confirmatory_eval.py`** — the micro-ensemble evaluation harness (and the PI controller) used by all three campaigns.
 - **`run_noise_floor.py --cross-process`** — the corrected chaos-noise measurement (Part 7.2).
@@ -674,3 +1051,9 @@ and the simulated ocean is itself close to an integrator.
 - **`run_campaign_ramp.sh`** — Part 15's growing-disturbance campaign; **`run_co2_scoping.py`** and the `co2_rate` plumbing are kept as the record of the CO2 route that could not work.
 - **`analyze_precip_sideeffects.py`** — the Part-12 rainfall side-effect analysis (Amendment 5; meta-audit Addendum 4).
 - **`jcm/physics/speedy/shortwave_radiation.py`** — where MCB correctly brightens cloud albedo (the R6 fix).
+- **`mcb_experiments_gpu/stage1_v2/stage1_optimized_pattern.pkl`** (its `history`), **`run_stage0_plumbing_test.py`** and **`jcm/mcb/coupled_features.py`** (feature 0) — the evidence behind Part 16's three main code findings.
+- **`jcm/mcb/gradient_truncation.py`** — Part 17's gradient cut (atmosphere snipped every W days, ocean kept), with its tests.
+- **`jcm/mcb/band_basis.py`** / **`jcm/mcb/gradient_fidelity.py`** — Experiment 1's five ocean-band knobs, its four objectives, and the truth-vs-gradient machinery.
+- **`run_gradient_fidelity.py`** / **`analyze_gradient_fidelity.py`** — Experiment 1's driver and its pre-committed analysis (every threshold registered in Amendment 9).
+- **`run_generate_macro_ics.py`** — starting states from 16 genuinely different ocean states, in five disjoint roles.
+- **`run_campaign_step0_exp1.sh`** — the gated GPU script for the macro starting states and Experiment 1 (~9.5 GPU-h).
