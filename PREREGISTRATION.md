@@ -1139,3 +1139,113 @@ Run on a laptop CPU from a cold start with Q2 (`mcb_experiments/qflux/attempt2/`
     branches from that base carry. The GPU run is a second weather realization; with a window-mean
     standard error of about 0.07 K, a fail there is very unlikely, but the gate still applies.
   * The tropical cold / Southern Ocean warm pattern is a documented limitation of the base climate.
+
+### Amendment 9, revision 0.4 — interleaved training and evaluation states; maps from Experiment 1 (frozen 2026-10-01, BEFORE any Step-0 or Experiment-1 data)
+
+**Decision.** The user adopted MCB_PROJECT_REPORT.md Part 18 steps 2 and 3, the last two items that
+revision 0.1 left open. No Step-0 or Experiment-1 data exist, and nothing has run on the GPU.
+
+**1. Interleaved macro states (Step 0).**
+
+* *Change.* Experiment 1 and every training or validation role use the even macro states (0, 2, ...,
+  14); evaluation uses the odd ones (1, 3, ..., 15). Branches, seeds (12000 + 100 * macro + branch), IC
+  indices, horizons and role sizes are unchanged. Amendment 9's table becomes:
+
+| role | macro states | branches | split | baseline horizon |
+|---|---|---|---|---|
+| `exp1` | 0, 2, ..., 14 | 0 | heldout | 120 d |
+| `exp2_train` | 0, 2, ..., 14 | 1 | train | 60 d |
+| `exp2_eval` | 1, 3, ..., 15 | 0, 1 | heldout | 60 d |
+| `exp3_train` | 0, 2, ..., 14 | 2, 3 (train); 4 (heldout = validation) | train / heldout | 60 d |
+| `exp3_eval` | 1, 3, ..., 15 | 2, 3, 4 | heldout | 60 d |
+
+* *Why.*
+  * The first-half/second-half split put training in the first 15 years of the 30-year control run
+    and evaluation in the last 15, so any slow wander of the ocean's mean state would have separated
+    the two sides. The Q-flux settling run shows such wander: its yearly means moved over about
+    0.26 K, with a lag-1 autocorrelation of 0.65 (revision 0.3 RESULT).
+  * Interleaving keeps the states on each side four years apart instead of two, so they are closer
+    to independent. Experiment 1 benefits directly: its hierarchical bootstrap resamples ICs as
+    independent units, and under the old plan its eight ICs were consecutive states two years apart.
+* *Alternatives considered.*
+  * An ABBA order (train, eval, eval, train, ...) would cancel a linear trend exactly, but it puts
+    pairs of same-side states two years apart, which costs independence. The measured trend is too
+    small to be worth that (attempt-2 drift -0.0044 K per 60 days; no trend in the yearly means).
+  * A random assignment would add nothing over a fixed rule.
+* *The cost of the choice.* Each evaluation state now has training neighbours two years away.
+  Regional SST anomalies in the slab decay with e-folding times of about 60-570 days, so this link
+  should be weak. It is measured, not assumed (next bullet).
+* *Reported, not gated* (in the log and `macro_bases_manifest.json`), in addition to Amendment 9's
+  per-state means and neighbour similarities, which now straddle the split:
+  * the similarity of states two spacings apart (same side);
+  * the least-squares trend of the ocean-mean SST across the 16 states, with its standard error
+    (Part 18 step 8);
+  * the split balance: the mean ocean SST of the training-side and of the evaluation-side states, and
+    their difference.
+* *Enforced in code.* `validate_plan` now rejects any plan in which an evaluation role (`*_eval`)
+  shares a macro state with another role. Before, only a unit test checked this, and only for the
+  registered plan.
+
+**2. Maps from Experiment 1 (secondary outputs).**
+
+* *Truth maps.* Every truth rollout (unchanged: 8 ICs x 4 members x 12 runs of 120 d) also returns its
+  slab-ocean SST and slab-land temperature maps as 5-day block means over all 120 days, relative to
+  288 K, from the same rollout (`make_series_and_maps_fn`). The 5-day blocks reproduce every
+  registered tail window exactly (days 6-15, 21-30, 51-60 and 111-120) and any look-ahead average that
+  revision 1 may choose.
+* *Map Jacobians.* For each registered window (W = 1, 7, 14 d and full) on member 0 of each IC, one
+  forward-mode pass through the same truncated rollout (decay exactly 1) gives the derivative of every
+  block-mean map cell with respect to each band (`make_map_jacobian_fn`). The damped estimators get
+  none.
+* *Why the map Jacobians too.* Part 18 step 3 names a check on the planner's map-shaped objective,
+  which needs both sides; truth maps alone give only the brute-force response. With both stored:
+  * the gradient of any map-shaped objective can be checked offline against brute force;
+  * step 23's comparison of the planner's response maps with brute-force maps is paired on the same
+    ICs;
+  * the forward-mode pass is the planner's preferred gradient (Part 18: Gauss-Newton with a
+    forward-mode gradient). Experiment 1 therefore also validates it, runs step 16's
+    forward-versus-backward agreement test on the real model, and times it on the GPU for step 17.
+* *Two checks, logged in `<output>.json`, reported and not gated.*
+  * (a) Each truth run's maps, weighted like the objectives, must reproduce the tail means of its own
+    objective series (`maps.truth_alignment_max_abs_K`).
+  * (b) The forward-mode map Jacobians, weighted the same way, must reproduce the registered
+    reverse-mode Jacobians of the same window, IC and member (`map_jacobian_check`, per objective).
+  * *Expected values, measured on a laptop CPU* (real model, 2-10 days):
+    * (a) a few 1e-6 K: 0.8e-6 K over 10 days in 5-day blocks, 3.4e-6 K with 1-day tails. This is
+      float32 round-off in the objectives' weighted sums; a one-day misalignment would show as at
+      least about 1e-2 K.
+    * (b) about 1e-3 of each objective's largest entry, worst 3.3e-3 (LAND at 3 days), similar for
+      W = 1, 7 and full. This is float32 round-off over the model's sub-steps.
+    * Over long untruncated windows chaos may amplify round-off differently in the two modes; that
+      would be reported as a property of untruncated gradients.
+* *Storage.* `<output>_maps.npz`, float32, about 0.48 GB uncompressed, next to the registered
+  `<output>.npz`.
+* *Role.* Secondary outputs. `analyze_gradient_fidelity.py` never reads them, and they enter neither
+  the outcome grid (U/A/A'/B/C) nor the choice of W*. Their uses are fixed in revision 1, before any
+  Experiment-2 or Experiment-3 data: the classical linear-response design, the check of the planner's
+  response maps and map-shaped objective, and the pilot.
+
+**What this changes, and doesn't, in the registered Experiment 1.**
+
+* Unchanged: the ICs (now drawn from the even macro states), members, seeds, amplitudes, horizons,
+  windows, damped arms, metrics, thresholds, outcome grid and W*, and also `analyze_gradient_fidelity.py`
+  and every array it reads.
+* The truth's objective series now come from the function that also returns the maps. On the laptop
+  CPU, over 10 days with the registered 5 bands, the two functions gave bit-identical series at the
+  same speed. `MapsTest` (toy) and `RealModelMapsTest` (real model, slow) check this to round-off.
+* End to end, the CPU smoke of the campaign run with and without maps gave bit-identical
+  `fd_series`, `jacobians` and `jacobians_damped`, and identical output from the registered
+  analysis.
+* The registered reverse-mode Jacobians are computed exactly as before; the map Jacobians run after
+  them.
+
+**Cost.**
+
+* Truth maps: no measurable extra time on the laptop.
+* Map Jacobians: one 120-day forward-mode pass per IC and window (32 passes). On the laptop a
+  forward-mode day cost 6.0-6.6 truth-rollout days, against 10.9-12.6 for the registered reverse mode.
+  Scaled to the registered gradients' 4.8 GPU-h, that is about 1.5 GPU-h.
+* Experiment 1 is now about 12.2 GPU-h; Step 0 plus Experiment 1, with the Q-flux re-settle, about
+  14 GPU-h.
+
+**Posting.** The OSF posting includes revisions 0.1-0.4 and the commit that contains them.

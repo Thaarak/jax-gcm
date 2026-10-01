@@ -1,7 +1,7 @@
 #!/bin/bash
 # Step 0 (macro starting states) + Experiment 1 (gradient fidelity) for the
 # long-horizon gradient study (PREREGISTRATION.md "Amendment 9", frozen
-# 2026-09-29, and its revision 0.1). Run on the GPU machine only after the
+# 2026-09-29, and its revisions 0.1-0.4). Run on the GPU machine only after the
 # Amendment-9 commit is pushed and posted to OSF.
 #
 # Question (Experiment 1): does cutting gradient flow through the chaotic
@@ -14,11 +14,12 @@
 #   1/5 Q-flux base climate (revisions 0.2-0.3): settle 10 years from the committed
 #       Q-flux file and apply the registered gate (~0.3 GPU-h); abort on FAIL
 #   2/5 macro starting states: 16 macro states x registered branches (~1.4 GPU-h)
-#   3/5 Experiment 1 truth + estimators on ics_macro/exp1 (~10.7 GPU-h,
-#       including ~2.4 for the exploratory damped estimators, revision 0.1)
+#   3/5 Experiment 1 truth + estimators on ics_macro/exp1 (~12.2 GPU-h,
+#       including ~2.4 for the exploratory damped estimators, revision 0.1,
+#       and ~1.5 for the forward-mode map Jacobians, revision 0.4)
 #   4/5 pre-committed analysis -> exp1_gradient_fidelity_analysis.json
 #
-# Cost: ~12.5 GPU-h in total. vLLM is stopped with a restart trap, as in every
+# Cost: ~14 GPU-h in total. vLLM is stopped with a restart trap, as in every
 # earlier campaign.
 CONTAINER=aeon-vllm
 ts() { date +%H:%M:%S; }
@@ -46,14 +47,16 @@ SMOKE=/tmp/step0_smoke
 step "0/5 Smoke: plumbing of the three drivers (cold start, 2-4 days)"
 rm -rf $SMOKE && mkdir -p $SMOKE
 cat > $SMOKE/plan.json <<'EOF'
-{"exp1": [{"macro": [0, 1], "branches": [0], "split": "heldout", "horizon": 3}]}
+{"exp1": [{"macro": [0, 2], "branches": [0], "split": "heldout", "horizon": 3}],
+ "exp2_eval": [{"macro": [1, 3], "branches": [0], "split": "heldout", "horizon": 3}]}
 EOF
-$PY run_generate_macro_ics.py --base-carry cold --num-macro 2 \
+$PY run_generate_macro_ics.py --base-carry cold --num-macro 4 \
   --spacing-days 2 --decorr-days 1 --plan-json $SMOKE/plan.json \
   --output-root $SMOKE/ics || { echo "SMOKE (macro ICs) FAILED"; exit 1; }
 $PY run_gradient_fidelity.py --ic-dir $SMOKE/ics/exp1 --fd-members 2 \
   --grad-members 1 --horizons 2 3 --tail-days 1 --windows 1 0 \
-  --damped-efold-days 3 --band-centers 20 -20 --output $SMOKE/exp1 \
+  --damped-efold-days 3 --band-centers 20 -20 --map-block-days 1 \
+  --output $SMOKE/exp1 \
   || { echo "SMOKE (Experiment 1) FAILED"; exit 1; }
 $PY analyze_gradient_fidelity.py $SMOKE/exp1 --n-boot 50 >/dev/null \
   || { echo "SMOKE (analysis) FAILED"; exit 1; }
@@ -83,12 +86,13 @@ if [ ! -f $ICS/exp3_eval/manifest.json ]; then
     --require-qflux --output-root $ICS || { echo "MACRO ICs FAILED"; exit 1; }
 else echo "  $ICS exists — reusing"; fi
 
-step "3/5 Experiment 1: truth (8 ICs x 4 members) + estimators (W 1/7/14/full; damped tau 3/7, exploratory)"
+step "3/5 Experiment 1: truth (8 ICs x 4 members) + estimators (W 1/7/14/full; damped tau 3/7, exploratory) + maps (rev 0.4)"
 if [ ! -f $OUT.json ] || ! grep -q '"finished_utc"' $OUT.json; then
   $PY run_gradient_fidelity.py --ic-dir $ICS/exp1 \
     --fd-members 4 --grad-members 1 --member-seed0 91000 \
     --a0 0.03 --delta 0.03 --horizons 15 30 60 120 --tail-days 10 \
     --windows 1 7 14 0 --damped-efold-days 3 7 --align episode \
+    --map-block-days 5 \
     --output $OUT \
     || { echo "EXPERIMENT 1 FAILED (partial arrays kept in $OUT.npz)"; exit 1; }
 else echo "  $OUT complete — reusing"; fi
@@ -98,4 +102,4 @@ $PY analyze_gradient_fidelity.py $OUT || { echo "ANALYSIS FAILED"; exit 1; }
 
 echo ""
 echo "[$(ts)] ========== STEP 0 + EXPERIMENT 1 COMPLETE =========="
-echo "Artifacts: $ICS/, $OUT.npz, $OUT.json, ${OUT}_analysis.json"
+echo "Artifacts: $ICS/, $OUT.npz, ${OUT}_maps.npz, $OUT.json, ${OUT}_analysis.json"

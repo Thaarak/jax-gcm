@@ -23,7 +23,9 @@ level:
    ``run_gradient_fidelity.py`` read unchanged.
 
 The registered plan never reuses a (macro state, branch) pair, and every
-evaluation role draws from macro states no training role touches.
+evaluation role draws from macro states no other role touches
+(``validate_plan`` enforces both). Training and Experiment 1 use the even
+macro states and evaluation the odd ones (Amendment 9 revision 0.4).
 
 Example (GPU; the Q-flux base carry of Amendment 9 revision 0.2):
     python run_generate_macro_ics.py \
@@ -63,30 +65,35 @@ from run_coupled_training import (
 from run_generate_ics_independent import perturb_sst
 from run_stage5_training import START_DATE
 
-# Registered plan (Amendment 9). Macro states 0-7 serve Experiment 1 and all
-# training/validation; macro states 8-15 are reserved for evaluation.
+# Registered plan (Amendment 9 revision 0.4). Even macro states serve
+# Experiment 1 and all training/validation; odd ones are reserved for
+# evaluation. Interleaving spreads both sides over the whole control run, so a
+# slow wander of the ocean's mean state cannot separate training from
+# evaluation, and it keeps the states within each side four years apart.
+TRAIN_MACROS = list(range(0, 16, 2))
+EVAL_MACROS = list(range(1, 16, 2))
 DEFAULT_PLAN = {
     "exp1": [
-        {"macro": list(range(0, 8)), "branches": [0], "split": "heldout",
+        {"macro": TRAIN_MACROS, "branches": [0], "split": "heldout",
          "horizon": 120},
     ],
     "exp2_train": [
-        {"macro": list(range(0, 8)), "branches": [1], "split": "train",
+        {"macro": TRAIN_MACROS, "branches": [1], "split": "train",
          "horizon": 60},
     ],
     "exp2_eval": [
-        {"macro": list(range(8, 16)), "branches": [0, 1], "split": "heldout",
+        {"macro": EVAL_MACROS, "branches": [0, 1], "split": "heldout",
          "horizon": 60},
     ],
     "exp3_train": [
-        {"macro": list(range(0, 8)), "branches": [2, 3], "split": "train",
+        {"macro": TRAIN_MACROS, "branches": [2, 3], "split": "train",
          "horizon": 60},
-        {"macro": list(range(0, 8)), "branches": [4], "split": "heldout",
+        {"macro": TRAIN_MACROS, "branches": [4], "split": "heldout",
          "horizon": 60},
     ],
     "exp3_eval": [
-        {"macro": list(range(8, 16)), "branches": [2, 3, 4],
-         "split": "heldout", "horizon": 60},
+        {"macro": EVAL_MACROS, "branches": [2, 3, 4], "split": "heldout",
+         "horizon": 60},
     ],
 }
 
@@ -117,8 +124,23 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+def is_eval_role(role):
+    """Tell evaluation roles (named ``*_eval``) from roles that train or tune."""
+    return role.endswith("_eval")
+
+
+def split_macros(flat):
+    """Sorted macro states used by non-evaluation and by evaluation roles."""
+    train = sorted({m for role, m, *_ in flat if not is_eval_role(role)})
+    evaluation = sorted({m for role, m, *_ in flat if is_eval_role(role)})
+    return train, evaluation
+
+
 def validate_plan(plan, num_macro):
-    """Reject plans that reuse a (macro, branch) pair or exceed num_macro.
+    """Reject plans that break the registered rules.
+
+    A plan may not reuse a (macro, branch) pair, exceed ``num_macro``, or let
+    an evaluation role share a macro state with any other role.
 
     Returns the flat list of (role, macro, branch, split, horizon).
     """
@@ -138,6 +160,11 @@ def validate_plan(plan, num_macro):
                     seen[(m, b)] = role
                     flat.append((role, m, b, group["split"],
                                  int(group["horizon"])))
+    train, evaluation = split_macros(flat)
+    shared = sorted(set(train) & set(evaluation))
+    if shared:
+        raise SystemExit(f"macro states {shared} are used by both an "
+                         f"evaluation role and another role")
     return flat
 
 
@@ -150,20 +177,59 @@ def ic_index(macro, branch):
     return 100 * macro + branch
 
 
-def macro_diagnostics(ssts, weights):
-    """Ocean-mean SST per macro state and similarity between neighbours."""
+def _similarity(a, b, w):
+    """Area-weighted anomaly pattern correlation and RMS difference."""
+    wa, wb = a * np.sqrt(w), b * np.sqrt(w)
+    corr = float(np.sum(wa * wb) / np.sqrt(np.sum(wa ** 2) * np.sum(wb ** 2)))
+    rms = float(np.sqrt(np.sum(w * (a - b) ** 2)))
+    return {"pattern_corr": corr, "rms_diff_K": rms}
+
+
+def macro_diagnostics(ssts, weights, train_macros=None, eval_macros=None,
+                      spacing_days=None):
+    """How different the macro states are, and whether the split is balanced.
+
+    Reported, not gated (Amendment 9 and its revision 0.4):
+
+    * ``ocean_mean_sst_K``: ocean-mean SST of each macro state.
+    * ``neighbour_similarity``: states one spacing apart. With the interleaved
+      plan these pairs straddle training and evaluation.
+    * ``two_apart_similarity``: states two spacings apart, i.e. neighbours
+      within the same side of the interleaved plan.
+    * ``trend_K_per_decade`` (with ``spacing_days``): least-squares trend of
+      the ocean-mean SST across the macro states, with its standard error.
+    * ``split_balance`` (with both macro lists): mean ocean SST of the
+      training-side and evaluation-side states and their difference.
+    """
     ssts = np.asarray(ssts, float)
     w = np.asarray(weights, float)
-    means = [float(np.sum(s * w)) for s in ssts]
+    means = np.array([float(np.sum(s * w)) for s in ssts])
     anomalies = ssts - ssts.mean(axis=0)
-    pairs = []
-    for a, b in zip(anomalies[:-1], anomalies[1:]):
-        wa, wb = a * np.sqrt(w), b * np.sqrt(w)
-        corr = float(np.sum(wa * wb) / np.sqrt(np.sum(wa ** 2) *
-                                               np.sum(wb ** 2)))
-        rms = float(np.sqrt(np.sum(w * (a - b) ** 2)))
-        pairs.append({"pattern_corr": corr, "rms_diff_K": rms})
-    return {"ocean_mean_sst_K": means, "neighbour_similarity": pairs}
+    out = {
+        "ocean_mean_sst_K": means.tolist(),
+        "neighbour_similarity": [_similarity(a, b, w) for a, b in
+                                 zip(anomalies[:-1], anomalies[1:])],
+        "two_apart_similarity": [_similarity(a, b, w) for a, b in
+                                 zip(anomalies[:-2], anomalies[2:])],
+    }
+    if spacing_days is not None and means.size >= 3:
+        years = np.arange(means.size) * spacing_days / 365.2425
+        design = np.stack([np.ones_like(years), years], axis=1)
+        coef, *_ = np.linalg.lstsq(design, means, rcond=None)
+        resid = means - design @ coef
+        se = np.sqrt(np.sum(resid ** 2) / (means.size - 2)
+                     / np.sum((years - years.mean()) ** 2))
+        out["trend_K_per_decade"] = {"slope": float(10.0 * coef[1]),
+                                     "se": float(10.0 * se)}
+    if train_macros and eval_macros:
+        train_mean = float(np.mean(means[list(train_macros)]))
+        eval_mean = float(np.mean(means[list(eval_macros)]))
+        out["split_balance"] = {"train_macros": list(train_macros),
+                                "eval_macros": list(eval_macros),
+                                "train_mean_K": train_mean,
+                                "eval_mean_K": eval_mean,
+                                "eval_minus_train_K": eval_mean - train_mean}
+    return out
 
 
 def main(argv=None):
@@ -226,13 +292,26 @@ def main(argv=None):
             entry["carry_file"] = fname
         macro_entries.append(entry)
 
-    diagnostics = macro_diagnostics(macro_ssts, ocean_w)
+    train_side, eval_side = split_macros(flat)
+    diagnostics = macro_diagnostics(macro_ssts, ocean_w, train_side,
+                                    eval_side, args.spacing_days)
     for m, sst_mean in enumerate(diagnostics["ocean_mean_sst_K"]):
-        print(f"  macro {m:02d}: ocean-mean SST {sst_mean:.3f} K")
+        side = ("eval" if m in eval_side else
+                "train" if m in train_side else "unused")
+        print(f"  macro {m:02d} ({side}): ocean-mean SST {sst_mean:.3f} K")
     for m, pair in enumerate(diagnostics["neighbour_similarity"]):
         print(f"  macro {m:02d}->{m + 1:02d}: anomaly pattern corr "
               f"{pair['pattern_corr']:+.2f}, rms diff "
               f"{pair['rms_diff_K']:.3f} K")
+    if "trend_K_per_decade" in diagnostics:
+        trend = diagnostics["trend_K_per_decade"]
+        print(f"  trend across macro states: {trend['slope']:+.3f} "
+              f"+/- {trend['se']:.3f} K per decade")
+    if "split_balance" in diagnostics:
+        bal = diagnostics["split_balance"]
+        print(f"  split balance: train {bal['train_mean_K']:.3f} K, eval "
+              f"{bal['eval_mean_K']:.3f} K (eval - train "
+              f"{bal['eval_minus_train_K']:+.3f} K)")
     with open(root / "macro_bases_manifest.json", "w") as f:
         json.dump({"base_carry": args.base_carry,
                    "base_qflux_max_abs_wm2": q_max,
@@ -291,7 +370,8 @@ def main(argv=None):
             "macro_spacing_days": args.spacing_days,
             "base_carry": args.base_carry,
             "seed0": args.seed0,
-            "preregistration": "PREREGISTRATION.md Amendment 9",
+            "preregistration": "PREREGISTRATION.md Amendment 9 "
+                               "(plan: revision 0.4)",
             "ics": ics,
         }
         with open(root / role / "manifest.json", "w") as f:

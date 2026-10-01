@@ -19,12 +19,18 @@ from jcm.mcb.band_basis import (
     stack_objective_weights,
 )
 from jcm.mcb.gradient_fidelity import (
+    MAP_REFERENCE_K,
     apply_band_control,
+    block_means,
+    central_difference_maps,
     make_jacobian_fn,
+    make_map_jacobian_fn,
     make_objective_fn,
+    make_series_and_maps_fn,
     make_series_fn,
     rollout_objective_series,
     tail_mean,
+    tail_objectives_from_maps,
 )
 from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
 
@@ -222,6 +228,123 @@ class DampedJacobianTest(_Fixture):
         self.assertFalse(np.allclose(damped[0], self._jac(1)[0]))
         self.assertFalse(np.allclose(damped[0],
                                      self._jac(NO_TRUNCATION_DAYS)[0]))
+
+
+class MapsTest(_Fixture):
+    """Truth maps and forward-mode map Jacobians (Amendment 9 revision 0.4)."""
+
+    BLOCK = 2           # HORIZON = 8 -> 4 blocks; tails of 2 days line up
+    LABELS = ["center", "plus_0", "minus_0", "plus_1", "minus_1"]
+
+    def _truth(self, amplitudes, block=BLOCK):
+        fn = make_series_and_maps_fn(_toy_step, self.patterns, self.weights,
+                                     HORIZON, block)
+        return [np.asarray(x) for x in fn(amplitudes, self.carry)]
+
+    def _map_jac(self, window, decay=None, block=BLOCK):
+        jac = make_map_jacobian_fn(_toy_step, self.patterns, self.weights,
+                                   HORIZON, block)
+        args = (self.a0, self.carry, jnp.asarray(window), self.t0)
+        if decay is not None:
+            args += (jnp.asarray(decay, dtype=jnp.float32),)
+        return [np.asarray(x) for x in jac(*args)]
+
+    def test_block_means(self):
+        daily = jnp.arange(12.0).reshape(6, 2)
+        np.testing.assert_allclose(np.asarray(block_means(daily, 3)),
+                                   [[2.0, 3.0], [8.0, 9.0]])
+        np.testing.assert_array_equal(np.asarray(block_means(daily, 1)),
+                                      np.asarray(daily))
+        for bad in (0, 4):
+            with self.assertRaises(ValueError):
+                block_means(daily, bad)
+
+    def test_truth_series_equals_the_registered_series(self):
+        series, sst, land = self._truth(self.a0)
+        registered = np.asarray(make_series_fn(
+            _toy_step, self.patterns, self.weights, HORIZON)(self.a0,
+                                                             self.carry))
+        np.testing.assert_allclose(series, registered, rtol=0, atol=1e-6)
+        n_blocks = HORIZON // self.BLOCK
+        self.assertEqual(sst.shape, (n_blocks, IX, IL))
+        self.assertEqual(land.shape, (n_blocks, IX, IL))
+
+    def test_maps_are_block_means_relative_to_the_reference(self):
+        _, sst, _ = self._truth(self.a0, block=1)
+        c = apply_band_control(self.carry, self.a0, self.patterns)
+        for s in range(HORIZON):
+            c, _ = _toy_step(c, s)
+            np.testing.assert_allclose(
+                sst[s], np.asarray(c["ocn"]["state"].sea_surface_temperature)
+                - MAP_REFERENCE_K, atol=1e-5)
+        _, sst2, _ = self._truth(self.a0)
+        np.testing.assert_allclose(sst2[1], sst[2:4].mean(axis=0), atol=1e-6)
+
+    def test_truth_maps_reproduce_the_tail_objectives(self):
+        series, sst, land = self._truth(self.a0)
+        for horizon, tail in ((8, 2), (6, 4), (4, 2)):
+            from_maps = tail_objectives_from_maps(
+                sst, land, self.weights, horizon, tail, self.BLOCK)
+            np.testing.assert_allclose(
+                from_maps, np.asarray(tail_mean(jnp.asarray(series), horizon,
+                                                tail)), rtol=0, atol=1e-5)
+
+    def test_forward_maps_reproduce_the_reverse_mode_jacobians(self):
+        for window, decay in ((1, None), (3, None), (NO_TRUNCATION_DAYS, None),
+                              (NO_TRUNCATION_DAYS, 0.5)):
+            sst_j, land_j = self._map_jac(window, decay)
+            self.assertEqual(sst_j.shape, (2, HORIZON // self.BLOCK, IX, IL))
+            jac = make_jacobian_fn(_toy_step, self.patterns, self.weights,
+                                   HORIZON, 2)
+            args = (self.a0, self.carry, jnp.asarray(window), self.t0)
+            if decay is not None:
+                args += (jnp.asarray(decay, dtype=jnp.float32),)
+            reverse = np.asarray(jac(*args))
+            forward = tail_objectives_from_maps(sst_j, land_j, self.weights,
+                                                HORIZON, 2, self.BLOCK).T
+            np.testing.assert_allclose(forward, reverse, rtol=1e-5,
+                                       atol=1e-7)
+
+    def test_forward_maps_match_central_differences_on_linear_toy(self):
+        # The toy is linear, so any step is exact; a large one keeps the
+        # per-cell differences far above float32's 3e-5 K spacing near 290 K
+        # (with delta = 0.05 the smallest cell responses round to zero).
+        delta = 1.0
+        blocks = {"sst": [], "land": []}
+        for label in self.LABELS:
+            amp = self.a0
+            if label != "center":
+                sign, k = label.split("_")
+                amp = amp.at[int(k)].add(delta if sign == "plus" else -delta)
+            _, sst, land = self._truth(amp)
+            blocks["sst"].append(sst)
+            blocks["land"].append(land)
+        sst_j, land_j = self._map_jac(NO_TRUNCATION_DAYS)
+        for name, fd, fwd in (("sst", blocks["sst"], sst_j),
+                              ("land", blocks["land"], land_j)):
+            truth = central_difference_maps(np.stack(fd), self.LABELS, delta)
+            self.assertEqual(truth.shape, fwd.shape, msg=name)
+            np.testing.assert_allclose(fwd, truth, rtol=1e-3, atol=5e-5,
+                                       err_msg=name)
+
+    def test_window_semantics_carry_over_to_forward_mode(self):
+        full = self._map_jac(NO_TRUNCATION_DAYS)[0]
+        long = self._map_jac(HORIZON + 1)[0]
+        np.testing.assert_allclose(long, full, rtol=1e-6, atol=1e-9)
+        self.assertFalse(np.allclose(self._map_jac(1)[0], full))
+
+    def test_rejects_misaligned_blocks(self):
+        with self.assertRaises(ValueError):
+            make_series_and_maps_fn(_toy_step, self.patterns, self.weights,
+                                    HORIZON, 3)
+        with self.assertRaises(ValueError):
+            make_map_jacobian_fn(_toy_step, self.patterns, self.weights,
+                                 HORIZON, 0)
+        _, sst, land = self._truth(self.a0)
+        for horizon, tail in ((8, 3), (7, 2), (10, 2)):
+            with self.assertRaises(ValueError):
+                tail_objectives_from_maps(sst, land, self.weights, horizon,
+                                          tail, self.BLOCK)
 
 
 if __name__ == "__main__":

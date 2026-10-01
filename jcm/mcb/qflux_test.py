@@ -274,8 +274,22 @@ class CoupledBitIdentityTest(unittest.TestCase):
     """The full coupled model: new ocean + zero Q-flux == the old free slab."""
 
     def test_three_coupled_days_are_identical(self):
+        # The root conftest deletes the jcm modules after every test, but jem
+        # and the run_* scripts keep the classes they imported first, and a
+        # model built from both fails with "different tree structures".
+        # Build it from one fresh import of everything that touches jcm.
+        import sys
+        for key in list(sys.modules):
+            root = key.split(".")[0]
+            if root in ("jcm", "jem") or (root.startswith("run_")
+                                           and not root.endswith("_test")):
+                del sys.modules[key]
         import run_coupled_training as rct
         from jcm.mcb.coupled_controller import create_coupled_step_fn
+        from jcm.mcb.qflux import MonthlyQfluxSlabOceanModel as monthly_cls
+        from jem.components.slab.slab_ocean_model.slab_ocean_model import (
+            SlabOceanModel as slab_cls,
+        )
 
         def sst_after(ocean_cls, n=3):
             with mock.patch.object(rct, "MonthlyQfluxSlabOceanModel",
@@ -291,8 +305,8 @@ class CoupledBitIdentityTest(unittest.TestCase):
             return (np.asarray(carry["ocn"]["state"].sea_surface_temperature),
                     np.asarray(carry["lnd"]["state"].land_surface_temperature))
 
-        old_sst, old_land = sst_after(SlabOceanModel)
-        new_sst, new_land = sst_after(MonthlyQfluxSlabOceanModel)
+        old_sst, old_land = sst_after(slab_cls)
+        new_sst, new_land = sst_after(monthly_cls)
         np.testing.assert_array_equal(old_sst, new_sst)
         np.testing.assert_array_equal(old_land, new_land)
 

@@ -19,27 +19,37 @@ Pre-registered as PREREGISTRATION.md Amendment 9. For each initial condition
   by exp(-1 / tau) per coupling day, for each e-folding time tau in
   ``--damped-efold-days``. They are stored separately (``jacobians_damped``)
   and never enter the registered outcome grid or the choice of W*.
+* MAPS (Amendment 9 revision 0.4; secondary outputs the registered analysis
+  never reads). Every truth rollout also returns its slab-ocean SST and
+  slab-land temperature maps as ``--map-block-days`` block means over the
+  whole run, so each band's brute-force response map costs no extra runs.
+  For every registered window, a forward-mode pass on the gradient members
+  gives the matching map Jacobians. Two checks are logged, not gated: the
+  truth maps must reproduce the tail means of their own objective series,
+  and the forward-mode map Jacobians, weighted like the objectives, must
+  reproduce the registered reverse-mode Jacobians.
 
 Window length, episode start and decay factor are traced, so there is one
-compile for the forward series plus one per horizon. The registered windows
-pass a decay factor of exactly 1, which leaves their gradients unchanged.
-Results go to ``<output>.npz`` (arrays) and ``<output>.json``
-(configuration, index maps, provenance) — no pickle. Arrays are written
-after every IC, so a crash loses at most one IC.
+compile for the forward series plus one per horizon (and one for the map
+Jacobians). The registered windows pass a decay factor of exactly 1, which
+leaves their gradients unchanged. Results go to ``<output>.npz`` (registered
+arrays), ``<output>_maps.npz`` (maps) and ``<output>.json`` (configuration,
+index maps, checks, provenance) — no pickle. Arrays are written after every
+IC, so a crash loses at most one IC.
 
 Example (GPU):
     python run_gradient_fidelity.py \
         --ic-dir mcb_experiments_gpu/ics_macro/exp1 \
         --fd-members 4 --grad-members 1 --a0 0.03 --delta 0.03 \
         --horizons 15 30 60 120 --tail-days 10 --windows 1 7 14 0 \
-        --damped-efold-days 3 7 \
+        --damped-efold-days 3 7 --map-block-days 5 \
         --output mcb_experiments_gpu/exp1_gradient_fidelity
 
 CPU smoke (tiny):
     python run_gradient_fidelity.py --ic-dir <smoke ics> --max-ics 1 \
         --fd-members 1 --grad-members 1 --horizons 2 3 --tail-days 1 \
         --windows 1 0 --damped-efold-days 3 --band-centers 20 -20 \
-        --output /tmp/exp1_smoke
+        --map-block-days 1 --output /tmp/exp1_smoke
 """
 
 import argparse
@@ -66,7 +76,14 @@ from jcm.mcb.band_basis import (
 )
 from jcm.mcb.coupled_controller import create_coupled_step_fn
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
-from jcm.mcb.gradient_fidelity import make_jacobian_fn, make_series_fn
+from jcm.mcb.gradient_fidelity import (
+    MAP_REFERENCE_K,
+    make_jacobian_fn,
+    make_map_jacobian_fn,
+    make_series_and_maps_fn,
+    make_series_fn,
+    tail_objectives_from_maps,
+)
 from jcm.mcb.gradient_truncation import (
     NO_TRUNCATION_DAYS,
     atmosphere_decay_factor,
@@ -118,8 +135,19 @@ def parse_args(argv=None):
     p.add_argument("--band-width", type=float, default=DEFAULT_BAND_WIDTH_DEG)
     p.add_argument("--no-zero-run", dest="zero_run", action="store_false",
                    help="Skip the a = 0 rollout (operating-point response).")
+    p.add_argument("--map-block-days", type=int, default=5,
+                   help="Maps are stored as means over blocks of this many "
+                        "days; it must divide --tail-days and every horizon "
+                        "(revision 0.4 registers 5).")
+    p.add_argument("--no-maps", dest="save_maps", action="store_false",
+                   help="Skip the maps and their Jacobians (revision 0.4).")
+    p.add_argument("--no-map-jacobians", dest="map_jacobians",
+                   action="store_false",
+                   help="Keep the truth maps but skip the forward-mode map "
+                        "Jacobians.")
     p.add_argument("--output", required=True,
-                   help="Output prefix; writes <output>.npz and .json.")
+                   help="Output prefix; writes <output>.npz, "
+                        "<output>_maps.npz and <output>.json.")
     return p.parse_args(argv)
 
 
@@ -135,6 +163,14 @@ def validate_args(args):
         raise SystemExit("--windows must be >= 0 (0 = full BPTT)")
     if any(not tau > 0 for tau in args.damped_efold_days):
         raise SystemExit("--damped-efold-days must all be > 0")
+    if args.save_maps:
+        block = args.map_block_days
+        if block < 1 or args.tail_days % block or any(
+                h % block for h in args.horizons):
+            raise SystemExit("--map-block-days must be >= 1 and divide "
+                             "--tail-days and every horizon, so every "
+                             "registered tail window is a whole number of "
+                             "blocks")
 
 
 def run_labels(k_bands, zero_run):
@@ -211,6 +247,62 @@ def save_outputs(prefix, arrays, meta):
         json.dump(meta, f, indent=2)
 
 
+def save_maps(prefix, maps):
+    """Write the revision-0.4 maps next to the registered arrays."""
+    np.savez_compressed(str(prefix) + "_maps.npz", **maps)
+
+
+def truth_alignment_error(series, sst_blocks, land_blocks, weight_stack,
+                          horizons, tail_days, block_days):
+    """Largest |tail mean of the series - the same objective from the maps|.
+
+    Every objective is a weighted sum of a map, so a truth run's block maps
+    must reproduce the tail means of its own objective series; anything above
+    float32 round-off means the maps and the series are misaligned.
+    """
+    series = np.asarray(series, dtype=np.float64)
+    worst = 0.0
+    for h in horizons:
+        from_maps = tail_objectives_from_maps(sst_blocks, land_blocks,
+                                              weight_stack, h, tail_days,
+                                              block_days)
+        from_series = series[h - tail_days:h].mean(axis=0)
+        worst = max(worst, float(np.max(np.abs(from_maps - from_series))))
+    return worst
+
+
+def forward_reverse_check(sst_jac, land_jac, reverse, weight_stack, horizons,
+                          tail_days, block_days):
+    """Compare forward-mode map Jacobians with the reverse-mode Jacobians.
+
+    ``reverse`` is ``(n_horizons, n_obj, K)`` for one window and member.
+    Returns ``{horizon: {"max_abs_diff", "rel_diff", "rel_diff_by_objective"}}``:
+    the largest absolute difference, the same over the largest reverse-mode
+    entry, and per objective over that objective's largest entry (so a small
+    row such as LAND is not hidden behind T0). Agreement to float32 round-off
+    is expected wherever the tangent stays bounded; over long untruncated
+    windows chaos can amplify round-off differently in the two modes, so this
+    is reported, not gated.
+    """
+    out = {}
+    for h_idx, h in enumerate(horizons):
+        forward = tail_objectives_from_maps(sst_jac, land_jac, weight_stack,
+                                            h, tail_days, block_days).T
+        rev = np.asarray(reverse[h_idx], dtype=np.float64)
+        diff = np.abs(forward - rev)
+        scale = float(np.max(np.abs(rev)))
+        by_obj = {}
+        for o, name in enumerate(OBJECTIVE_NAMES[:rev.shape[0]]):
+            row_scale = float(np.max(np.abs(rev[o])))
+            by_obj[name] = (float(np.max(diff[o])) / row_scale
+                            if row_scale > 0 else None)
+        out[str(h)] = {"max_abs_diff": float(np.max(diff)),
+                       "rel_diff": (float(np.max(diff)) / scale
+                                    if scale > 0 else None),
+                       "rel_diff_by_objective": by_obj}
+    return out
+
+
 def main(argv=None):
     args = parse_args(argv)
     validate_args(args)
@@ -260,6 +352,15 @@ def main(argv=None):
                                        max_h))
     jac_fns = {h: make_jacobian_fn(step_fn, patterns, weight_stack, h,
                                    args.tail_days) for h in horizons}
+    # Revision 0.4: with maps, the truth runs use the function that returns
+    # the same objective series plus the block maps from ONE rollout.
+    block = args.map_block_days
+    truth_fn = (jax.jit(make_series_and_maps_fn(step_fn, patterns,
+                                                weight_stack, max_h, block))
+                if args.save_maps else None)
+    map_jac_fn = (make_map_jacobian_fn(step_fn, patterns, weight_stack,
+                                       max_h, block)
+                  if args.save_maps and args.map_jacobians else None)
 
     n_ic, n_obj = len(ics), len(OBJECTIVE_NAMES)
     arrays = {
@@ -303,6 +404,53 @@ def main(argv=None):
         "timing_s": {},
     }
 
+    maps = {}
+    if args.save_maps:
+        ix, il = shape
+        n_blocks = max_h // block
+        fd_shape = (n_ic, args.fd_members, len(labels), n_blocks, ix, il)
+        maps = {
+            "fd_sst_blocks": np.full(fd_shape, np.nan, dtype=np.float32),
+            "fd_land_blocks": np.full(fd_shape, np.nan, dtype=np.float32),
+            "ocean_mask": np.asarray(ocean_mask, dtype=np.float32),
+            "land_mask": np.asarray(land_mask, dtype=np.float32),
+            "latitudes_rad": np.asarray(lats),
+            "longitudes_rad": np.asarray(coords.horizontal.longitudes),
+            "objective_weights": np.asarray(weight_stack),
+        }
+        if map_jac_fn is not None:
+            jac_shape = (n_ic, args.grad_members, len(windows), k_bands,
+                         n_blocks, ix, il)
+            maps["jac_sst_blocks"] = np.full(jac_shape, np.nan,
+                                             dtype=np.float32)
+            maps["jac_land_blocks"] = np.full(jac_shape, np.nan,
+                                              dtype=np.float32)
+        meta["maps"] = {
+            "file": Path(args.output).name + "_maps.npz",
+            "note": ("Amendment 9 revision 0.4: secondary outputs, never "
+                     "read by the registered analysis"),
+            "block_days": block,
+            "n_blocks": n_blocks,
+            "reference_k": MAP_REFERENCE_K,
+            "layout": {
+                "fd_sst_blocks": "(ic, member, run_label, block, lon, lat): "
+                                 "slab-ocean SST block means minus "
+                                 "reference_k (K)",
+                "fd_land_blocks": "as fd_sst_blocks, slab-land surface "
+                                  "temperature",
+                "jac_sst_blocks": "(ic, grad_member, window, band, block, "
+                                  "lon, lat): forward-mode d(SST block "
+                                  "mean)/d(band amplitude), K per unit",
+                "jac_land_blocks": "as jac_sst_blocks, land temperature",
+            },
+            "map_jacobian_windows": windows if map_jac_fn is not None else [],
+            "map_jacobian_mode": ("forward mode (jax.jacfwd) through the "
+                                  "registered truncated rollout, decay 1, "
+                                  "members < grad_members"),
+            "truth_alignment_max_abs_K": 0.0,
+        }
+        meta["map_jacobian_check"] = {}
+
     for i, (entry, carry) in enumerate(ics):
         t_ic = time.time()
         for m in range(args.fd_members):
@@ -318,8 +466,19 @@ def main(argv=None):
 
             t_fd = time.time()
             for r, label in enumerate(labels):
-                series = series_fn(amplitude_for(label, a0_vec, args.delta),
-                                   member)
+                amplitudes = amplitude_for(label, a0_vec, args.delta)
+                if truth_fn is None:
+                    series = series_fn(amplitudes, member)
+                else:
+                    series, sst_b, land_b = truth_fn(amplitudes, member)
+                    sst_b, land_b = np.asarray(sst_b), np.asarray(land_b)
+                    maps["fd_sst_blocks"][i, m, r] = sst_b
+                    maps["fd_land_blocks"][i, m, r] = land_b
+                    meta["maps"]["truth_alignment_max_abs_K"] = max(
+                        meta["maps"]["truth_alignment_max_abs_K"],
+                        truth_alignment_error(series, sst_b, land_b,
+                                              weight_stack, horizons,
+                                              args.tail_days, block))
                 arrays["fd_series"][i, m, r] = np.asarray(series)
             fd_s = time.time() - t_fd
 
@@ -339,19 +498,50 @@ def main(argv=None):
                         arrays["jacobians_damped"][i, m, d_idx, h_idx] = (
                             np.asarray(jac))
                 grad_s = time.time() - t_g
+
+            map_s, check_note = 0.0, ""
+            if map_jac_fn is not None and m < args.grad_members:
+                t_map = time.time()
+                check = {}
+                for w_idx, w in enumerate(window_values):
+                    sst_j, land_j = map_jac_fn(a0_vec, member, jnp.asarray(w),
+                                               t0, no_decay)
+                    sst_j, land_j = np.asarray(sst_j), np.asarray(land_j)
+                    maps["jac_sst_blocks"][i, m, w_idx] = sst_j
+                    maps["jac_land_blocks"][i, m, w_idx] = land_j
+                    check[f"W{windows[w_idx]}"] = forward_reverse_check(
+                        sst_j, land_j, arrays["jacobians"][i, m, w_idx],
+                        weight_stack, horizons, args.tail_days, block)
+                meta["map_jacobian_check"][f"{i}:{m}"] = check
+                map_s = time.time() - t_map
+                # Worst per-objective relative gap over all horizons.
+                worst = {name: max((v or 0.0) for c in per_h.values()
+                                   for v in c["rel_diff_by_objective"]
+                                   .values())
+                         for name, per_h in check.items()}
+                check_note = " | fwd/rev worst rel diff " + ", ".join(
+                    f"{name} {val:.1e}" for name, val in worst.items())
             print(f"  IC {entry['index']:>3} member {m}: {len(labels)} "
-                  f"forward runs {fd_s:.0f}s | gradients {grad_s:.0f}s",
-                  flush=True)
+                  f"forward runs {fd_s:.0f}s | gradients {grad_s:.0f}s"
+                  + (f" | map Jacobians {map_s:.0f}s" if map_s else "")
+                  + check_note, flush=True)
             meta["timing_s"][f"{i}:{m}"] = {"forward": fd_s,
-                                            "gradients": grad_s}
+                                            "gradients": grad_s,
+                                            "map_jacobians": map_s}
         meta["finished_ics"] = i + 1
         save_outputs(args.output, arrays, meta)
+        if maps:
+            save_maps(args.output, maps)
         print(f"IC {i + 1}/{n_ic} done in {time.time() - t_ic:.0f}s "
               f"-> {args.output}.npz", flush=True)
 
     meta["finished_utc"] = datetime.now(timezone.utc).isoformat()
     meta["total_s"] = time.time() - t_start
     save_outputs(args.output, arrays, meta)
+    if maps:
+        save_maps(args.output, maps)
+        print(f"maps -> {args.output}_maps.npz (truth alignment "
+              f"{meta['maps']['truth_alignment_max_abs_K']:.1e} K)")
     print(f"DONE in {meta['total_s'] / 3600:.2f} h")
 
 

@@ -2,7 +2,7 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4).*
 
 ---
 
@@ -950,8 +950,12 @@ depends on it.
   continues the settled control run and saves the ocean every two years — 16 different ocean states,
   all in the same season — then branches each into independent weather runs: 80 starting states in
   five roles (Experiment 1; design training and evaluation; controller training and evaluation), with
-  every evaluation set drawn from ocean states nothing else ever touches. **Written and tested on a
-  laptop; the full run needs the GPU (~1.4 hours).**
+  every evaluation set drawn from ocean states nothing else ever touches. Training and Experiment 1
+  get the even-numbered ocean states and evaluation the odd-numbered ones, so both sides are spread
+  over the whole 30 years (Amendment 9 revision 0.4). The script refuses any plan that lets an
+  evaluation state be used by anything else, and it reports whether the two sides come out balanced
+  and whether the 16 states drift. **Written and tested on a laptop; the full run needs the GPU (~1.4
+  hours).**
 - **A realistic ocean temperature: the Q-flux** (added 2026-09-30; `jcm/mcb/qflux.py`,
   `run_qflux_base_climate.py`; Amendment 9 revisions 0.2 and 0.3). The simple ocean has no
   currents, so left alone it settles about 3.8 K colder than the real ocean. The standard fix is a
@@ -1020,7 +1024,7 @@ depends on it.
 
 **What Step 0 still needs from a person:** approval to run `run_campaign_step0_exp1.sh` on the GPU
 machine (it stops and restarts the vLLM container exactly like every earlier campaign), and posting
-Amendment 9 (with revisions 0.1 to 0.3) to OSF with its commit hash.
+Amendment 9 (with revisions 0.1 to 0.4) to OSF with its commit hash.
 
 ## Experiment 1 — does the snipped gradient match the truth?
 
@@ -1060,8 +1064,20 @@ chaos grows (about 0.18 per day, judging from Dubey et al.'s data). So the 3-day
 stable, and the 7-day fade is borderline. If the damped version does as well as snipping, both are
 reasonable choices. If it needs its fade time tuned just right, that is a point in snipping's favour.
 
-**Cost:** about 10.7 GPU-hours (8.3 for the registered comparison, 2.4 for the damped one), plus 1.4
-for the starting states.
+**The maps, added before anything runs (Amendment 9 revision 0.4).** The brute-force runs now also
+keep their full ocean and land temperature maps, as 5-day averages over all 120 days. So each knob's
+response *map*, which the classical designs in Experiments 2 and 3 need, comes free from runs that
+are made anyway. On the gradient side, one extra pass per snipping window, run forward alongside the
+model, gives each knob's whole response map at once. That is how the planner itself is meant to
+compute its gradient, so the planner's map-shaped objective can later be checked against brute force
+without new runs. Two automatic checks guard the new files: the maps must reproduce the four numbers
+of their own runs, and the forward-pass maps must reproduce the registered backward-pass gradients.
+None of this touches the pass/fail rule or the frozen analysis. On a laptop, keeping the maps added
+no measurable time and gave bit-identical numbers, and the forward pass cost about 6 plain runs per
+simulated day against about 11 for the registered backward pass.
+
+**Cost:** about 12.2 GPU-hours (8.3 for the registered comparison, 2.4 for the damped one, about 1.5
+for the forward-pass maps), plus 1.4 for the starting states.
 
 ## Experiment 2 — can the gradient design a pattern? (after Experiment 1)
 
@@ -1147,20 +1163,24 @@ describes them, apart from three small changes made before anything runs (steps 
    0.3). The first Q-flux left the ocean 1.6 K too cold and failed the pre-written 0.5 K check; the
    one registered correction passed (0.26 K too cold, no drift), so Step 0 starts from the Q-flux
    climate.
-2. **Alternate training and test ocean states:** give training the even-numbered ocean states and
-   evaluation the odd-numbered ones, instead of the first eight and the last eight, because the
-   ocean's average temperature wanders slowly (in the Q-flux settling run its yearly averages moved
-   over a range of about 0.25 K, staying high or low for a few years at a time), so over Step 0's 30
-   simulated years a first-half/second-half split could train and test on measurably different
-   climates.
-3. **Keep the maps from Experiment 1:** have Experiment 1's brute-force runs also save their full
-   ocean and land temperature maps, without touching its frozen analysis, because the same runs then
-   give each knob's response map, which the classical designs in Experiments 2 and 3 need, and a
-   check on the planner's map-shaped objective, instead of repeating those runs later (about 3.5
-   GPU-hours).
-4. **Post the rules publicly:** post Amendment 9 with its revisions (0.1 to 0.3, already written,
-   plus steps 2–3 once decided) and its commit hash to OSF before the GPU run, because an outside
-   timestamp is what makes "decided before the data" believable to a reviewer.
+2. **Alternate training and test ocean states:** *done 2026-10-01* (Amendment 9 revision 0.4).
+   Training gets the even-numbered ocean states and evaluation the odd-numbered ones, instead of the
+   first eight and the last eight, because the ocean's average temperature wanders slowly (in the
+   Q-flux settling run its yearly averages moved over a range of about 0.25 K, staying high or low
+   for a few years at a time), so over Step 0's 30 simulated years a first-half/second-half split
+   could train and test on measurably different climates. It also keeps the states on each side four
+   years apart instead of two, so they are closer to independent, which Experiment 1's statistics
+   assume.
+3. **Keep the maps from Experiment 1:** *done 2026-10-01* (Amendment 9 revision 0.4). Experiment
+   1's brute-force runs also save their full ocean and land temperature maps (5-day averages),
+   without touching its frozen analysis, because the same runs then give each knob's response map,
+   which the classical designs in Experiments 2 and 3 need, instead of repeating those runs later
+   (about 3.5 GPU-hours). The gradient side gets the matching maps from one forward pass per window
+   (about 1.5 GPU-hours), because checking the planner's map-shaped objective needs both sides, and
+   the forward pass is how the planner itself is meant to compute its gradient.
+4. **Post the rules publicly:** post Amendment 9 with its revisions (0.1 to 0.4, all written) and its
+   commit hash to OSF before the GPU run, because an outside timestamp is what makes "decided before
+   the data" believable to a reviewer.
 5. **Read the two blocked papers:** *done 2026-09-29.* Both papers support the premise. Sugiura et al.
    turned out to be the closest precedent, so the novelty claim was narrowed and Experiment 1 gained a
    damped-gradient comparison (Part 17; Amendment 9 revision 0.1).
@@ -1168,7 +1188,7 @@ describes them, apart from three small changes made before anything runs (steps 
    Chattopadhyay now, because their paper names "optimizing several segments ahead" as their own next
    step, which overlaps with the planner here, so early contact avoids a race or opens a collaboration.
 
-### Phase B — Step 0 and Experiment 1 (GPU, about 12.5 GPU-hours)
+### Phase B — Step 0 and Experiment 1 (GPU, about 14 GPU-hours)
 
 7. **Run it:** once approved, run the laptop smoke test and then `run_campaign_step0_exp1.sh` on the
    GPU machine, because every step after Phase B depends on which gradient Experiment 1 says can be
@@ -1212,12 +1232,14 @@ describes them, apart from three small changes made before anything runs (steps 
     snipping is noisy, and snipping is meant to give the long view without the noise.
 16. **Test the planner:** check that it finds the known best answer on a toy model, and that its
     forward-mode and backward-mode gradients agree on the real model, because a planner bug would
-    silently corrupt every later result.
+    silently corrupt every later result. Experiment 1 already logs this agreement on the real model
+    for every window (revision 0.4), so this step mainly tests the planner's own code.
 17. **Measure what planning costs:** time one re-plan on the GPU for each candidate setting (copies
     run side by side; a forward-mode gradient with two or three Gauss–Newton steps versus Dubey et
     al.'s 15 Adam steps; a 14- versus a 60-day look-ahead), because at Dubey et al.'s settings a year of
     60-day planning could take roughly 20–50 GPU-hours, so the budget in the rules has to come from
-    measured costs, not guesses.
+    measured costs, not guesses. Experiment 1's forward-pass maps already give the GPU time of one
+    120-day forward-mode gradient.
 18. **The fixed-pattern ladder:** build Dubey et al.'s four fixed opponents (uniform brightening tuned
     to cancel the average warming, uniform brightening at the planner's effort, the planner's own
     average pattern held constant, and the classical linear-response design), because each rung
@@ -1336,12 +1358,12 @@ The planner and the copying loop are new and expensive, so this plan costs more 
 | Phase | Lean (GPU-hours) | Full (GPU-hours) |
 |---|---|---|
 | A: base-climate fix (done on a laptop; its GPU re-settle is counted in B) | 0 | 0 |
-| B: Q-flux re-settle, Step 0 and Experiment 1 (with the damped comparison) | 12.5 | 12.5 |
+| B: Q-flux re-settle, Step 0 and Experiment 1 (with the damped comparison and the maps) | 14 | 14 |
 | C–D: tests, scoping, pilot | 3 | 5 |
 | E: Experiment 2 | 8 (no extra knobs) | 10–15 |
 | F: Experiment 3 | 20–30 (one copy, 4-month runs, the snipped and short-sighted planners only, one copying round, snipped-gradient direct training only) | 70–170 |
 | G: Experiment 4 | none | 5–10 |
-| **Total** | **about 45–55** | **about 100–210** |
+| **Total** | **about 45–55** | **about 105–215** |
 
 Rough calendar: Phase A this week; Experiment 1's answer a few days after the GPU run starts; Phase C
 coded in the meantime; revision 1 about a week after Experiment 1; Experiments 2 and 3 over the
@@ -1410,8 +1432,8 @@ following two to four weeks, depending on the budget; a preprint roughly two mon
 - **`jcm/physics/speedy/shortwave_radiation.py`** — where MCB correctly brightens cloud albedo (the R6 fix).
 - **`mcb_experiments_gpu/stage1_v2/stage1_optimized_pattern.pkl`** (its `history`), **`run_stage0_plumbing_test.py`** and **`jcm/mcb/coupled_features.py`** (feature 0) — the evidence behind Part 16's three main code findings.
 - **`jcm/mcb/gradient_truncation.py`** — Part 17's gradient cut (atmosphere snipped every W days, ocean kept) and the damped alternative (atmosphere's memory fades daily; Amendment 9 revision 0.1), with their tests.
-- **`jcm/mcb/band_basis.py`** / **`jcm/mcb/gradient_fidelity.py`** — Experiment 1's five ocean-band knobs, its four objectives, and the truth-vs-gradient machinery.
+- **`jcm/mcb/band_basis.py`** / **`jcm/mcb/gradient_fidelity.py`** — Experiment 1's five ocean-band knobs, its four objectives, and the truth-vs-gradient machinery, including the maps of revision 0.4 (brute-force map averages, forward-pass map gradients, and the two checks between them).
 - **`run_gradient_fidelity.py`** / **`analyze_gradient_fidelity.py`** — Experiment 1's driver and its pre-committed analysis (every threshold registered in Amendment 9).
-- **`run_generate_macro_ics.py`** — starting states from 16 genuinely different ocean states, in five disjoint roles.
-- **`run_campaign_step0_exp1.sh`** — the gated GPU script for the Q-flux re-settle, the macro starting states and Experiment 1 (~12.5 GPU-h).
+- **`run_generate_macro_ics.py`** — starting states from 16 genuinely different ocean states, in five disjoint roles (training on the even-numbered states, evaluation on the odd-numbered ones; revision 0.4).
+- **`run_campaign_step0_exp1.sh`** — the gated GPU script for the Q-flux re-settle, the macro starting states and Experiment 1 (~14 GPU-h).
 - **`jcm/mcb/qflux.py`** / **`run_qflux_base_climate.py`** — the ocean class with a monthly Q-flux, how the Q-flux is measured, and the settling run with its pre-written check (Amendment 9 revision 0.2), plus the one-step correction (revision 0.3). The Q-flux in use is `mcb_experiments/qflux/qflux_monthly_t30_v2.nc`; how it was derived is in `qflux_monthly_t30_v2_correction.json`, and its passing check is in `attempt2/`. The first attempt's file and summaries stay next to it as the record.
