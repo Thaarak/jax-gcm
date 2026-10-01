@@ -1,0 +1,35 @@
+{
+  "stage": "correct",
+  "config": {
+    "stage": "correct",
+    "qflux": "mcb_experiments/qflux/qflux_monthly_t30.nc",
+    "settle_dir": "mcb_experiments/qflux",
+    "fit_start_days": 180,
+    "block_days": 60,
+    "output": "mcb_experiments/qflux/qflux_monthly_t30_v2.nc"
+  },
+  "git": {
+    "commit": "9b8e95b844e7bb23311a9aaec120c2417c2b4306",
+    "dirty": true
+  },
+  "input_qflux": "mcb_experiments/qflux/qflux_monthly_t30.nc",
+  "settle_dir": "mcb_experiments/qflux",
+  "observed_annual_ocean_sst_k": 290.39258897504186,
+  "effective_heat_capacity_j_m2_k": 195571776.24001837,
+  "fit": {
+    "tau_days": 1255.0521390259757,
+    "t_inf": 288.6115023374382,
+    "amplitude": 1.6543845327162905,
+    "sse": 0.1217730802459351,
+    "tau_at_grid_edge": false
+  },
+  "lambda_wm2_per_k": 1.8035603100576556,
+  "equilibrium_bias_k": -1.7810866376036643,
+  "heat_into_ocean_wm2": 3.212297168356012,
+  "heat_into_ocean_by_fit_start_wm2": {
+    "180": 3.212297168356012,
+    "365": 3.2669101271876624,
+    "730": 3.355072194191629
+  },
+  "output_qflux": "mcb_experiments/qflux/qflux_monthly_t30_v2.nc"
+}

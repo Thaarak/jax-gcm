@@ -51,9 +51,10 @@ from jcm.mcb.train import TrainingConfig, save_checkpoint
 # JAX-ESM imports
 from jem.base.coupler import Coupler
 from jem.components.JCM import make_jem_compatible
-from jem.components.slab.slab_ocean_model.slab_ocean_model import SlabOceanModel
 from jem.components.slab.slab_land_model.slab_land_model import SlabLandModel
 from jem.mapping.mapper import BasicMapper
+
+from jcm.mcb.qflux import MonthlyQfluxSlabOceanModel
 
 
 def parse_args():
@@ -226,7 +227,13 @@ def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=Fal
     # relaxation), so the ocean responds freely to MCB — relaxation would damp
     # the very cooling signal we optimize. On the aquaplanet, SST_clim_file=None
     # keeps the idealized init (Stage 1-4 behavior unchanged).
-    ocn_model = SlabOceanModel(
+    #
+    # The ocean class is the free slab plus a MONTHLY Q-flux read from the
+    # carry (ocn.forcing.q_flux; jcm/mcb/qflux.py). A cold start and every
+    # carry saved before the Q-flux existed hold zeros there, which reproduces
+    # the old free slab bit for bit; a carry settled with the diagnosed Q-flux
+    # carries it into every run branched from it (Amendment 9 revision 0.2).
+    ocn_model = MonthlyQfluxSlabOceanModel(
         start_datetime=start_datetime,
         timestep=timestep_seconds,
         mask_file=TERRAIN_NC if realistic_terrain else None,

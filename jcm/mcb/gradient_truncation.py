@@ -48,8 +48,23 @@ compiled rollout serves every initial condition. Pass the episode's start
 time to align windows to the episode instead. Both ``window_days`` and
 ``t0_seconds`` may be traced JAX scalars, so a single compiled function can
 sweep window lengths and initial conditions without recompiling.
+
+Damped alternative (exploratory, Amendment 9 revision 0.1)
+----------------------------------------------------------
+Instead of cutting the atmosphere's memory every W days, ``atm_decay`` makes
+it fade: at the start of every coupling step the tangents (forward mode) and
+cotangents (reverse mode) of ``carry["atm"]["state"]`` are multiplied by
+``atm_decay``, so k days of atmospheric history carry weight
+``atm_decay ** k``. With ``atm_decay = exp(-dt / tau)`` the memory has an
+e-folding time of tau. This is a constant-rate analogue of the adjoint damping
+Sugiura et al. (2008, JGR 113 C10017) used to keep a coupled 4D-Var adjoint
+stable over 9-month windows (theirs adapts to the size of the sensitivity).
+It tames the chaos only if 1/tau exceeds the growth rate of the gradient
+noise. ``atm_decay = 1`` changes nothing and ``atm_decay = 0`` equals W = 1.
+Forward values stay bit-identical, and the factor may be traced.
 """
 
+import math
 from typing import Any, Callable, Optional
 
 import jax
@@ -103,40 +118,96 @@ def stop_atmosphere_gradient(carry: dict, cut) -> dict:
     return new_carry
 
 
+def atmosphere_decay_factor(efold_days: float,
+                            coupling_timestep_seconds: float = 86400.0
+                            ) -> float:
+    """Per-step factor ``exp(-dt / tau)`` for an e-folding time of tau days."""
+    if not efold_days > 0:
+        raise ValueError(f"efold_days must be > 0, got {efold_days}")
+    return math.exp(-coupling_timestep_seconds / (efold_days * 86400.0))
+
+
+@jax.custom_jvp
+def scale_tangent(x, factor):
+    """Identity on values; multiplies tangents and cotangents by ``factor``.
+
+    The JVP rule is linear in the tangent, so JAX transposes it for reverse
+    mode: the same function damps forward-mode and reverse-mode derivatives.
+    ``factor`` itself receives no derivative.
+    """
+    return x
+
+
+@scale_tangent.defjvp
+def _scale_tangent_jvp(primals, tangents):
+    x, factor = primals
+    x_dot, _ = tangents
+    return x, factor * x_dot
+
+
+def damp_atmosphere_gradient(carry: dict, factor) -> dict:
+    """Return a copy of ``carry`` whose atmospheric STATE derivatives fade.
+
+    Only ``carry["atm"]["state"]`` is affected, for the same reasons as in
+    ``stop_atmosphere_gradient``. Non-float leaves are passed through, since
+    they carry no derivative. Forward values are unchanged; ``factor`` may be
+    traced.
+    """
+    def _damp(leaf):
+        if jnp.issubdtype(jnp.result_type(leaf), jnp.inexact):
+            return scale_tangent(leaf, factor)
+        return leaf
+
+    atm = dict(carry["atm"])
+    atm["state"] = jax.tree.map(_damp, atm["state"])
+    new_carry = dict(carry)
+    new_carry["atm"] = atm
+    return new_carry
+
+
 def wrap_step_fn_with_atm_truncation(
     step_fn: Callable,
     window_days: Optional[Any],
     t0_seconds=None,
     coupling_timestep_seconds: float = 86400.0,
+    atm_decay: Optional[Any] = None,
 ) -> Callable:
     """Wrap a coupler step function so gradients forget old atmosphere.
 
     Args:
         step_fn: Coupler step function ``(carry, step_idx) -> (carry, preds)``.
         window_days: Truncation window W in days. None (or a Python int <= 0)
-            returns ``step_fn`` unchanged (full BPTT). A traced value is
-            allowed; use ``NO_TRUNCATION_DAYS`` for "no truncation" then.
+            means no truncation (full BPTT). A traced value is allowed; use
+            ``NO_TRUNCATION_DAYS`` for "no truncation" then.
         t0_seconds: Episode start (ocean ``sim_time``) for episode-aligned
             windows, or None for absolute-day alignment. May be traced.
         coupling_timestep_seconds: Coupling step length in seconds.
+        atm_decay: Optional per-step factor that damps the atmospheric state's
+            derivatives at the start of every coupling step (see the module
+            docstring); applied before the cut. None skips it. May be traced.
 
     Returns:
         A step function with the same signature, bit-identical forward
-        values, and truncated reverse-mode gradients.
+        values, and truncated and/or damped gradients. ``step_fn`` itself when
+        there is neither a cut nor a decay.
 
     """
-    if window_days is None:
-        return step_fn
-    if isinstance(window_days, int) and window_days <= 0:
+    no_cut = window_days is None or (isinstance(window_days, int)
+                                     and window_days <= 0)
+    if no_cut and atm_decay is None:
         return step_fn
 
     def truncated_step_fn(carry, step_idx):
-        cut = truncation_cut(
-            carry["ocn"]["state"].sim_time,
-            window_days,
-            t0_seconds=t0_seconds,
-            coupling_timestep_seconds=coupling_timestep_seconds,
-        )
-        return step_fn(stop_atmosphere_gradient(carry, cut), step_idx)
+        if atm_decay is not None:
+            carry = damp_atmosphere_gradient(carry, atm_decay)
+        if not no_cut:
+            cut = truncation_cut(
+                carry["ocn"]["state"].sim_time,
+                window_days,
+                t0_seconds=t0_seconds,
+                coupling_timestep_seconds=coupling_timestep_seconds,
+            )
+            carry = stop_atmosphere_gradient(carry, cut)
+        return step_fn(carry, step_idx)
 
     return truncated_step_fn

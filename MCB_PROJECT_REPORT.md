@@ -2,7 +2,7 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0).*
 
 ---
 
@@ -769,7 +769,8 @@ held-out climates, and compared with a uniform map using the same total brighten
   has no **Q-flux** (the standard fixed heating term that stands in for ocean currents) and nothing
   stops its water cooling past freezing. The paired design cancels this bias out of every comparison,
   but any future stratocumulus experiment needs the realistic cold water off Peru and Namibia that
-  makes those clouds form.
+  makes those clouds form. *Fixed on 2026-09-30 with a Q-flux (Part 17, Step 0): the ocean now settles
+  0.26 K below observed.*
 - **"Watching El Niño adds nothing" is partly built in.** The feedback controller's main input is the
   average ocean temperature change, and that average *includes* the patch where the pacemaker holds El
   Niño. By the paper plan's own arithmetic, the patch alone is 53% (steady) to 69% (growing) of the
@@ -907,10 +908,12 @@ short-sighted.
 
 So the new question is: **can we snip the gradient's chain through the atmosphere every few days,
 keep its chain through the ocean intact, and get gradients that stay useful for months?** If yes,
-that is new (nobody we could find has shown it in a differentiable coupled climate model), it turns
-this project's biggest failure into its motivation, and it would matter to anyone building
-differentiable climate models with an ocean. If no, measuring exactly where and why it fails is
-still publishable.
+that is new in a specific way. Sugiura et al. (2008) already got *approximate* months-long gradients
+in a coupled model by blurring them and damping them by hand. Nobody has cut only the atmosphere
+while keeping the gradients exact, checked the result against brute force, or used it to design an
+intervention. It also turns this project's biggest failure into its motivation, and it would matter
+to anyone building differentiable climate models with an ocean. If no, measuring exactly where and
+why it fails is still publishable.
 
 ## Step 0 — getting everything ready (status as of 2026-09-29)
 
@@ -949,6 +952,49 @@ depends on it.
   five roles (Experiment 1; design training and evaluation; controller training and evaluation), with
   every evaluation set drawn from ocean states nothing else ever touches. **Written and tested on a
   laptop; the full run needs the GPU (~1.4 hours).**
+- **A realistic ocean temperature: the Q-flux** (added 2026-09-30; `jcm/mcb/qflux.py`,
+  `run_qflux_base_climate.py`; Amendment 9 revisions 0.2 and 0.3). The simple ocean has no
+  currents, so left alone it settles about 3.8 K colder than the real ocean. The standard fix is a
+  **Q-flux**: a fixed, seasonal heating or cooling in each ocean cell that stands in for the missing
+  currents.
+  - *How it is measured.* The model runs for five years while its ocean is gently held to the
+    observed temperatures, and the heat that holding adds is recorded, month by month.
+  - *How it is checked.* The model then runs ten free years with that heat added. It must pass a
+    check written down in advance: drift under 0.02 K per 60 days, and an average within 0.5 K of the
+    observed ocean.
+  - *Surprise 1.* The coupler's own Q-flux option reads its twelve monthly values as if they were
+    days, so it would run through a whole year of heating every twelve days. The project now uses its
+    own ocean class, which reads them as months. With no Q-flux it matches the old ocean exactly (bit
+    for bit), so nothing earlier changes.
+  - *Surprise 2.* Over sea ice, the observed "sea temperature" is actually the ice surface, as cold as
+    237 K. That is what the model's atmosphere is built to see, so "water below freezing" there was
+    never the real problem (Part 16.3); the missing currents were.
+  - **Status (2026-09-30): in use. The first attempt failed its pre-written check; the one registered
+    correction (Amendment 9 revision 0.3) passed.**
+    - *Measuring* took 27 minutes on a laptop. The ocean needs about 11 W/m² of extra heat on average
+      to stay at observed temperatures. In the sea-ice zone the heat swings enormously with the seasons,
+      because there 40–60 m of water is made to follow the ice surface's yearly swing of up to 37 K.
+    - *Attempt 1:* the ten free years settled without drifting (-0.0004 K per 60 days: **pass**), but
+      about 1.6 K colder than the observed ocean, against a limit of 0.5 K (**fail**). That is roughly
+      half the old cold bias. The chill was spread almost evenly over every latitude and was not a
+      sea-ice effect. The held run had matched the observations to 0.02 K, so the measurement was
+      accurate; an ocean left to vary freely simply loses a few W/m² more heat than a held one.
+    - *The correction:* how fast attempt 1 cooled, and where it was heading, showed the ocean was
+      about 3.2 W/m² short. That much was added evenly to every ocean cell. Only this one try was
+      allowed, and it was written into the pre-registration before it ran.
+    - *Attempt 2* (ten more free years with the corrected Q-flux): drift -0.004 K per 60 days
+      (**pass**), and 0.26 K colder than the observed ocean (**pass**). The typical error of one grid
+      cell's yearly average fell from 2.1 K to 1.2 K, and the cells off by more than 2 K fell from 1,159
+      to 363 (of 3,411). The run started close to where it settled, and its yearly averages stayed
+      0.05–0.31 K below observed with no trend, so the pass is not a run caught halfway.
+    - *What is left:* the even heating warmed the poles roughly twice as much as the tropics. So the
+      tropical ocean between 10°S and 30°N is still 0.7–0.9 K too cold, while the ocean south of 30°S
+      is about 0.2–0.3 K too warm. The check is on the global average, so this is recorded as a
+      limitation, not tuned further.
+    - *What happens now:* the GPU script repeats this ten-year run from the corrected file
+      (`qflux_monthly_t30_v2.nc`) and checks it again before Step 0 uses it. Its weather will differ,
+      but the four-year average wobbles by only about 0.07 K, far less than the 0.24 K margin, so it
+      should pass there too.
 - **Pre-registration** (`PREREGISTRATION.md` Amendment 9). Step 0 and Experiment 1 are frozen in
   full; Experiments 2 and 3 are declared and get frozen in full after Experiment 1, before any of
   their data exist. **Written; still to be posted to OSF** (a public registry that timestamps it
@@ -957,12 +1003,24 @@ depends on it.
   weather toward observations to tame chaos (Lyu et al. 2018), averaging gradients over ensembles,
   ocean-only gradient systems (ECCO), and a coupled data-assimilation system with months-long windows
   (Sugiura et al. 2008) — but none cuts only the atmosphere in a differentiable coupled model and
-  checks the result against ensemble truth. Two papers still need to be read in full before any
-  novelty claim, because automated access was blocked: Sugiura et al. 2008 and Lu & Hsieh 1998.
+  checks the result against ensemble truth. **The two papers that had to be read in full were read on
+  2026-09-29** (the PDFs are kept locally in `literature/`, not committed).
+  - *Sugiura et al. (2008)* is the closest precedent. They ran 9-month optimizations through a full
+    coupled climate model and hit our exact problem: the exact gradient breaks down because of the
+    atmosphere's chaos. They tamed it differently. They worked with 10-day averages, added
+    artificial damping and simplified parts of the gradient by hand. They never checked the result
+    against brute force, only asserting that the approximation "affects the efficiency but not
+    necessarily the direction".
+  - *Lu & Hsieh (1998)* used the full, exact gradient in a simple linear toy model with no chaos, so
+    it worked over 40 days. They warn that this may not hold for longer windows in realistic models.
+    Their model trades heat between atmosphere and ocean once a day, as ours does.
+  - *What this changes:* we can no longer say months-long gradients in a coupled model are new. The
+    claim is narrower: exact gradients with only the atmosphere cut, the first direct test against
+    brute force, and use for designing interventions (logged as Amendment 9 revision 0.1).
 
 **What Step 0 still needs from a person:** approval to run `run_campaign_step0_exp1.sh` on the GPU
-machine (it stops and restarts the vLLM container exactly like every earlier campaign), posting
-Amendment 9 to OSF with its commit hash, and fetching the two papers.
+machine (it stops and restarts the vLLM container exactly like every earlier campaign), and posting
+Amendment 9 (with revisions 0.1 to 0.3) to OSF with its commit hash.
 
 ## Experiment 1 — does the snipped gradient match the truth?
 
@@ -990,7 +1048,20 @@ One prediction is written down in advance: the snipped gradient should *fail* on
 because the only way the ocean brightening reaches land is through the atmosphere we snipped. Seeing
 that failure would show the method's limits are understood, not hidden.
 
-**Cost:** about 8 GPU-hours, plus 1.4 for the starting states.
+**One extra comparison, added after reading Sugiura et al. (Amendment 9 revision 0.1).** A reviewer
+will ask why we *snip* the atmosphere's part of the gradient instead of *damping* it, as Sugiura et al.
+did. So Experiment 1 also computes a **damped gradient**. Nothing is snipped; the atmosphere's memory
+simply fades a little every day, with a fade time of 3 days in one version and 7 days in the other.
+It is scored with exactly the same measures, but it does not count toward the pass/fail rule or the
+choice of window, so adding it cannot change the registered answer.
+
+The expectation is written down in advance. Fading only calms the chaos if it is faster than the
+chaos grows (about 0.18 per day, judging from Dubey et al.'s data). So the 3-day fade should stay
+stable, and the 7-day fade is borderline. If the damped version does as well as snipping, both are
+reasonable choices. If it needs its fade time tuned just right, that is a point in snipping's favour.
+
+**Cost:** about 10.7 GPU-hours (8.3 for the registered comparison, 2.4 for the damped one), plus 1.4
+for the starting states.
 
 ## Experiment 2 — can the gradient design a pattern? (after Experiment 1)
 
@@ -1030,7 +1101,293 @@ before the data.
 > keeps. *Ground truth (here)* = the brute-force, many-runs answer the gradients are checked against.
 > *Macro vs micro starting states* = different ocean states from a long control run vs the same state
 > nudged imperceptibly. *OSF* = the Open Science Framework, a public registry that timestamps a
-> pre-registration so nobody can say it was written after the fact.
+> pre-registration so nobody can say it was written after the fact. *Damped gradient* = instead of
+> cutting the atmosphere's part of the gradient every few days, let it fade a fixed fraction each day.
+> *4D-Var* = the weather-forecasting method that fits a model to observations over a time window
+> using gradients; Sugiura et al.'s system is a coupled version of it.
+
+---
+
+# Part 18 — The plan from here: every step, and why
+
+*Written 2026-09-29, after reading Dubey et al. in full. Nothing in this part has run yet. It replaces
+Part 17's sketches of Experiments 2 and 3 and its cost estimate. Those experiments were declared but
+never frozen, so changing them now is within the rules. Step 0 and Experiment 1 stay as Part 17
+describes them, apart from three small changes made before anything runs (steps 1–3).*
+
+## The idea in four sentences
+
+1. Use the model's gradient only where Experiment 1 shows it can be trusted.
+2. Plan two weeks at a time and re-plan from wherever the simulated climate actually ends up, as
+   Dubey et al. do, but let every plan look months ahead through the ocean, which is exactly what the
+   snipped gradient is for.
+3. Teach the small AI by letting it copy the planner, the way it already learned by copying the
+   classical controller (Part 10), instead of training it through months of chaotic weather.
+4. Judge everything the way Dubey et al. do: add warming only to the runs being controlled, measure
+   against the model's own normal climate instead of a same-weather twin, and also score things the
+   objective never saw, such as land temperature and rainfall.
+
+## How the pieces fit
+
+- **Experiment 1** decides which gradient can be trusted, and how far ahead.
+- **A new test world** (steps 10–12): warming added only to controlled runs, a "normal climate"
+  target, and a map-shaped score.
+- **Experiment 2:** can gradients design one fixed brightening pattern?
+- **Experiment 3a:** does planning months ahead beat planning two weeks ahead, the best fixed pattern,
+  and the classical feedback controller?
+- **Experiment 3b:** when the true spraying strength is hidden, can a small network that copies the
+  planner beat the classical controller?
+- **Experiment 4 (optional):** does any of it survive in a changed version of the model?
+
+## The steps
+
+### Phase A — before anything runs (this week, no GPU)
+
+1. **Settle the base climate:** *done on 2026-09-30* (Part 17, Step 0; Amendment 9 revisions 0.2 and
+   0.3). The first Q-flux left the ocean 1.6 K too cold and failed the pre-written 0.5 K check; the
+   one registered correction passed (0.26 K too cold, no drift), so Step 0 starts from the Q-flux
+   climate.
+2. **Alternate training and test ocean states:** give training the even-numbered ocean states and
+   evaluation the odd-numbered ones, instead of the first eight and the last eight, because the
+   ocean's average temperature wanders slowly (in the Q-flux settling run its yearly averages moved
+   over a range of about 0.25 K, staying high or low for a few years at a time), so over Step 0's 30
+   simulated years a first-half/second-half split could train and test on measurably different
+   climates.
+3. **Keep the maps from Experiment 1:** have Experiment 1's brute-force runs also save their full
+   ocean and land temperature maps, without touching its frozen analysis, because the same runs then
+   give each knob's response map, which the classical designs in Experiments 2 and 3 need, and a
+   check on the planner's map-shaped objective, instead of repeating those runs later (about 3.5
+   GPU-hours).
+4. **Post the rules publicly:** post Amendment 9 with its revisions (0.1 to 0.3, already written,
+   plus steps 2–3 once decided) and its commit hash to OSF before the GPU run, because an outside
+   timestamp is what makes "decided before the data" believable to a reviewer.
+5. **Read the two blocked papers:** *done 2026-09-29.* Both papers support the premise. Sugiura et al.
+   turned out to be the closest precedent, so the novelty claim was narrowed and Experiment 1 gained a
+   damped-gradient comparison (Part 17; Amendment 9 revision 0.1).
+6. **Decide about contacting Dubey et al.:** ask the advisor whether to write to Dubey, Abbot and
+   Chattopadhyay now, because their paper names "optimizing several segments ahead" as their own next
+   step, which overlaps with the planner here, so early contact avoids a race or opens a collaboration.
+
+### Phase B — Step 0 and Experiment 1 (GPU, about 12.5 GPU-hours)
+
+7. **Run it:** once approved, run the laptop smoke test and then `run_campaign_step0_exp1.sh` on the
+   GPU machine, because every step after Phase B depends on which gradient Experiment 1 says can be
+   used.
+8. **Check the sixteen ocean states:** before anything uses them, check how different the 16 states
+   are and whether their average temperature trends across the 30 years, because starting from
+   different oceans only helps if the states really differ and are not drifting.
+9. **Follow the pre-written rule:** run the frozen analysis and act on its outcome exactly as
+   registered (A or A′: the planner uses the best snipped window; B: it uses ordinary
+   backpropagation; U: add brute-force runs; C: stop and write up the gradient map), because the
+   choice of gradient must come from a rule written before the data, not from looking at the numbers.
+
+### Phase C — build the new test world (code, in parallel with Phase B)
+
+10. **Warming only where we control:** add a steady extra heat input to the slab ocean, only in the
+    runs being controlled, using the same fixed-heating slot a Q-flux uses, because this warms the
+    ocean steadily the way greenhouse gases do, and unlike the CO2 knob (Part 15) it does not cancel
+    out of the comparison.
+11. **The normal-climate target:** for every starting state, average five runs with no warming and no
+    brightening into one smooth "normal climate" path, because controllers then steer toward, and are
+    judged against, the model's own normal climate while living with their own weather, which replaces
+    the perfect same-weather-twin sensor that Part 16 put first among its concerns.
+12. **A map-shaped objective and fair scores:** implement Dubey et al.'s pattern objective for ocean
+    temperature (the average error squared, plus half of the error map's variance, plus small
+    penalties on effort and on sudden changes) and their gain and effort scores, and apply the gain
+    also to land temperature, rainfall and evaporation, which the objective never sees, because a
+    map-shaped target forces genuinely spatial designs and out-of-objective scores catch side effects.
+13. **The planner:** every 14 days, starting from wherever the simulated climate actually is, choose
+    the five band settings that minimize the objective over a 60-day look-ahead using the gradient
+    Experiment 1 validated (averaged over three slightly nudged copies), apply them for 14 days, then
+    re-plan, because this is the new method: short, trustworthy steps that still see the ocean's
+    months-long memory.
+14. **Planner safeguards:** keep every band setting inside its allowed range through a smooth
+    transformation, log the gradient's noise-to-signal ratio at every re-plan, and always apply the
+    optimizer's last step rather than its best-looking one, because these guard against the three
+    failures behind the old "optimized" pattern: knobs stuck at a limit with no gradient, a gradient
+    that faded to nothing unnoticed, and keeping the luckiest of many noisy tries (Part 16.2).
+15. **Two comparison planners:** build the same planner with a 14-day look-ahead (Dubey et al.'s
+    setting) and with a 60-day look-ahead using ordinary backpropagation, because together with step
+    13 they show the dilemma and its fix: a short look-ahead is short-sighted, a long one without
+    snipping is noisy, and snipping is meant to give the long view without the noise.
+16. **Test the planner:** check that it finds the known best answer on a toy model, and that its
+    forward-mode and backward-mode gradients agree on the real model, because a planner bug would
+    silently corrupt every later result.
+17. **Measure what planning costs:** time one re-plan on the GPU for each candidate setting (copies
+    run side by side; a forward-mode gradient with two or three Gauss–Newton steps versus Dubey et
+    al.'s 15 Adam steps; a 14- versus a 60-day look-ahead), because at Dubey et al.'s settings a year of
+    60-day planning could take roughly 20–50 GPU-hours, so the budget in the rules has to come from
+    measured costs, not guesses.
+18. **The fixed-pattern ladder:** build Dubey et al.'s four fixed opponents (uniform brightening tuned
+    to cancel the average warming, uniform brightening at the planner's effort, the planner's own
+    average pattern held constant, and the classical linear-response design), because each rung
+    isolates where a win comes from: how much is brightened, where, when it changes, or how the design
+    was found.
+19. **The classical feedback controller:** build a controller that holds three numbers on target (the
+    ocean average, the north–south difference and the equator-to-pole difference) with true integral
+    action, as in the GLENS stratospheric-aerosol simulations, and keep the old adaptive controller for
+    continuity, because this is the feedback method the field actually uses and it answers Part 15's
+    open question about integral action.
+20. **The student network:** build a tiny network (about 100 adjustable numbers) that sees only what a
+    real system could measure (ocean temperature anomalies against the normal climate, the season,
+    and its own previous settings) and outputs the five band settings, because the goal is a
+    controller that is cheap to run and needs no access to the model's insides.
+21. **The copying loop, with a teacher that knows more:** train the student to copy the planner, then
+    repeatedly let the student drive, ask the planner what it would have done in each situation the
+    student reached, and retrain on the growing set (the DAgger method), with the planner told the
+    hidden spraying strength and the student not, because plain copying breaks down once the
+    student's small errors take it where the teacher never went, and a teacher that knows the answer
+    lets the student learn to infer it from what it sees.
+22. **Direct-training comparisons:** train the same tiny network straight through the simulation with
+    ordinary backpropagation, with the snipped gradient and with ensemble Kalman inversion, each at
+    the same GPU budget as the copying route (whose budget includes its teacher), because this
+    re-tests the project's founding bet, which failed in Part 9, now with a small network and
+    possibly trustworthy gradients.
+
+### Phase D — fix the rules for Experiments 2 and 3 (after Experiment 1, before any of their data)
+
+23. **Pilot on training states only:** use training states to pick the warming strength (several
+    times the weather noise, well inside what brightening can cancel), the long planner's look-ahead
+    (60 or 120 days), its optimizer and number of copies, and the penalty weights, and to check the
+    planner's per-knob response maps against Experiment 1's brute-force maps, because each of these
+    must be fixed before any evaluation state is touched.
+24. **Freeze revision 1:** write and freeze the full rules for Experiments 2 and 3 (arms, budgets, a
+    run length of about six months so each run crosses from southern to northern summer, a
+    hidden-strength range justified against the roughly 20-fold spread between climate models,
+    endpoints, tests, equivalence bounds and the outcome grid), write the analysis script, and post
+    both to OSF, because this project's recurring failure was a design whose answer was fixed, or
+    picked, after the fact.
+
+### Phase E — Experiment 2: can gradients design a fixed pattern? (about 10–15 GPU-hours)
+
+25. **Design it four ways:** on the training states, design one fixed five-band pattern that cancels
+    the warming over the validated horizon with the snipped gradient, with ordinary backpropagation,
+    with the linear-response method and with uniform brightening, because "gradients design" is half
+    of the planned paper's claim, and Part 16.2 showed it was never really tested.
+26. **Judge on fresh states:** score all four designs on the 16 evaluation states with
+    micro-ensembles, on the ocean map and on land temperature and rainfall, because a design only
+    counts if it works on climates nothing was tuned on.
+27. **More knobs (optional):** repeat the design with 7 bands and with 30 patches, recording GPU cost
+    next to the linear-response method's, because the practical case for differentiable models is
+    that the gradient's cost stays flat as knobs are added while the brute-force cost grows with every
+    knob.
+
+### Phase F — Experiment 3: planning and copying over months (the big one; cost set by step 17)
+
+28. **3a, planning with a perfect model:** over about six months of steadily growing warming, run the
+    three planners, the classical feedback controller and the fixed-pattern ladder on the evaluation
+    states, because this measures whether looking months ahead through the ocean beats two-week
+    planning, the best fixed pattern and the classical controller, and whether changing the pattern
+    with the seasons pays off for a sunlight-driven actuator, a question Dubey et al. could not
+    resolve.
+29. **3b, train the students:** with the spraying strength hidden, record the all-knowing planner's
+    decisions on the training states, then run the copying loop and the three direct-training
+    methods, because this produces the networks to be compared.
+30. **3b, the head-to-head:** on the evaluation states, compare the student with the classical
+    feedback controller, a planner that does not know the hidden strength, the all-knowing planner
+    (the ceiling), the fixed-pattern ladder and the directly trained networks, reporting GPU cost next
+    to skill, because the paper's central question is whether a network that learned from the model's
+    gradients, by copying a planner, can beat the classical controller under realistic uncertainty at
+    a small fraction of the planner's cost.
+
+### Phase G — Experiment 4 (optional): does it survive a changed model? (about 5–10 GPU-hours)
+
+31. **Replay in changed models:** replay the fixed designs and the planner's recorded schedule, and run
+    the feedback controllers live, in altered versions of the model (a shallower or deeper ocean,
+    brightening applied to the stratocumulus clouds instead of the convective ones, a different
+    resolution), because any real strategy would be designed in one model and used in another, Dubey
+    et al.'s cross-model replay sets that standard, and our feedback results predict that closing the
+    loop is what protects performance.
+
+### Phase H — write-up and housekeeping
+
+32. **Preprint quickly:** update `PAPER_PLAN.md` to this story and post a preprint as soon as
+    Experiments 1–3 have their registered answers, because the paper plan still describes the old
+    claim and Dubey et al. may reach planning ahead soon.
+33. **Make it checkable:** archive the settled climate and every set of starting states as NetCDF with
+    checksums (for example on Zenodo), have the advisor or a colleague recompute the headline numbers
+    with their own code, disclose the AI assistance, and fix the names, figure and citations Part 16
+    flagged, because every result depends on files that exist only on the GPU machine, and several
+    problems got past more than one AI-run audit.
+
+## Planner settings to start from (fixed for good in step 23)
+
+| Setting | Starting value | Why |
+|---|---|---|
+| Knobs | Experiment 1's five Gaussian ocean bands | comparable with Experiment 1 and with Dubey et al. |
+| Re-plan every | 14 days | Dubey et al.'s window, inside which gradients stay reliable |
+| Look-ahead | 60 days (14 for the short-sighted planner) | the ocean remembers for months; 60 days is Experiment 1's deciding horizon |
+| Gradient | Experiment 1's winning snipped window (ordinary backpropagation if the outcome is B) | only what Experiment 1 validated |
+| Copies averaged | 3, or 1 if Experiment 1 shows single runs are reliable | weather noise; one copy costs a third as much |
+| Optimizer | 2–3 Gauss–Newton steps with a forward-mode gradient, or 15 Adam steps at learning rate 0.1 (Dubey et al.), whichever the pilot shows is accurate at lower cost | with only five knobs, running the gradient forward alongside the model is cheap and gives each knob's whole response map at once |
+| Objective | ocean map: average error squared + 0.5 × error-map variance + effort and change penalties | Dubey et al.'s pattern objective; their penalty weights (0.01 and 0.1) were set for cooling in kelvin, not for albedo, so ours are tuned in the pilot |
+| Limits | each band between zero and the brightening cap, through a smooth transform | no knob can get stuck with zero gradient |
+| What gets applied | the optimizer's last step | never the luckiest try |
+
+Experiment 1's brute-force runs also give the classical feedback controller its sensitivity matrix (how
+much each knob moves each of the three numbers it tracks), so the classical and gradient methods start
+from the same information.
+
+## Budget: a lean and a full version
+
+The planner and the copying loop are new and expensive, so this plan costs more than Part 17's
+25–35 GPU-hours. Step 17 replaces these estimates with measured numbers.
+
+| Phase | Lean (GPU-hours) | Full (GPU-hours) |
+|---|---|---|
+| A: base-climate fix (done on a laptop; its GPU re-settle is counted in B) | 0 | 0 |
+| B: Q-flux re-settle, Step 0 and Experiment 1 (with the damped comparison) | 12.5 | 12.5 |
+| C–D: tests, scoping, pilot | 3 | 5 |
+| E: Experiment 2 | 8 (no extra knobs) | 10–15 |
+| F: Experiment 3 | 20–30 (one copy, 4-month runs, the snipped and short-sighted planners only, one copying round, snipped-gradient direct training only) | 70–170 |
+| G: Experiment 4 | none | 5–10 |
+| **Total** | **about 45–55** | **about 100–210** |
+
+Rough calendar: Phase A this week; Experiment 1's answer a few days after the GPU run starts; Phase C
+coded in the meantime; revision 1 about a week after Experiment 1; Experiments 2 and 3 over the
+following two to four weeks, depending on the budget; a preprint roughly two months from now.
+
+## If things go differently
+
+| If … | then … |
+|---|---|
+| Experiment 1 comes out C (no gradient is trustworthy at 60 days) | Experiments 2 and 3 stop; the gradient map becomes a short paper on its own |
+| Experiment 1 comes out B (ordinary backpropagation is fine) | the planners use it; snipping becomes a side result, and Experiment 3a is about look-ahead length alone |
+| Planning costs far more than expected | the lean version, or fewer states, shorter runs and one copy, all fixed in revision 1 before any Experiment-3 data |
+| The planner only ties the best fixed pattern or the classical controller | report the tie with equivalence bounds; Dubey et al. explain such ties by a flat loss near the optimum, and the case for gradients then rests on cost as knobs are added (step 27) |
+| The student falls well short of its teacher | report it; the planner itself is still the method, and the gap measures what copying loses |
+
+## Decisions for the advisor
+
+1. **Add the Q-flux before Step 0 runs (step 1)?** *Decided yes and done on 2026-09-30.* The first
+   attempt halved the cold bias but failed its pre-written check; the one registered correction
+   passed (Part 17, Step 0). Nothing is left to decide here.
+2. **Which budget,** lean (about 50 GPU-hours) or full (about 100–200), and on which machine?
+3. **Contact Dubey et al. now (step 6)?**
+4. **Is a steady extra heat input into the ocean an acceptable stand-in for greenhouse warming
+   (step 10)?** Imposed ocean heating is a common device in idealized slab-ocean studies (for example
+   Kang et al. 2008), but it heats the surface rather than the top of the atmosphere.
+
+## Limits this plan does not fix
+
+- The brightening still acts on the model's convective clouds, not the stratocumulus decks real cloud
+  brightening would target; only Experiment 4 touches this.
+- There are no aerosol particles, so air-quality questions (PM2.5) stay out of reach.
+- The slab ocean has no currents, so there is no real El Niño, and far-away rainfall effects stay weak.
+- The controllers are given the normal climate exactly; a real system would only have an estimate.
+- Everything happens in one model; Experiment 4 tests changed versions of it, not a different model.
+
+> **New terms:** *Planner / model predictive control* = choose the next settings by simulating ahead,
+> apply only the first stretch, then re-plan (receding-horizon control, Part 16, is the same idea).
+> *Look-ahead* = how far ahead each plan simulates. *Forward-mode gradient* = working out how every
+> output responds to each knob by carrying the sensitivities forward alongside the simulation, which is
+> cheap when there are few knobs. *Gauss–Newton* = an optimizer that treats the response as locally
+> linear and solves for the best settings directly. *DAgger* = an imitation method in which the student
+> drives and the teacher corrects it in the situations the student actually reaches. *Privileged
+> teacher* = a teacher that sees information the student cannot, so the student learns to infer it.
+> *Integral action* = a controller's running memory of past error, which removes steady misses.
+> *Gain (G)* = the doing-nothing run's squared error against the normal climate divided by the
+> strategy's (10 means ten times smaller). *Effort (E)* = how much brightening a strategy asks for.
 
 ---
 
@@ -1052,8 +1409,9 @@ before the data.
 - **`analyze_precip_sideeffects.py`** — the Part-12 rainfall side-effect analysis (Amendment 5; meta-audit Addendum 4).
 - **`jcm/physics/speedy/shortwave_radiation.py`** — where MCB correctly brightens cloud albedo (the R6 fix).
 - **`mcb_experiments_gpu/stage1_v2/stage1_optimized_pattern.pkl`** (its `history`), **`run_stage0_plumbing_test.py`** and **`jcm/mcb/coupled_features.py`** (feature 0) — the evidence behind Part 16's three main code findings.
-- **`jcm/mcb/gradient_truncation.py`** — Part 17's gradient cut (atmosphere snipped every W days, ocean kept), with its tests.
+- **`jcm/mcb/gradient_truncation.py`** — Part 17's gradient cut (atmosphere snipped every W days, ocean kept) and the damped alternative (atmosphere's memory fades daily; Amendment 9 revision 0.1), with their tests.
 - **`jcm/mcb/band_basis.py`** / **`jcm/mcb/gradient_fidelity.py`** — Experiment 1's five ocean-band knobs, its four objectives, and the truth-vs-gradient machinery.
 - **`run_gradient_fidelity.py`** / **`analyze_gradient_fidelity.py`** — Experiment 1's driver and its pre-committed analysis (every threshold registered in Amendment 9).
 - **`run_generate_macro_ics.py`** — starting states from 16 genuinely different ocean states, in five disjoint roles.
-- **`run_campaign_step0_exp1.sh`** — the gated GPU script for the macro starting states and Experiment 1 (~9.5 GPU-h).
+- **`run_campaign_step0_exp1.sh`** — the gated GPU script for the Q-flux re-settle, the macro starting states and Experiment 1 (~12.5 GPU-h).
+- **`jcm/mcb/qflux.py`** / **`run_qflux_base_climate.py`** — the ocean class with a monthly Q-flux, how the Q-flux is measured, and the settling run with its pre-written check (Amendment 9 revision 0.2), plus the one-step correction (revision 0.3). The Q-flux in use is `mcb_experiments/qflux/qflux_monthly_t30_v2.nc`; how it was derived is in `qflux_monthly_t30_v2_correction.json`, and its passing check is in `attempt2/`. The first attempt's file and summaries stay next to it as the record.

@@ -42,6 +42,13 @@ smallest median single-realization angle; ties within 2 deg go to the larger
 window. Registered prediction: at 60 d, W = 1 is ``failed`` on LAND or its
 ratio lies outside [0.5, 2]; if the LAND truth is unresolved the prediction
 is reported as untestable.
+
+Exploratory (Amendment 9 revision 0.1, added before any data): damped
+estimators (no truncation; the atmosphere's derivatives fade by exp(-1/tau)
+per day; ``jacobians_damped``) get the same metrics, the same thresholds and
+the same bootstrap resampling as the registered estimators. They are
+reported under ``exploratory_damped`` and never enter the outcome grid or W*.
+The registered code path above is unchanged.
 """
 
 import argparse
@@ -321,7 +328,63 @@ def analyze(arrays, meta, n_boot=N_BOOT, seed=BOOT_SEED):
     else:
         out["primary"] = {"endpoint": key, "outcome": "not_computed",
                           "reason": "primary horizon or full BPTT missing"}
+    damped = damped_cells(arrays, meta, fd, truth, truth_se, out["truth"],
+                          finished, n_boot, seed)
+    if damped is not None:
+        out["exploratory_damped"] = damped
     return out
+
+
+def damped_cells(arrays, meta, fd, truth, truth_se, truth_info, finished,
+                 n_boot, seed):
+    """Exploratory damped estimators (revision 0.1); None if absent.
+
+    Same metrics, thresholds and bootstrap as the registered estimators. The
+    bootstrap draws depend only on the IC and member counts, so with the same
+    seed every replicate resamples exactly the ICs and members the registered
+    analysis did (the truth replicates are identical). Never used for the
+    outcome grid or W*.
+    """
+    taus = list(meta.get("damped_efold_days") or [])
+    if "jacobians_damped" not in arrays or not taus:
+        return None
+    jac_d = np.asarray(arrays["jacobians_damped"], float)[:finished]
+    horizons = list(meta["horizons"])
+    objectives = list(meta["objective_names"])
+    k_bands = jac_d.shape[-1]
+    truth_b, est_b = bootstrap_means(fd, jac_d, n_boot, seed, True)
+    flat_truth_b, flat_est_b = bootstrap_means(fd, jac_d, n_boot, seed + 1,
+                                               False)
+    cells = {}
+    for hi, h in enumerate(horizons):
+        for oi, obj in enumerate(objectives):
+            g, se = truth[hi, oi], truth_se[hi, oi]
+            resolved = truth_info[f"{obj}@{h}"]["resolved"]
+            for di, tau in enumerate(taus):
+                real = jac_d[:, :, di, hi, oi].reshape(-1, k_bands)
+                cell = estimator_metrics(g, se, real)
+                ang_b = angle_deg(est_b[:, di, hi, oi], truth_b[:, hi, oi])
+                rat_b = projection_ratio(est_b[:, di, hi, oi],
+                                         truth_b[:, hi, oi])
+                fang = angle_deg(flat_est_b[:, di, hi, oi],
+                                 flat_truth_b[:, hi, oi])
+                frat = projection_ratio(flat_est_b[:, di, hi, oi],
+                                        flat_truth_b[:, hi, oi])
+                cell["angle_ci"] = np.nanpercentile(ang_b, [2.5, 97.5]).tolist()
+                cell["ratio_ci"] = np.nanpercentile(rat_b, [2.5, 97.5]).tolist()
+                cell["flat_angle_ci"] = np.nanpercentile(
+                    fang, [2.5, 97.5]).tolist()
+                cell["flat_ratio_ci"] = np.nanpercentile(
+                    frat, [2.5, 97.5]).tolist()
+                cell["verdict"] = verdict(resolved, cell["angle_ci"],
+                                          cell["ratio_ci"],
+                                          cell["median_single_angle"])
+                cells[f"D{tau:g}|{obj}@{h}"] = cell
+    return {"note": ("exploratory (Amendment 9 revision 0.1): not part of "
+                     "the outcome grid or W*"),
+            "efold_days": taus,
+            "decay_per_day": meta.get("damped_decay_per_day"),
+            "cells": cells}
 
 
 def print_table(result, windows, horizons, objectives):
@@ -345,6 +408,19 @@ def print_table(result, windows, horizons, objectives):
     print(f"\nPRIMARY {p['endpoint']}: outcome {p['outcome']}  "
           f"(full BPTT {p.get('full_bptt_verdict')}, W* = "
           f"{p.get('w_star')})")
+    damped = result.get("exploratory_damped")
+    if damped:
+        print("\nEXPLORATORY damped estimators (not part of the outcome or "
+              "W*):")
+        for obj in objectives:
+            for h in horizons:
+                for tau in damped["efold_days"]:
+                    c = damped["cells"][f"D{tau:g}|{obj}@{h}"]
+                    print(f"  {obj}@{h}d tau={tau:g}d: angle "
+                          f"{c['angle_mean']:5.1f} [{c['angle_ci'][0]:5.1f},"
+                          f"{c['angle_ci'][1]:5.1f}]  ratio {c['ratio']:5.2f}"
+                          f"  single {c['median_single_angle']:5.1f}  "
+                          f"-> {c['verdict']}")
 
 
 def main(argv=None):

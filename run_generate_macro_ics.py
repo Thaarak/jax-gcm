@@ -25,10 +25,10 @@ level:
 The registered plan never reuses a (macro state, branch) pair, and every
 evaluation role draws from macro states no training role touches.
 
-Example (GPU):
+Example (GPU; the Q-flux base carry of Amendment 9 revision 0.2):
     python run_generate_macro_ics.py \
-        --base-carry mcb_experiments_gpu/equilibrated/base_carry.pkl \
-        --output-root mcb_experiments_gpu/ics_macro
+        --base-carry mcb_experiments_gpu/equilibrated_qflux/base_carry.pkl \
+        --require-qflux --output-root mcb_experiments_gpu/ics_macro
 
 CPU smoke (plumbing only, cold start):
     python run_generate_macro_ics.py --base-carry cold --num-macro 2 \
@@ -53,6 +53,7 @@ from jcm.mcb.coupled_controller import (
     run_interval_final_carry,
 )
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
+from jcm.mcb.qflux import qflux_magnitude
 from jcm.mcb.state_features import compute_area_weights
 from run_coupled_training import (
     TERRAIN_NC,
@@ -109,6 +110,10 @@ def parse_args(argv=None):
     p.add_argument("--output-root", required=True)
     p.add_argument("--no-save-macro-bases", dest="save_macro_bases",
                    action="store_false")
+    p.add_argument("--require-qflux", action="store_true",
+                   help="Refuse a base carry without a Q-flux (Amendment 9 "
+                        "revision 0.2: Step 0 branches from the Q-flux "
+                        "climate).")
     return p.parse_args(argv)
 
 
@@ -180,6 +185,11 @@ def main(argv=None):
     step_fn = create_coupled_step_fn(coupler, wf, jitted=True)
     base = (template if args.base_carry == "cold"
             else load_carry(args.base_carry, template))
+    q_max = qflux_magnitude(base)
+    print(f"base carry {args.base_carry}: max |Q-flux| {q_max:.1f} W m-2")
+    if args.require_qflux and q_max == 0.0:
+        raise SystemExit("--require-qflux: the base carry has no Q-flux "
+                         "(settle it with run_qflux_base_climate.py)")
     ocean_w = compute_area_weights(coords) * ocean_mask_from_coupler(coupler)
     ocean_w = ocean_w / jnp.sum(ocean_w)
 
@@ -225,6 +235,7 @@ def main(argv=None):
               f"{pair['rms_diff_K']:.3f} K")
     with open(root / "macro_bases_manifest.json", "w") as f:
         json.dump({"base_carry": args.base_carry,
+                   "base_qflux_max_abs_wm2": q_max,
                    "spacing_days": args.spacing_days,
                    "num_macro": args.num_macro,
                    "macro_states": macro_entries,

@@ -11,10 +11,13 @@ module provides the two measurements Experiment 1 compares:
 * **Estimators.** Reverse-mode Jacobians of the same tail-mean objectives
   through the atmosphere-truncated rollout
   (``jcm.mcb.gradient_truncation``), for any window W, including no
-  truncation (ordinary backpropagation through time).
+  truncation (ordinary backpropagation through time), and for the
+  exploratory damped estimator (the atmosphere's memory fades instead of
+  being cut; Amendment 9 revision 0.1).
 
-Window length and episode start time are traced arguments, so one compiled
-Jacobian per horizon serves every window, initial condition and member.
+Window length, episode start time and decay factor are traced arguments, so
+one compiled Jacobian per horizon serves every estimator, initial condition
+and member.
 """
 
 from typing import Callable
@@ -94,21 +97,24 @@ def make_series_fn(step_fn: Callable, patterns, weight_stack, num_steps: int):
 
 def make_objective_fn(step_fn: Callable, patterns, weight_stack,
                       horizon: int, tail_days: int):
-    """``J(amplitudes, carry, window, t0) -> (n_obj,)`` tail-mean objectives.
+    """``J(amplitudes, carry, window, t0[, atm_decay]) -> (n_obj,)``.
 
-    ``window`` is the truncation window in days (use
-    ``gradient_truncation.NO_TRUNCATION_DAYS`` for full BPTT); ``t0`` is the
-    ocean ``sim_time`` the windows align to (the episode start for
-    episode-aligned windows, 0.0 for absolute model days). Both may be
-    traced. Forward values do not depend on either.
+    Returns the tail-mean objectives. ``window`` is the truncation window in
+    days (use ``gradient_truncation.NO_TRUNCATION_DAYS`` for full BPTT);
+    ``t0`` is the ocean ``sim_time`` the windows align to (the episode start
+    for episode-aligned windows, 0.0 for absolute model days). The optional
+    ``atm_decay`` damps the atmosphere's derivatives by that factor per
+    coupling step (the exploratory damped estimator; 1.0 changes nothing).
+    All three may be traced. Forward values depend on none of them.
     """
     if not 0 < tail_days <= horizon:
         raise ValueError(f"need 0 < tail_days ({tail_days}) <= horizon "
                          f"({horizon})")
 
-    def objective(amplitudes, carry, window, t0):
+    def objective(amplitudes, carry, window, t0, atm_decay=None):
         wrapped = wrap_step_fn_with_atm_truncation(step_fn, window,
-                                                   t0_seconds=t0)
+                                                   t0_seconds=t0,
+                                                   atm_decay=atm_decay)
         controlled = apply_band_control(carry, amplitudes, patterns)
         _, series = rollout_objective_series(controlled, wrapped, horizon,
                                              weight_stack)
@@ -119,10 +125,11 @@ def make_objective_fn(step_fn: Callable, patterns, weight_stack,
 
 def make_jacobian_fn(step_fn: Callable, patterns, weight_stack, horizon: int,
                      tail_days: int):
-    """Jitted ``jac(amplitudes, carry, window, t0) -> (n_obj, K)``.
+    """Jitted ``jac(amplitudes, carry, window, t0[, atm_decay]) -> (n_obj, K)``.
 
     Reverse mode, one backward pass per objective (vectorized). Compile once
-    per horizon; window, t0, carry and amplitudes are all traced.
+    per horizon and call signature; window, t0, atm_decay, carry and
+    amplitudes are all traced.
     """
     objective = make_objective_fn(step_fn, patterns, weight_stack, horizon,
                                   tail_days)

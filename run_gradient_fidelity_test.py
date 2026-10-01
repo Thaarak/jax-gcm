@@ -58,10 +58,19 @@ class ValidateArgsTest(unittest.TestCase):
         bad = [("--grad-members", "9", "--fd-members", "2"),
                ("--horizons", "5", "--tail-days", "10"),
                ("--a0", "0.01", "--delta", "0.02"),
-               ("--windows", "-1")]
+               ("--windows", "-1"),
+               ("--damped-efold-days", "0"),
+               ("--damped-efold-days", "3", "-1")]
         for extra in bad:
             with self.assertRaises(SystemExit):
                 validate_args(self._args(*extra))
+
+    def test_damped_estimators_default_and_can_be_skipped(self):
+        # Revision 0.1 registers tau = 3 and 7 days; an empty list skips them.
+        self.assertEqual(self._args().damped_efold_days, [3.0, 7.0])
+        skipped = self._args("--damped-efold-days")
+        self.assertEqual(skipped.damped_efold_days, [])
+        validate_args(skipped)
 
 
 class MacroPlanTest(unittest.TestCase):

@@ -169,3 +169,11 @@ notebooks/model_state.nc
 docs/build
 docs/source/generated
 .gstack/
+
+# Copyrighted paper PDFs: keep local, never commit (the GitHub fork is public)
+literature/**/*.pdf
+
+# Q-flux (Amendment 9 revision 0.2): commit the small NetCDF and summaries, never settled carries
+!mcb_experiments/qflux/*.nc
+mcb_experiments/qflux/*.pkl
+mcb_experiments/qflux/**/*.pkl

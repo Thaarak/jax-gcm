@@ -14,23 +14,32 @@ Pre-registered as PREREGISTRATION.md Amendment 9. For each initial condition
 * ESTIMATORS. Reverse-mode Jacobians of the tail-mean objectives at every
   horizon, for every truncation window W (0 = no truncation = ordinary
   backpropagation through time).
+* EXPLORATORY DAMPED ESTIMATORS (Amendment 9 revision 0.1). The same
+  Jacobians with no truncation but with the atmosphere's derivatives damped
+  by exp(-1 / tau) per coupling day, for each e-folding time tau in
+  ``--damped-efold-days``. They are stored separately (``jacobians_damped``)
+  and never enter the registered outcome grid or the choice of W*.
 
-Window length and episode start are traced, so there is one compile for the
-forward series plus one per horizon. Results go to ``<output>.npz`` (arrays)
-and ``<output>.json`` (configuration, index maps, provenance) — no pickle.
-Arrays are written after every IC, so a crash loses at most one IC.
+Window length, episode start and decay factor are traced, so there is one
+compile for the forward series plus one per horizon. The registered windows
+pass a decay factor of exactly 1, which leaves their gradients unchanged.
+Results go to ``<output>.npz`` (arrays) and ``<output>.json``
+(configuration, index maps, provenance) — no pickle. Arrays are written
+after every IC, so a crash loses at most one IC.
 
 Example (GPU):
     python run_gradient_fidelity.py \
         --ic-dir mcb_experiments_gpu/ics_macro/exp1 \
         --fd-members 4 --grad-members 1 --a0 0.03 --delta 0.03 \
         --horizons 15 30 60 120 --tail-days 10 --windows 1 7 14 0 \
+        --damped-efold-days 3 7 \
         --output mcb_experiments_gpu/exp1_gradient_fidelity
 
 CPU smoke (tiny):
     python run_gradient_fidelity.py --ic-dir <smoke ics> --max-ics 1 \
         --fd-members 1 --grad-members 1 --horizons 2 3 --tail-days 1 \
-        --windows 1 0 --band-centers 20 -20 --output /tmp/exp1_smoke
+        --windows 1 0 --damped-efold-days 3 --band-centers 20 -20 \
+        --output /tmp/exp1_smoke
 """
 
 import argparse
@@ -58,7 +67,10 @@ from jcm.mcb.band_basis import (
 from jcm.mcb.coupled_controller import create_coupled_step_fn
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
 from jcm.mcb.gradient_fidelity import make_jacobian_fn, make_series_fn
-from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
+from jcm.mcb.gradient_truncation import (
+    NO_TRUNCATION_DAYS,
+    atmosphere_decay_factor,
+)
 from run_coupled_training import coupler_workflow, setup_coupled_model
 from run_generate_ics_independent import perturb_sst
 from run_stage5_training import START_DATE
@@ -86,6 +98,11 @@ def parse_args(argv=None):
     p.add_argument("--tail-days", type=int, default=10)
     p.add_argument("--windows", type=int, nargs="+", default=[1, 7, 14, 0],
                    help="Truncation windows in days; 0 = none (full BPTT).")
+    p.add_argument("--damped-efold-days", type=float, nargs="*",
+                   default=[3.0, 7.0],
+                   help="Exploratory damped estimators: e-folding times "
+                        "(days) of the atmosphere's derivative memory, no "
+                        "truncation. Pass none to skip them.")
     p.add_argument("--align", choices=["episode", "absolute"],
                    default="episode",
                    help="Align truncation windows to the episode start or "
@@ -116,6 +133,8 @@ def validate_args(args):
         raise SystemExit("a0 - delta must stay >= 0 (no darkening)")
     if any(w < 0 for w in args.windows):
         raise SystemExit("--windows must be >= 0 (0 = full BPTT)")
+    if any(not tau > 0 for tau in args.damped_efold_days):
+        raise SystemExit("--damped-efold-days must all be > 0")
 
 
 def run_labels(k_bands, zero_run):
@@ -230,6 +249,12 @@ def main(argv=None):
     max_h = horizons[-1]
     windows = list(args.windows)
     window_values = [NO_TRUNCATION_DAYS if w == 0 else w for w in windows]
+    damped_efold = [float(tau) for tau in args.damped_efold_days]
+    damped_decay = [atmosphere_decay_factor(tau) for tau in damped_efold]
+    # Registered windows get a decay factor of exactly 1 (no damping); the
+    # damped estimators run without truncation. One compile covers both.
+    no_decay = jnp.asarray(1.0, dtype=jnp.float32)
+    full_window = jnp.asarray(NO_TRUNCATION_DAYS)
 
     series_fn = jax.jit(make_series_fn(step_fn, patterns, weight_stack,
                                        max_h))
@@ -243,6 +268,9 @@ def main(argv=None):
         "jacobians": np.full((n_ic, args.grad_members, len(windows),
                               len(horizons), n_obj, k_bands), np.nan,
                              dtype=np.float64),
+        "jacobians_damped": np.full((n_ic, args.grad_members,
+                                     len(damped_efold), len(horizons), n_obj,
+                                     k_bands), np.nan, dtype=np.float64),
         "ic_index": np.array([e["index"] for e, _ in ics]),
         "band_patterns": np.asarray(patterns),
         "objective_weights": np.asarray(weight_stack),
@@ -256,6 +284,12 @@ def main(argv=None):
         "horizons": horizons,
         "windows": windows,
         "window_note": "0 = no truncation (full BPTT)",
+        "damped_efold_days": damped_efold,
+        "damped_decay_per_day": damped_decay,
+        "damped_note": ("exploratory (Amendment 9 revision 0.1): no "
+                        "truncation; atmospheric-state derivatives scaled "
+                        "by exp(-1/tau) at every coupling step; reported, "
+                        "not part of the outcome grid or W*"),
         "ic_entries": [e for e, _ in ics],
         "ic_manifest": str(Path(args.ic_dir) / "manifest.json"),
         "manifest_extra": {k: manifest.get(k) for k in
@@ -294,8 +328,15 @@ def main(argv=None):
                 t_g = time.time()
                 for h_idx, h in enumerate(horizons):
                     for w_idx, w in enumerate(window_values):
-                        jac = jac_fns[h](a0_vec, member, jnp.asarray(w), t0)
+                        jac = jac_fns[h](a0_vec, member, jnp.asarray(w), t0,
+                                         no_decay)
                         arrays["jacobians"][i, m, w_idx, h_idx] = (
+                            np.asarray(jac))
+                    for d_idx, decay in enumerate(damped_decay):
+                        jac = jac_fns[h](a0_vec, member, full_window, t0,
+                                         jnp.asarray(decay,
+                                                     dtype=jnp.float32))
+                        arrays["jacobians_damped"][i, m, d_idx, h_idx] = (
                             np.asarray(jac))
                 grad_s = time.time() - t_g
             print(f"  IC {entry['index']:>3} member {m}: {len(labels)} "

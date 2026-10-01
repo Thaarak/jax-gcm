@@ -140,5 +140,49 @@ class EndToEndTest(unittest.TestCase):
         self.assertTrue(res["land_prediction_confirmed"])
 
 
+class ExploratoryDampedTest(unittest.TestCase):
+    """Revision 0.1: damped estimators are reported but change nothing."""
+
+    TAUS = [3.0, 7.0]
+
+    def _arrays(self):
+        arrays, meta = _synthetic(
+            [1, 7, 0], lambda w, rng: _bad(rng) if w == 0 else _good(rng))
+        n_ic, k_g, _, n_h, n_obj, k = arrays["jacobians"].shape
+        rng = np.random.default_rng(99)       # separate stream: registered
+        damped = np.zeros((n_ic, k_g, len(self.TAUS), n_h, n_obj, k))
+        for i in range(n_ic):                 # arrays stay untouched
+            for m in range(k_g):
+                for hi in range(n_h):
+                    for oi in range(n_obj):
+                        damped[i, m, 0, hi, oi] = _good(rng)   # tau = 3
+                        damped[i, m, 1, hi, oi] = _bad(rng)    # tau = 7
+        with_damped = dict(arrays, jacobians_damped=damped)
+        meta_damped = dict(meta, damped_efold_days=self.TAUS,
+                           damped_decay_per_day=[float(np.exp(-1 / t))
+                                                 for t in self.TAUS])
+        return arrays, meta, with_damped, meta_damped
+
+    def test_registered_results_are_unchanged(self):
+        arrays, meta, with_damped, meta_damped = self._arrays()
+        plain = analyze(arrays, meta, n_boot=200, seed=1)
+        damped = analyze(with_damped, meta_damped, n_boot=200, seed=1)
+        self.assertNotIn("exploratory_damped", plain)
+        self.assertEqual(plain["primary"], damped["primary"])
+        self.assertEqual(plain["cells"], damped["cells"])
+        self.assertEqual(plain["truth"], damped["truth"])
+
+    def test_damped_cells_get_the_registered_verdicts(self):
+        _, _, with_damped, meta_damped = self._arrays()
+        res = analyze(with_damped, meta_damped, n_boot=200, seed=1)
+        cells = res["exploratory_damped"]["cells"]
+        self.assertEqual(res["exploratory_damped"]["efold_days"], self.TAUS)
+        self.assertEqual(cells["D3|T0@60"]["verdict"], "useful")
+        self.assertEqual(cells["D7|T0@60"]["verdict"], "failed")
+        # Never eligible for W*: the outcome still comes from the windows.
+        self.assertEqual(res["primary"]["outcome"], "A")
+        self.assertIn(res["primary"]["w_star"], (1, 7))
+
+
 if __name__ == "__main__":
     unittest.main()

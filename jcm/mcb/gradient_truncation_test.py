@@ -13,9 +13,12 @@ The actuator ``u`` lives in ``atm.derived.mcb_perturbation`` exactly as in
 jax-esm's JCM wrapper. JAX's reverse-mode gradient of the final SST is checked
 against an independent forward-mode tangent recursion that applies the
 intended cut by hand (tangent of x zeroed at cut steps; the tangents of
-derived flux, atm-forcing SST and the ocean untouched).
+derived flux, atm-forcing SST and the ocean untouched). The damped variant
+is checked the same way (tangent of x multiplied by the decay factor at the
+start of every step).
 """
 
+import math
 import unittest
 
 import jax
@@ -24,6 +27,9 @@ import numpy as np
 
 from jcm.mcb.gradient_truncation import (
     NO_TRUNCATION_DAYS,
+    atmosphere_decay_factor,
+    damp_atmosphere_gradient,
+    scale_tangent,
     stop_atmosphere_gradient,
     truncation_cut,
     wrap_step_fn_with_atm_truncation,
@@ -103,19 +109,23 @@ def _rollout(u, step_fn, n_steps=T_STEPS, start_day=START_DAY):
     return final
 
 
-def _final_sst(u, window, t0=None, start_day=START_DAY, n_steps=T_STEPS):
+def _final_sst(u, window, t0=None, start_day=START_DAY, n_steps=T_STEPS,
+               decay=None):
     step_fn = wrap_step_fn_with_atm_truncation(_toy_step_fn, window,
-                                               t0_seconds=t0)
+                                               t0_seconds=t0,
+                                               atm_decay=decay)
     final = _rollout(u, step_fn, n_steps, start_day)
     return final["ocn"]["state"].sea_surface_temperature
 
 
 def _reference_gradient(window, aligned_to_episode, start_day=START_DAY,
-                        n_steps=T_STEPS):
+                        n_steps=T_STEPS, decay=None):
     """Forward-mode tangent recursion with the cut applied by hand (NumPy)."""
     dx = dflux_derived = dsst = dflux_ocn = dsst_atm = 0.0
     for t in range(n_steps):
         day = t if aligned_to_episode else start_day + t
+        if decay is not None:
+            dx = decay * dx               # damping: ONLY the atmospheric state
         if window is not None and day % window == 0:
             dx = 0.0                      # cut: ONLY the atmospheric state
         dflux_ocn = dflux_derived          # coupling mapper
@@ -261,6 +271,104 @@ class StopAtmosphereGradientScopeTest(unittest.TestCase):
                       _toy_step_fn)
         self.assertIs(wrap_step_fn_with_atm_truncation(_toy_step_fn, 0),
                       _toy_step_fn)
+        # A decay alone still needs the wrapper.
+        self.assertIsNot(wrap_step_fn_with_atm_truncation(
+            _toy_step_fn, None, atm_decay=0.5), _toy_step_fn)
+
+
+class DampedGradientTest(unittest.TestCase):
+    """The exploratory damped estimator (Amendment 9 revision 0.1)."""
+
+    def test_decay_factor(self):
+        self.assertAlmostEqual(atmosphere_decay_factor(7.0),
+                               math.exp(-1.0 / 7.0), places=12)
+        self.assertAlmostEqual(atmosphere_decay_factor(3.0),
+                               math.exp(-1.0 / 3.0), places=12)
+        for bad in (0.0, -2.0):
+            with self.assertRaises(ValueError):
+                atmosphere_decay_factor(bad)
+
+    def test_scale_tangent_is_identity_on_values(self):
+        x = jnp.array([1.0, -2.0, 3.5])
+        np.testing.assert_array_equal(np.asarray(scale_tangent(x, 0.25)),
+                                      np.asarray(x))
+        _, tangent = jax.jvp(lambda v: scale_tangent(v, 0.25), (x,),
+                             (jnp.ones(3),))
+        np.testing.assert_allclose(np.asarray(tangent), 0.25)
+        _, vjp = jax.vjp(lambda v: scale_tangent(v, 0.25), x)
+        np.testing.assert_allclose(np.asarray(vjp(jnp.ones(3))[0]), 0.25)
+
+    def test_matches_reference_for_every_decay_and_window(self):
+        for decay in (0.0, 0.25, 0.6, 0.9, 1.0):
+            for window in (None, 3):
+                g = float(jax.grad(_final_sst)(0.1, window, decay=decay))
+                ref = _reference_gradient(window, False, decay=decay)
+                self.assertAlmostEqual(
+                    g, ref, delta=1e-4 * max(1.0, abs(ref)),
+                    msg=f"decay={decay} window={window}")
+
+    def test_decay_one_changes_nothing(self):
+        for window in (None, 3):
+            plain = float(jax.grad(_final_sst)(0.1, window))
+            damped = float(jax.grad(_final_sst)(0.1, window, decay=1.0))
+            self.assertEqual(plain, damped)
+
+    def test_decay_zero_equals_window_one(self):
+        zero = float(jax.grad(_final_sst)(0.1, None, decay=0.0))
+        w1 = float(jax.grad(_final_sst)(0.1, 1))
+        self.assertAlmostEqual(zero, w1, delta=1e-6 * max(1.0, abs(w1)))
+
+    def test_damping_sits_between_full_and_window_one(self):
+        full = abs(float(jax.grad(_final_sst)(0.1, None)))
+        damped = abs(float(jax.grad(_final_sst)(0.1, None, decay=0.6)))
+        w1 = abs(float(jax.grad(_final_sst)(0.1, 1)))
+        self.assertGreater(full, damped)
+        self.assertGreater(damped, w1)
+
+    def test_forward_values_are_bit_identical(self):
+        plain = _rollout(0.1, _toy_step_fn)
+        for window in (None, 3):
+            wrapped = _rollout(0.1, wrap_step_fn_with_atm_truncation(
+                _toy_step_fn, window, atm_decay=0.5))
+            for a, b in zip(jax.tree.leaves(plain),
+                            jax.tree.leaves(wrapped)):
+                np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+
+    def test_forward_mode_agrees_with_reverse_mode(self):
+        # The planner may use forward-mode Jacobians; both modes must damp.
+        for window, decay in ((None, 0.6), (3, 0.6), (3, None)):
+            rev = float(jax.grad(_final_sst)(0.1, window, decay=decay))
+            fwd = float(jax.jacfwd(_final_sst)(0.1, window, decay=decay))
+            self.assertAlmostEqual(rev, fwd, delta=1e-5 * max(1.0, abs(rev)))
+
+    def test_traced_decay_compiles_once(self):
+        @jax.jit
+        def grad_fn(u, decay):
+            return jax.grad(_final_sst)(u, jnp.asarray(NO_TRUNCATION_DAYS),
+                                        decay=decay)
+
+        for decay in (0.0, 0.5, 0.9):
+            traced = float(grad_fn(0.1, jnp.asarray(decay)))
+            ref = _reference_gradient(None, False, decay=decay)
+            self.assertAlmostEqual(traced, ref,
+                                   delta=1e-4 * max(1.0, abs(ref)))
+
+    def test_only_float_leaves_of_the_atmospheric_state_are_damped(self):
+        carry = _initial_carry(jnp.asarray(0.1))
+        carry["atm"]["state"]["step"] = jnp.asarray(3, dtype=jnp.int32)
+
+        def total(c):
+            out = damp_atmosphere_gradient(c, 0.5)
+            return (out["atm"]["state"]["x"]
+                    + out["atm"]["derived"]["flux"]
+                    + out["ocn"]["state"].sea_surface_temperature
+                    + out["atm"]["state"]["step"].astype(jnp.float32))
+
+        grads = jax.grad(total, allow_int=True)(carry)
+        self.assertEqual(float(grads["atm"]["state"]["x"]), 0.5)
+        self.assertEqual(float(grads["atm"]["derived"]["flux"]), 1.0)
+        self.assertEqual(
+            float(grads["ocn"]["state"].sea_surface_temperature), 1.0)
 
 
 if __name__ == "__main__":

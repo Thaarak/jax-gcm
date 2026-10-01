@@ -871,3 +871,271 @@ Revision 1 must fix:
 
 **Posting.** Before Experiment 1 runs, this amendment and the commit hash that freezes the Step-0 and
 Experiment-1 code are posted to OSF for an independent timestamp.
+
+### Amendment 9, revision 0.1 — related work read in full; exploratory damped estimators added to Experiment 1 (frozen 2026-09-29, BEFORE any Step-0 or Experiment-1 data)
+
+**Related work, now read in full.** The PDFs are kept locally under `literature/` and are not
+committed.
+
+* **Sugiura et al. (2008)**, JGR 113, C10017, doi:10.1029/2008JC004741.
+  * *What they did:* 4D-Var coupled data assimilation in the CFES coupled GCM (T42 atmosphere,
+    1-degree ocean), with 9-month windows and 1.5-month margins.
+  * *Controls and data:* ocean initial conditions plus bulk flux adjustment factors (latent heat,
+    sensible heat, momentum) at every grid point every 10 days; observations assimilated as 10-day
+    means.
+  * *How they tame atmospheric chaos:* an APPROXIMATE adjoint. It is tangent-linearized about
+    10-day-mean ("coarse-grained") fields, adds an artificial adjoint damping
+    Gamma = diag{a_i lambda_i^2}, and approximates nonlinear and subgrid terms semilinearly. The
+    forward model is unchanged.
+  * *Validation:* the approximation is asserted to "affect the efficiency but not necessarily the
+    direction" of the optimization. It is validated only indirectly, against observations, and never
+    compared with finite differences.
+* **Lu & Hsieh (1998)**, Tellus 50A, 534-544, doi:10.3402/tellusa.v50i4.14531.
+  * *What they did:* the full, exact coupled adjoint of a LINEAR, damped shallow-water equatorial
+    model over 40-day windows. There is no chaos, so the gradient cannot blow up.
+  * *Setup:* daily coupling with the forcing held fixed within the day. Atmospheric initial
+    conditions are fixed at zero (an equilibrium atmosphere), and they retrieve 3 ocean initial
+    fields and 6 parameters.
+  * *Caveat:* the authors warn that their conclusions may not hold for longer windows in realistic
+    models.
+
+**Consequence for the novelty claim (binding on every write-up).** Months-long gradients in a coupled
+model are NOT new: Sugiura et al. obtained approximate ones. The claim is restricted to three things:
+
+1. Exact automatic differentiation that removes only the atmosphere's dynamical memory
+   (`atm.state`), with no tuned damping, no approximated adjoint and a bit-identical forward model.
+2. The first direct validation of such a long-window coupled gradient against ensemble
+   finite-difference truth. Experiment 1 tests exactly the property Sugiura et al. asserted.
+3. Its use for intervention design and control, not state estimation.
+
+Cite Sugiura et al. as the closest precedent, and Lu & Hsieh as the exact-adjoint, non-chaotic case.
+
+**Added to Experiment 1: exploratory damped estimators D_tau.** A reviewer will ask why we cut instead
+of damp.
+
+* *Definition.* No truncation (W = full). At the start of every coupling step, the tangents and
+  cotangents of `carry["atm"]["state"]` are multiplied by gamma = exp(-1/tau) per day (see
+  `scale_tangent`, `damp_atmosphere_gradient` and the `atm_decay` argument in
+  `jcm/mcb/gradient_truncation.py`). Forward values are bit-identical, and the rest of the carry is
+  left untouched, exactly as for truncation. This is a constant-rate analogue of Sugiura et al.'s
+  adaptive damping.
+* *Values.* tau in {3, 7} days.
+* *Stated expectation (not a gate).* Damping tames the chaos only if 1/tau exceeds the growth rate of
+  the gradient noise. Dubey et al.'s noise-to-signal ratio rises from 0.07 at 14 days to 1.2 at 30
+  days, about 0.18 per day. So tau = 3 d (0.33 per day) should stay stable, and tau = 7 d (0.14 per
+  day) is marginal.
+* *Data.* Computed on the same ICs, member and horizons as the registered estimators, and stored as
+  `jacobians_damped`.
+* *Analysis.* `damped_cells` in `analyze_gradient_fidelity.py` uses the same metrics, the same
+  thresholds and the same bootstrap resampling (same seed, identical truth replicates). Results are
+  reported under `exploratory_damped`.
+* *Role.* NOT part of the outcome grid (U/A/A'/B/C) and NOT eligible for W*. Experiments 2-3
+  (revision 1) may carry a damped estimator only as a secondary arm.
+
+**What this changes, and doesn't, in the registered analysis:**
+
+* The registered windows are now evaluated with an explicit decay factor of exactly 1, which leaves
+  their gradients unchanged. Tested in `DampedJacobianTest.test_decay_one_equals_the_registered_estimators`
+  (bitwise) and in `DampedGradientTest`.
+* The registered code path of the analysis is unchanged. Tested in
+  `ExploratoryDampedTest.test_registered_results_are_unchanged`.
+
+**Cost.** About +2.4 GPU-h (1,800 gradient-days per estimator). Experiment 1 is now about 10.7 GPU-h,
+and about 12 with the macro starting states.
+
+**Still to decide before Step 0 runs** (MCB_PROJECT_REPORT.md Part 18, steps 1-3):
+
+* a Q-flux for the slab ocean;
+* interleaved train and evaluation macro states;
+* saving full maps from Experiment 1's truth runs.
+
+Each one adopted will be logged as a further revision BEFORE any data exist.
+
+**Posting.** The OSF posting required above will include this revision and the commit hash that
+contains it.
+
+### Amendment 9, revision 0.2 — base climate with a monthly Q-flux (frozen 2026-09-30, BEFORE the Q-flux diagnosis, the settling run and any Step-0 or Experiment-1 data)
+
+**Decision.** The user chose to fix the free slab's cold bias before Step 0 (MCB_PROJECT_REPORT.md
+Part 18, step 1). A Q-flux is a fixed, seasonal heat source or sink per ocean cell that stands in for
+the ocean heat transport a slab lacks.
+
+**Two facts found while planning (reported upstream, not patched there):**
+
+* *jax-esm indexes both climatology modes by DAY.* Its `forcing_method="Qflux"` computes the index as
+  floor(day) mod (cycle length), although the field's dimension is named "month" and holds 12
+  entries. A monthly Q-flux would therefore advance one month per day and repeat every 12 days.
+  `"relaxation"` indexes its SST climatology the same way. Neither mode is used.
+* *Over sea ice, `forcing.nc` "sst" is the ice surface temperature* (minimum 236.6 K). SPEEDY's surface
+  fluxes use `sea_surface_temperature` directly, with no separate ice temperature, so these are the
+  temperatures the atmosphere is built to see. Sub-freezing values in ice regions are therefore not
+  an error in this model; the missing ocean heat transport is. No freezing floor is added.
+
+**Model change.**
+
+* *The new class.* `MonthlyQfluxSlabOceanModel` (`jcm/mcb/qflux.py`) is the jax-esm free slab plus a
+  monthly Q-flux read from `carry["ocn"]["forcing"].q_flux`: shape (lon, lat, 12), in W m-2,
+  upward-positive. It is linearly interpolated between mid-month anchors on a 365.2425-day year and
+  evaluated at mid-step.
+* *Where it is used.* `setup_coupled_model` now always builds this class.
+* *Nothing changes without a Q-flux.* With a zero Q-flux (every cold start, and every carry saved
+  before this revision) it reproduces the old free slab bit for bit. This is tested on the component
+  (`MonthlyQfluxSlabTest`) and on the full coupled model (`CoupledBitIdentityTest`, slow).
+* *It travels with the state.* The Q-flux lives in the carry, so every state branched from a Q-flux
+  base carry inherits it.
+
+**Diagnosis** (`run_qflux_base_climate.py diagnose`).
+
+* *Start.* Cold start (the usual `initialize()`: observed January SST, resting atmosphere), coupled
+  model on realistic terrain.
+* *Restoring.* After every coupled day, the SST of the slab's ocean cells is restored toward the
+  `forcing.nc` monthly SST climatology (same interpolation), with tau = 5 days.
+* *Record.* Spin up for 365 days (discarded), then record 1,460 days.
+* *Fit.* The daily restoring heat is fitted by least squares with the interpolation weights at each
+  step's midpoint. Q = minus the fit (upward-positive); land cells get 0.
+* *Output.* Written to `mcb_experiments/qflux/qflux_monthly_t30.nc` with diagnostics: fit residual,
+  area-weighted mean Q, zonal mean.
+
+**Settling run** (`run_qflux_base_climate.py settle`). Cold start plus the diagnosed Q-flux, as a free
+slab (no restoring), for 3,650 days. The final state is the new base carry.
+
+**Acceptance gate.** It is evaluated on the last 1,460 days of the settling run, with cos(latitude)
+area weights over the slab's ocean cells.
+
+* **G1 drift.** The linear trend of daily ocean-mean SST, fitted together with 3 annual harmonics, must
+  have |trend| < 0.02 K per 60 days. This is the original equilibration criterion.
+* **G2 bias.** The mean ocean-mean SST must be within 0.5 K of the observed annual mean.
+* *Reported, not gated:*
+  * the RMS error of the annual-mean SST map;
+  * the RMS error of the seasonal cycle;
+  * the number of cells with |annual-mean error| > 2 K;
+  * the SST range and the land temperature range;
+  * simple averages over `fmask < 0.5` cells, for comparison with the original 283.9 -> 280.1 K.
+* *If G1 or G2 fails:*
+  * the Q-flux climate is NOT used;
+  * Step 0 keeps the original base carry, and the cold bias stays a documented limitation;
+  * any new attempt is discussed first. No silent retries.
+
+**Where it runs.**
+
+* *On a CPU, locally:* the diagnosis and a validation settle. Their numbers go in the report, and the
+  small Q-flux NetCDF is committed.
+* *In the GPU campaign* (`run_campaign_step0_exp1.sh`): it re-runs the settle stage from the
+  committed Q-flux file, applies the same gate, and aborts if it fails. Step 0 then branches from
+  that GPU-settled base carry (`mcb_experiments_gpu/equilibrated_qflux/base_carry.pkl`, used instead
+  of `equilibrated/base_carry.pkl`). `run_generate_macro_ics.py --require-qflux` refuses a base carry
+  without one.
+
+**Consequences.**
+
+* The campaigns in Parts 8-15 ran in the no-Q-flux climate. They are not re-run, and results are
+  never pooled across the two climates.
+* Cost: about 5,500 model-days in all, which is about 0.5 GPU-h on the GPU or a few hours on a CPU.
+
+**Amendment 9, revision 0.2 — RESULT (logged 2026-09-30, after the runs; the rule above is unchanged).**
+Both runs were done on a laptop CPU (`mcb_experiments/qflux/`).
+
+* **Diagnosis** (27 min).
+  * The restored run tracked the observed climatology almost exactly: its mean minus observed at the
+    same time of year is -0.02 K (range -0.07 to +0.04 K, 20 samples).
+  * The fitted Q-flux's ocean-mean annual value is -11.13 W m-2 (upward-positive), meaning about 11
+    W m-2 of heat INTO the ocean on average.
+  * The largest values, up to about 1,300 W m-2, are seasonal and sit in the Northern-Hemisphere
+    seasonal sea-ice zone (147 of the 148 cells above 1,000 W m-2, at 54-87 N). There, 40-60 m of
+    water is made to follow the ice surface's 18-37 K annual swing; the annual mean over ice cells is
+    +1.2 W m-2.
+  * In ice-free cells, the median of each cell's largest monthly |Q| is 109 W m-2, and 99% of cells
+    stay below 354 W m-2.
+* **Settling run** (51 min, 3,650 days).
+  * **G1 drift = -0.0004 K per 60 days: PASS.**
+  * **G2 bias = -1.62 K: FAIL** (limit 0.5 K).
+  * **Verdict: FAIL.**
+* **Reported numbers.**
+  * RMS annual-mean error 2.06 K; RMS seasonal-cycle error 0.62 K; 1,159 of 3,411 cells with
+    |annual error| > 2 K.
+  * Simple mean over `fmask < 0.5` cells: model 283.23 K vs observed 284.93 K, where the old free slab
+    was about 3.8 K cold.
+  * The error is nearly uniform: -1.1 to -2.2 K in every 20-degree latitude band. Ice-free cells are
+    at -1.57 K and seasonal-ice cells at -1.81 K (22% of the global bias, close to their 20% area
+    share).
+  * The free run cooled slowly for about 7 years, then levelled off.
+* **Consequence (per the rule).**
+  * This Q-flux climate is NOT used, and the original base carry stays the Step-0 base.
+  * No new attempt is run before it is discussed with the user and registered as a further revision.
+  * The files are kept as the record of the attempt: the Q-flux NetCDF and both summaries.
+
+### Amendment 9, revision 0.3 — one Newton correction of the Q-flux (frozen 2026-09-30, AFTER the revision-0.2 result and BEFORE the correction's settling run)
+
+**Decision.** After the revision-0.2 gate failed (bias -1.62 K), the user chose ONE correction attempt.
+This is the registered "discuss first" step.
+
+**Why the method changed before any run.** The option put to the user was to re-measure the missing
+heat under loose restoring. Checking it before registration showed two problems:
+
+* It recovers only a fraction, (C / tau_r) / (lambda + C / tau_r), of a state-independent deficit.
+* It recovers less still if the restoring suppresses the variability that causes the deficit.
+
+The expected residual was -0.3 to -0.9 K. It is replaced by a direct Newton step on the settled free
+run, which needs no new measuring run:
+
+* **Fit.** Take attempt 1's daily area-weighted ocean-mean SST. Deseasonalize it with 3 annual
+  harmonics fitted on its last 1,460 days, average in 60-day blocks, and fit from day 180:
+  T(t) = T_inf + A exp(-t / tau). Tau is searched on a fine geometric grid, and the model is linear in
+  T_inf and A.
+* **Sensitivity.** lambda = C_eff / tau, where C_eff is the area-weighted mean rho c_p h over the
+  slab's ocean cells (the gate's weights).
+* **Correction.** dQ = lambda (T_obs - T_inf) W m-2 into every ocean cell in every month, so
+  Q2 = Q1 - dQ (upward-positive). It is uniform because attempt 1's bias is nearly uniform and the
+  gate is on the global mean.
+* **Numbers already seen** (from attempt-1 data only):
+  * tau about 1,255 d (fits starting at 365 and 730 d give 1,231 and 1,194 d);
+  * T_inf about 288.61 K, i.e. a bias of -1.78 K;
+  * C_eff about 1.96e8 J m-2 K-1, so lambda is about 1.80 W m-2 K-1 and dQ about +3.2 W m-2.
+
+  `run_qflux_base_climate.py correct` reproduces the computation, and
+  `qflux_monthly_t30_v2_correction.json` records it.
+
+**Test.** Run `settle` with Q2 from a cold start for 3,650 days. The gate and code are the SAME as in
+revision 0.2 (G1: |drift| < 0.02 K per 60 days; G2: |bias| < 0.5 K). Outputs go to
+`mcb_experiments/qflux/attempt2/`.
+
+**Outcomes.**
+
+* **PASS.** Q2 (`mcb_experiments/qflux/qflux_monthly_t30_v2.nc`, committed) becomes the Q-flux. The
+  GPU campaign re-settles from it under the same gate, and Step 0 branches from that base carry.
+* **FAIL.** There are no further attempts. Step 0 uses the original base climate, the cold bias is a
+  documented limitation, and the GPU script is switched back.
+
+**Amendment 9, revision 0.3 — RESULT (logged 2026-09-30, after the run; the rule above is unchanged).**
+Run on a laptop CPU from a cold start with Q2 (`mcb_experiments/qflux/attempt2/`).
+
+* **Settling run** (3,650 days; 3.3 h of wall time because the laptop was throttled on battery,
+  against 51 min for attempt 1).
+  * **G1 drift = -0.0044 K per 60 days: PASS.**
+  * **G2 bias = -0.26 K: PASS** (limit 0.5 K).
+  * **Verdict: PASS.**
+* **Reported numbers** (attempt 1 in brackets).
+  * RMS annual-mean error 1.25 K [2.06]; RMS seasonal-cycle error 0.56 K [0.62]; 363 of 3,411 cells
+    with |annual error| > 2 K [1,159].
+  * Simple mean over `fmask < 0.5` cells: model 284.79 K vs observed 284.93 K [283.23].
+  * By 20-degree band, south to north: +0.17, +0.28, +0.23, -0.05, -0.88, -0.73, -0.29, -0.17,
+    +0.07 K [-2.17 to -1.23 K]. The uniform heating warmed the high latitudes about twice as much as
+    the tropics, so the leftover error is a pattern: tropics 0.7-0.9 K too cold, Southern Ocean about
+    0.25 K too warm.
+  * Cells with sea ice in any month (`icec`, 20% of the area): +0.21 K [-1.81]; ice-free: -0.38 K
+    [-1.57].
+* **Checks (not part of the gate).**
+  * *No hidden approach.* The exponential fit used for the Newton step finds no approach curve here
+    (tau runs to the grid edge for fit starts 180, 365 and 730 d): the run started near where it
+    settled. Yearly means sit between -0.05 and -0.31 K (SD 0.086 K, lag-1 autocorrelation 0.65); the
+    10-year mean is -0.19 K.
+  * *The correction under-shot slightly.* Adding 3.21 W m-2 raised the gate-window mean by 1.36 K
+    (1.52 K relative to attempt 1's fitted end state), against the 1.78 K aimed for. The realized
+    sensitivity is 2.1-2.4 W m-2 K-1 rather than the fitted 1.80.
+* **Consequence (per the rule).**
+  * Q2 (`mcb_experiments/qflux/qflux_monthly_t30_v2.nc`) is the Q-flux. Attempt 1's files stay as the
+    record. No further correction is made.
+  * `run_campaign_step0_exp1.sh` re-settles from Q2 on the GPU under the same gate, and Step 0
+    branches from that base carry. The GPU run is a second weather realization; with a window-mean
+    standard error of about 0.07 K, a fail there is very unlikely, but the gate still applies.
+  * The tropical cold / Southern Ocean warm pattern is a documented limitation of the base climate.

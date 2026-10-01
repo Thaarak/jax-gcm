@@ -190,8 +190,38 @@ class JacobianTest(_Fixture):
         values = [np.asarray(objective(self.a0, self.carry, w, self.t0))
                   for w in (jnp.asarray(1), jnp.asarray(3),
                             jnp.asarray(NO_TRUNCATION_DAYS))]
+        values.append(np.asarray(objective(
+            self.a0, self.carry, jnp.asarray(NO_TRUNCATION_DAYS), self.t0,
+            jnp.asarray(0.5))))
         for v in values[1:]:
             np.testing.assert_array_equal(v, values[0])
+
+
+class DampedJacobianTest(_Fixture):
+    """Exploratory damped estimator (Amendment 9 revision 0.1)."""
+
+    def _jac(self, window, decay=None):
+        jac = make_jacobian_fn(_toy_step, self.patterns, self.weights,
+                               HORIZON, TAIL)
+        args = (self.a0, self.carry, jnp.asarray(window), self.t0)
+        if decay is not None:
+            args += (jnp.asarray(decay, dtype=jnp.float32),)
+        return np.asarray(jac(*args))
+
+    def test_decay_one_equals_the_registered_estimators(self):
+        for window in (1, 3, NO_TRUNCATION_DAYS):
+            np.testing.assert_array_equal(self._jac(window, 1.0),
+                                          self._jac(window))
+
+    def test_decay_zero_equals_window_one(self):
+        np.testing.assert_allclose(self._jac(NO_TRUNCATION_DAYS, 0.0),
+                                   self._jac(1), rtol=1e-6, atol=1e-9)
+
+    def test_partial_decay_differs_from_both_ends(self):
+        damped = self._jac(NO_TRUNCATION_DAYS, 0.5)
+        self.assertFalse(np.allclose(damped[0], self._jac(1)[0]))
+        self.assertFalse(np.allclose(damped[0],
+                                     self._jac(NO_TRUNCATION_DAYS)[0]))
 
 
 if __name__ == "__main__":
