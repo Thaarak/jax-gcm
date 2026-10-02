@@ -2,7 +2,7 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19).*
 
 ---
 
@@ -1022,9 +1022,12 @@ depends on it.
     claim is narrower: exact gradients with only the atmosphere cut, the first direct test against
     brute force, and use for designing interventions (logged as Amendment 9 revision 0.1).
 
-**What Step 0 still needs from a person:** approval to run `run_campaign_step0_exp1.sh` on the GPU
-machine (it stops and restarts the vLLM container exactly like every earlier campaign), and posting
-Amendment 9 (with revisions 0.1 to 0.4) to OSF with its commit hash.
+**Status (2026-10-01):**
+- *The GPU run:* approved and started at 16:45 PDT on the GPU machine, an ASUS GX10.
+- *OSF:* Amendment 9 (with revisions 0.1 to 0.4) went up at 18:42–18:44 PDT: project
+  https://osf.io/pqabf/ and registration https://osf.io/2bs8p/. That was 54 minutes after Experiment
+  1 started, so the posting came late. The commit was already public on GitHub before the run began,
+  and the deviation is logged in `PREREGISTRATION.md`.
 
 ## Experiment 1 — does the snipped gradient match the truth?
 
@@ -1178,8 +1181,11 @@ describes them, apart from three small changes made before anything runs (steps 
    (about 3.5 GPU-hours). The gradient side gets the matching maps from one forward pass per window
    (about 1.5 GPU-hours), because checking the planner's map-shaped objective needs both sides, and
    the forward pass is how the planner itself is meant to compute its gradient.
-4. **Post the rules publicly:** post Amendment 9 with its revisions (0.1 to 0.4, all written) and its
-   commit hash to OSF before the GPU run, because an outside timestamp is what makes "decided before
+4. **Post the rules publicly:** *done 2026-10-01, but late.* Amendment 9 with revisions 0.1 to 0.4
+   is on OSF (project https://osf.io/pqabf/, registration https://osf.io/2bs8p/), posted 54 minutes
+   after Experiment 1 started instead of before the GPU run. The commit was public on GitHub before
+   the run, and the deviation is logged in `PREREGISTRATION.md`. Revision 1 should be posted before
+   any Experiment-2 or Experiment-3 run, because an outside timestamp is what makes "decided before
    the data" believable to a reviewer.
 5. **Read the two blocked papers:** *done 2026-09-29.* Both papers support the premise. Sugiura et al.
    turned out to be the closest precedent, so the novelty claim was narrowed and Experiment 1 gained a
@@ -1437,3 +1443,56 @@ following two to four weeks, depending on the budget; a preprint roughly two mon
 - **`run_generate_macro_ics.py`** — starting states from 16 genuinely different ocean states, in five disjoint roles (training on the even-numbered states, evaluation on the odd-numbered ones; revision 0.4).
 - **`run_campaign_step0_exp1.sh`** — the gated GPU script for the Q-flux re-settle, the macro starting states and Experiment 1 (~14 GPU-h).
 - **`jcm/mcb/qflux.py`** / **`run_qflux_base_climate.py`** — the ocean class with a monthly Q-flux, how the Q-flux is measured, and the settling run with its pre-written check (Amendment 9 revision 0.2), plus the one-step correction (revision 0.3). The Q-flux in use is `mcb_experiments/qflux/qflux_monthly_t30_v2.nc`; how it was derived is in `qflux_monthly_t30_v2_correction.json`, and its passing check is in `attempt2/`. The first attempt's file and summaries stay next to it as the record.
+
+---
+
+# Part 19 — What could actually be published: every idea, how finished it is, and what's left
+
+*Added 2026-10-01.* The project has produced a lot of results, plus a lot of things that failed or
+were taken apart. This part sorts all of it into **ideas that could become published research**,
+says how finished each one is, and lists what's still needed to finish it. Think of each idea as an
+**ingredient**: most aren't a paper on their own, but a few of them combined make a full one.
+
+## The chart
+
+| # | The idea (simple version) | What we already have | What's missing to finish it | How finished? | How interesting to others? |
+|---|---|---|---|---|---|
+| **1** | **Gradients that stay useful for months.** Cut the gradient's path through the chaotic weather every few days, keep its path through the slow ocean (Part 17). | Idea, setup and the Q-flux ocean fix all done. Literature search found only one older, rougher version (Sugiura 2008). | **Run Experiment 1** (~14 GPU-hours): check the new gradients against the brute-force true answer. Everything else depends on this. | Set up, not run | **High** — could be the main result of a paper |
+| **2** | **Gradients can design a good brightening map.** | A map that hits the target (Tier 1), but it was picked by luck after step 1, not designed (16.2). | **Redo the design properly** (Experiment 2): score it on cooling, average over several starting climates, compare against a plain "same brightening everywhere" map. Dubey et al. already did something similar, so it needs our responding ocean to stand out. | Needs redoing | **Medium** — best as one piece of #1 |
+| **3** | **Copying works, training through the simulation doesn't.** The AI got all its skill from copying the classical controller, never from gradient training (Parts 9–10). | Strong results, repeated 5 times. Dubey's numbers (gradients break down after ~2 weeks) explain why. | **Untangle the three possible causes:** 60-day runs (too long), an output map of ~1.25 million numbers (too big), only 40 training steps (too few). Test a few-knob controller, short training windows, and a trial-and-error (no-gradient) method at the same cost. | Result done, explanation missing | **High** — especially for AI/machine-learning readers |
+| **4** | **Plan two weeks ahead, re-plan, and let the AI copy the planner** (Dubey-style planning plus our copying trick; Part 18). | Fully planned (Experiment 3). | **Everything:** build the planner, run it, train the student AI. The most expensive item (~20–170 GPU-hours). Test whether it still works when the planner's assumed spraying strength is wrong. | Just an idea | **High** — and a natural joint project with the Dubey group |
+| **5** | **The "weather noise floor":** how much random wobble there is in experiments with a differentiable climate model, and how to measure through it (Parts 7–8). | Measured noise (~12–17 mK per 60-day run), the "fake zero noise" trap, and the fixes (averaging 8 runs, twin comparison runs, proper statistics). | **Mostly writing.** Show it holds at other run lengths. Frame it as advice for experiments in differentiable climate models, since climate scientists already know weather is noisy. | Mostly done | **Medium** — very useful, not flashy |
+| **6** | **The "rigged experiment" catalogue:** five times a test's answer was decided by its design before it ran. | All five documented: feedback that could never win (Part 7), the warm-only El Niño win (Part 13), the untuned knob (Part 14), CO2 cancelling out (Part 15), the El Niño inside the sensor (16.3). | **Writing only.** Turn it into a checklist other researchers can use. | Done | **Medium** — pairs well with #5 |
+| **7** | **Feedback beats a fixed plan when the spraying strength is hidden** (Tier 2). | Classical controller halves the error, repeated 3 times, strong statistics. | **A realistic sensor** (no perfect twin Earth). **A bigger uncertainty range** (models disagree ~20-fold, not 0.6–1.4×). Different ocean states and seasons. **Rename the controller** ("adaptive", not "PI"). Note "feedback beats a fixed plan" is already known (Kravitz 2014, Lee 2025). | Strong but narrow | **Low on its own** — a solid supporting result |
+| **8** | **Feedback cancels most of an El Niño, without needing to watch it** (Parts 13–15). | 85% (steady) and about two-thirds (growing) cancelled, held up on new climates. "Watching El Niño adds nothing" held twice. | **Fix the built-in part:** take the El Niño patch out of what the controller watches and how it's scored, and use a realistic sensor (Experiment 7 in 16.4, ~3–6 GPU-hours). Ideally test with a real El Niño, not a fake patch. | Done, with a known flaw | **Medium** — possibly the first feedback loop against El Niño-style swings |
+| **9** | **Real MCB: brighten the right clouds** (low stratocumulus instead of storm clouds). | Code understood: the brightening is added to the main/storm cloud term (`shortwave_radiation.py:82`); the stratocumulus term (line 85) is untouched. The change is small, and the Q-flux ocean is now realistic enough for these clouds to form. | **Map where the model's stratocumulus forms** and compare with satellite maps; add a switch (storm / stratocumulus / both); recalibrate; re-run the key results. If it works, the MCB name can come back. | Just an idea | **High** — turns a methods paper into an MCB paper |
+| **10** | **"Spread out vs. turn up":** when spraying is weak, brighten *more area* instead of just brightening harder. | A hint only (p = 0.053, just short of significant; Tier 2b). Lee et al. use this same lever. | **Start runs in different seasons** with a fairly re-tuned fixed map for each, and a controller that can move where it sprays. | A hint | **Medium** |
+| **11** | **The Q-flux ocean fix for JAX-GCM** (Part 17, Step 0). | Done: ocean went from 3.8 K too cold to 0.26 K off. | **Clean it up and share it** with the model's developers (a code contribution). Too small for a paper alone. | Done | **Low as a paper, high as a contribution** |
+| **12** | **Rainfall side effects (Amazon/Sahel)** (Part 12). | "No detectable harm", plus a measured rain noise of about ±3 mm/day. | **A model that can actually create far-away rain changes** (ocean currents), plus longer averages and different seasons. | Weak | **Low for now** — keep as a paragraph |
+
+**Not research (dead ends, but keep the lessons):** the original Stage 1–5 results (broken by bugs,
+Part 4), the CO2 experiment (cancels out by design; it becomes an example for #6), and PM2.5/aerosols
+(the model has no particles).
+
+## How the ingredients combine into papers
+
+| Paper | Ingredients | One-line pitch | What has to happen first |
+|---|---|---|---|
+| **Paper A (main)** | **#1 + #2 + #3** (+ #4 if budget allows) | "Gradients through a coupled climate model stay useful for months if you cut the chaotic weather out, and here's what that does for designing and training controllers." | Run Experiment 1. If it fails, it's still a short paper: "a map of when you can trust gradients." |
+| **Paper B (methods)** | **#5 + #6 + #7 + #8** | "How to run control experiments in a chaotic differentiable climate model without fooling yourself, with worked examples." | Mostly writing, plus Experiment 7 (the realistic sensor) to fix the El Niño flaw. |
+| **Paper C (later, MCB proper)** | **#9 + #10** (+ a better ocean, + #12) | "Feedback-controlled brightening of low marine clouds in a differentiable model." | The stratocumulus switch, different seasons and ocean states. A follow-up after A and B. |
+
+## If you only remember three things
+
+1. **The most finished work is about *method*:** the noise floor, the rigged-experiment catalogue,
+   and feedback versus fixed plans. That's Paper B, and it mostly needs writing.
+2. **The most exciting work hasn't run yet:** the months-long gradients (#1). One ~14 GPU-hour
+   experiment decides whether Paper A exists.
+3. **Getting the MCB name back** depends on #9 (brightening the right clouds), a fairly cheap fix
+   worth doing after Experiment 1.
+
+> **New terms:** *Ingredient vs. paper* = a single result (ingredient) is rarely enough to publish;
+> a paper bundles several around one clear claim. *Stratocumulus* = the low, flat, gray cloud sheets
+> over cold ocean that real MCB targets (Part 1). *Adaptive controller* = a controller that estimates
+> an unknown quantity (here, how strongly the spraying works) and adjusts for it; the correct name for
+> what earlier parts called "PI" (16.3).

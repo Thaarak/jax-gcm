@@ -1249,22 +1249,3 @@ revision 0.1 left open. No Step-0 or Experiment-1 data exist, and nothing has ru
   14 GPU-h.
 
 **Posting.** The OSF posting includes revisions 0.1-0.4 and the commit that contains them.
-
-**Amendment 9 — OSF posting (logged 2026-10-01).** Amendment 9 with revisions 0.1-0.4 was posted to
-OSF on 2026-10-01:
-
-* the public project https://osf.io/pqabf/, with files uploaded at 18:42 PDT whose SHA-256 match commit
-  512c85dc;
-* the registration https://osf.io/2bs8p/, registered at 18:44 PDT and pending the admin's approval at
-  the time of writing (OSF then makes it public).
-
-**Deviation.** The amendment required this posting before Experiment 1 ran; it came 54 minutes after
-Experiment 1 started (17:48 PDT). The registered text and code were public on GitHub, in commit
-512c85dc, from about 16:30 PDT, before the campaign began.
-
-**What had been viewed before the posting:**
-* the GPU re-settle's registered check and the Step-0 diagnostics (both reported, not gated);
-* for the first Experiment-1 IC only, revision 0.4's forward-versus-backward check and the size of
-  the registered gradient estimates.
-
-No truth estimate, metric or outcome had been computed or viewed.
