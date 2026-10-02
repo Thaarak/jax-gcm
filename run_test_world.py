@@ -16,10 +16,12 @@ MCB_PROJECT_REPORT.md Part 18 steps 10-12 (``jcm/mcb/test_world.py`` and
     is given. Their references are built only after revision 1 of
     Amendment 9 is frozen, so no design choice can be informed by them.
 
-``episode``
-    Run one controlled episode from one IC with a fixed band setting and the
-    warming, and score it against that IC's references over
-    ``[--score-start-day, --score-end-day)``. The controlled side is averaged
+``episode`` / ``plan``
+    Run one controlled episode from one IC with the warming, either with a
+    fixed band setting (``episode``) or with the receding-horizon planner of
+    ``jcm.mcb.planner`` (``plan``: Part 18 steps 13-15, presets
+    ``snipped60``, ``short14``, ``bptt60``). Score it against that IC's
+    references over ``[--score-start-day, --score-end-day)``. The controlled side is averaged
     over as many members as the references, started from the same member
     seeds, so both sides carry the same weather noise. The scores are:
     - the gains of SST (ocean), land temperature (land), and rainfall and
@@ -42,6 +44,7 @@ Examples (CPU smoke; GPU runs use the macro ICs of Step 0):
 """
 
 import argparse
+import dataclasses
 import json
 import sys
 import time
@@ -56,6 +59,8 @@ import numpy as np
 from jcm.mcb.band_basis import gaussian_band_patterns
 from jcm.mcb.coupled_controller import create_coupled_step_fn
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
+from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
+from jcm.mcb.planner import OPTIMIZERS, PRESETS, Planner, PlannerConfig
 from jcm.mcb.scores import (
     PATTERN_ALPHA,
     PATTERN_BETA,
@@ -121,35 +126,56 @@ def parse_args(argv=None):
                    help="Allow *_eval roles (only after revision 1).")
     warming_args(r)
 
-    e = sub.add_parser("episode", help="one scored controlled episode")
-    e.add_argument("--ic-dir", required=True)
-    e.add_argument("--ic-position", type=int, default=0,
-                   help="Position of the IC in the manifest's list.")
-    e.add_argument("--references", required=True,
-                   help="That IC's ic<index>_references.npz.")
+    def run_args(sp):
+        sp.add_argument("--ic-dir", required=True)
+        sp.add_argument("--ic-position", type=int, default=0,
+                        help="Position of the IC in the manifest's list.")
+        sp.add_argument("--references", required=True,
+                        help="That IC's ic<index>_references.npz.")
+        sp.add_argument("--segments", type=int, required=True)
+        sp.add_argument("--segment-days", type=int, default=14,
+                        help="Days between decisions (re-plans).")
+        sp.add_argument("--efficacy", type=float, default=1.0,
+                        help="True strength of the spraying (1 = nominal).")
+        sp.add_argument("--members", type=int, default=None,
+                        help="Members to run and average before scoring "
+                             "(default: as many as the references, from the "
+                             "same member seeds, so both sides carry the "
+                             "same weather noise).")
+        sp.add_argument("--score-start-day", type=int, default=0)
+        sp.add_argument("--score-end-day", type=int, default=None,
+                        help="Default: the end of the episode.")
+        sp.add_argument("--alpha", type=float, default=PATTERN_ALPHA)
+        sp.add_argument("--beta", type=float, default=PATTERN_BETA)
+        sp.add_argument("--mu", type=float, default=0.0)
+        sp.add_argument("--lam", type=float, default=0.0)
+        sp.add_argument("--output", required=True, help="JSON summary path.")
+        sp.add_argument("--save-fields", action="store_true",
+                        help="Also write the daily fields next to the JSON.")
+        warming_args(sp)
+
+    e = sub.add_parser("episode", help="one scored episode, fixed design")
+    run_args(e)
     amp = e.add_mutually_exclusive_group(required=True)
     amp.add_argument("--amplitudes", type=float, nargs=K_BANDS)
     amp.add_argument("--uniform", type=float)
-    e.add_argument("--segments", type=int, required=True)
-    e.add_argument("--segment-days", type=int, default=14)
-    e.add_argument("--efficacy", type=float, default=1.0,
-                   help="True strength of the spraying (1 = nominal).")
-    e.add_argument("--members", type=int, default=None,
-                   help="Members to run and average before scoring "
-                        "(default: as many as the references, from the same "
-                        "member seeds, so both sides carry the same weather "
-                        "noise).")
-    e.add_argument("--score-start-day", type=int, default=0)
-    e.add_argument("--score-end-day", type=int, default=None,
-                   help="Default: the end of the episode.")
-    e.add_argument("--alpha", type=float, default=PATTERN_ALPHA)
-    e.add_argument("--beta", type=float, default=PATTERN_BETA)
-    e.add_argument("--mu", type=float, default=0.0)
-    e.add_argument("--lam", type=float, default=0.0)
-    e.add_argument("--output", required=True, help="JSON summary path.")
-    e.add_argument("--save-fields", action="store_true",
-                   help="Also write the daily fields next to the JSON.")
-    warming_args(e)
+
+    pl = sub.add_parser("plan", help="one scored episode, driven by the "
+                                     "receding-horizon planner")
+    run_args(pl)
+    pl.add_argument("--preset", default="snipped60", choices=sorted(PRESETS),
+                    help="snipped60 (60-day look-ahead, W* = 14), short14 "
+                         "(Dubey et al.'s 14 days, exact BPTT), bptt60.")
+    pl.add_argument("--lookahead-days", type=int, default=None)
+    pl.add_argument("--window-days", type=int, default=None,
+                    help="Atmosphere snip in days; 0 = none (full BPTT).")
+    pl.add_argument("--copies", type=int, default=None)
+    pl.add_argument("--optimizer", choices=OPTIMIZERS, default=None)
+    pl.add_argument("--iterations", type=int, default=None)
+    pl.add_argument("--learning-rate", type=float, default=None)
+    pl.add_argument("--planner-efficacy", type=float, default=None,
+                    help="The spraying strength the planner believes in "
+                         "(default: the true one, as in Experiment 3a).")
     return p.parse_args(argv)
 
 
@@ -171,14 +197,20 @@ def validate_args(args):
         if not 0 <= args.score_start_day < end <= n_days:
             raise SystemExit("need 0 <= --score-start-day < "
                              "--score-end-day <= segments * segment-days")
-        a = episode_amplitudes(args)
-        if np.any(a < 0.0) or np.any(a > BRIGHTENING_CAP):
-            raise SystemExit(f"band amplitudes must lie in [0, "
-                             f"{BRIGHTENING_CAP}]")
         if args.efficacy < 0.0:
             raise SystemExit("--efficacy must be >= 0")
         if args.members is not None and args.members < 1:
             raise SystemExit("--members must be >= 1")
+        if args.stage == "episode":
+            a = episode_amplitudes(args)
+            if np.any(a < 0.0) or np.any(a > BRIGHTENING_CAP):
+                raise SystemExit(f"band amplitudes must lie in [0, "
+                                 f"{BRIGHTENING_CAP}]")
+        else:
+            planner_config(args)
+            if args.planner_efficacy is not None and \
+                    args.planner_efficacy <= 0.0:
+                raise SystemExit("--planner-efficacy must be > 0")
 
 
 def episode_amplitudes(args) -> np.ndarray:
@@ -284,48 +316,74 @@ def stage_references(args):
     print(f"wrote {out / 'references_manifest.json'} ({len(ics)} ICs)")
 
 
-def stage_episode(args):
+def load_references(args, days_needed: int):
+    """Load one IC's references and check they fit this run."""
     ref_path = Path(args.references)
     with open(ref_path.parent / "references_manifest.json") as f:
         ref_meta = json.load(f)
     check_warming_matches(ref_meta["config"], args)
     refs = dict(np.load(ref_path, allow_pickle=False))
-    n_days = args.segments * args.segment_days
-    if refs["normal_sst"].shape[0] < n_days:
+    if refs["normal_sst"].shape[0] < days_needed:
         raise SystemExit(f"references cover {refs['normal_sst'].shape[0]} "
-                         f"days, the episode needs {n_days}")
+                         f"days, this run needs {days_needed}")
     if "warmed_sst" not in refs:
         raise SystemExit("references have no warmed run (built with "
                          "--no-warmed)")
-    m = build_model()
+    return ref_path, ref_meta, refs
+
+
+def load_ic(m, args, ref_path):
+    """Load the IC at ``--ic-position`` and check its references match it."""
     _, ics = load_manifest_ics(args.ic_dir, "all", None, m["template"])
     entry, carry = ics[args.ic_position]
     expected = f"ic{entry['index']:04d}_references.npz"
     if ref_path.name != expected:
         raise SystemExit(f"IC {entry['index']} needs {expected}, got "
                          f"{ref_path.name}")
-    # Fair scoring: the controlled side is averaged over as many members as
-    # the references, from the same seeds, so both carry the same noise.
-    rc = ref_meta["config"]
-    n_members = rc["members"] if args.members is None else args.members
-    a = episode_amplitudes(args)
+    return entry, carry
+
+
+def run_members(m, args, entry, carry, ref_config, make_policy):
+    """Run the controlled episode for every member and average the fields.
+
+    Fair scoring: as many members as the references by default, started from
+    the same member seeds, so both sides carry the same weather noise.
+    ``make_policy(member, member_carry, warming)`` returns each member's
+    policy. Returns the mean daily fields, each member's ``(n_segments, K)``
+    settings, the member seeds and the policies.
+    """
+    n_members = (ref_config["members"] if args.members is None
+                 else args.members)
     seg = make_segment_fn(m["step_fn"], m["patterns"], args.segment_days)
-    start = args.score_start_day
-    end = n_days if args.score_end_day is None else args.score_end_day
-    t0 = time.time()
-    seeds, runs = [], []
+    runs, schedules, seeds, policies = [], [], [], []
     for member in range(n_members):
-        seed = member_seed(rc["member_seed0"], entry["index"], member)
-        c = carry if seed is None else perturb_member(carry, seed,
-                                                      rc["member_amp"])
+        seed = member_seed(ref_config["member_seed0"], entry["index"], member)
+        c = carry if seed is None else perturb_member(
+            carry, seed, ref_config["member_amp"])
         warming = make_warming(c, m["ocean"], args.warming_step_wm2,
                                args.warming_ramp_wm2_per_day)
-        ep = run_episode(c, seg, constant_policy(a), args.segments,
-                         args.segment_days, K_BANDS, warming, args.efficacy)
+        policy = make_policy(member, c, warming)
+        ep = run_episode(c, seg, policy, args.segments, args.segment_days,
+                         K_BANDS, warming, args.efficacy)
         runs.append(ep.fields)
+        schedules.append(ep.amplitudes)
         seeds.append(seed)
-    mean_fields = {k: np.mean([r[k] for r in runs], axis=0)
-                   for k in runs[0]}
+        policies.append(policy)
+    mean_fields = {k: np.mean([r[k] for r in runs], axis=0) for k in runs[0]}
+    return mean_fields, schedules, seeds, policies
+
+
+def score_runs(m, args, refs, mean_fields, schedules):
+    """Score the member-mean fields against the references.
+
+    Returns the gains, the effort (mean over members), and the objective's
+    terms. The bias and variance terms use the window-mean error map. The
+    amplitude penalty uses the window-mean settings. The movement penalty is
+    the mean over segment changes, so it is zero for a fixed design.
+    """
+    n_days = args.segments * args.segment_days
+    start = args.score_start_day
+    end = n_days if args.score_end_day is None else args.score_end_day
     ctrl = time_means(mean_fields, start, end)
     tgt = time_means({k: refs[f"normal_{k}"][:n_days] for k in FIELD_NAMES},
                      start, end)
@@ -335,48 +393,130 @@ def stage_episode(args):
                domain_weights(m["lats"], m["ocean"], m["land"]).items()}
     unit = np.asarray(gaussian_band_patterns(m["lats"],
                                              np.ones_like(m["ocean"])))
-    daily_a = np.repeat(ep.amplitudes, args.segment_days, axis=0)[start:end]
-    # A fixed design never moves, so the movement penalty is zero; the
-    # uncontrolled run applies no brightening at all.
-    terms = {
-        name: objective_terms(jnp.asarray(fields["sst"] - tgt["sst"]),
-                              jnp.asarray(weights["ocean"]),
-                              jnp.asarray(amps), jnp.asarray(amps),
-                              args.alpha, args.beta, args.mu, args.lam)
-        for name, fields, amps in (("controlled", ctrl, a),
-                                   ("uncontrolled", warm, np.zeros_like(a)))}
-    summary = {
-        "stage": "episode", "config": vars(args), "ic": entry,
-        "members": n_members, "member_seeds": seeds,
-        "reference_members": rc["members"], "amplitudes": a.tolist(),
-        "score_window_days": [start, end],
-        "gains": restoration_scores(ctrl, warm, tgt, weights),
-        "effort": effort(daily_a, unit, weights["global"]),
-        "objective": terms,
-        "references": str(ref_path), "git": git_provenance(),
-        "command": " ".join(sys.argv), "seconds": round(time.time() - t0, 1),
-    }
+    daily = [np.repeat(s, args.segment_days, axis=0)[start:end]
+             for s in schedules]
+    mean_a = np.mean([d.mean(axis=0) for d in daily], axis=0)
+    movement = float(np.mean([args.lam * np.mean(np.sum(np.diff(s, axis=0)
+                                                        ** 2, axis=1))
+                              if len(s) > 1 else 0.0 for s in schedules]))
+    terms = {}
+    for name, fields, amps, move in (("controlled", ctrl, mean_a, movement),
+                                     ("uncontrolled", warm,
+                                      np.zeros_like(mean_a), 0.0)):
+        t = objective_terms(jnp.asarray(fields["sst"] - tgt["sst"]),
+                            jnp.asarray(weights["ocean"]), jnp.asarray(amps),
+                            jnp.asarray(amps), args.alpha, args.beta,
+                            args.mu, 0.0)
+        t["movement"] = move
+        t["total"] = (t["bias_sq"] + t["variance"] + t["amplitude"]
+                      + t["movement"])
+        terms[name] = t
+    return {"score_window_days": [start, end],
+            "gains": restoration_scores(ctrl, warm, tgt, weights),
+            "effort": float(np.mean([effort(d, unit, weights["global"])
+                                     for d in daily])),
+            "objective": terms}
+
+
+def write_summary(args, summary, mean_fields, schedules):
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as f:
         json.dump(summary, f, indent=2)
     if args.save_fields:
         np.savez_compressed(out.with_suffix(".fields.npz"),
-                            amplitudes=ep.amplitudes, **mean_fields)
+                            amplitudes=np.asarray(schedules), **mean_fields)
+    t = summary["objective"]
     print("gains:", {k: round(v, 3) for k, v in summary["gains"].items()})
     print(f"effort {summary['effort']:.4f} | objective controlled "
-          f"{terms['controlled']['total']:.4g} vs uncontrolled "
-          f"{terms['uncontrolled']['total']:.4g} -> {out}")
+          f"{t['controlled']['total']:.4g} vs uncontrolled "
+          f"{t['uncontrolled']['total']:.4g} -> {out}")
+
+
+def stage_episode(args):
+    n_days = args.segments * args.segment_days
+    ref_path, ref_meta, refs = load_references(args, n_days)
+    m = build_model()
+    entry, carry = load_ic(m, args, ref_path)
+    a = episode_amplitudes(args)
+    t0 = time.time()
+    mean_fields, schedules, seeds, _ = run_members(
+        m, args, entry, carry, ref_meta["config"],
+        lambda member, c, warming: constant_policy(a))
+    summary = {"stage": "episode", "config": vars(args), "ic": entry,
+               "members": len(seeds), "member_seeds": seeds,
+               "reference_members": ref_meta["config"]["members"],
+               "amplitudes": a.tolist(),
+               **score_runs(m, args, refs, mean_fields, schedules),
+               "references": str(ref_path), "git": git_provenance(),
+               "command": " ".join(sys.argv),
+               "seconds": round(time.time() - t0, 1)}
+    write_summary(args, summary, mean_fields, schedules)
+
+
+def planner_config(args) -> PlannerConfig:
+    """Return the preset with any command-line overrides, validated."""
+    overrides = {"alpha": args.alpha, "beta": args.beta, "mu": args.mu,
+                 "lam": args.lam}
+    for name in ("lookahead_days", "copies", "optimizer", "iterations",
+                 "learning_rate"):
+        if getattr(args, name) is not None:
+            overrides[name] = getattr(args, name)
+    if args.window_days is not None:
+        overrides["window_days"] = (NO_TRUNCATION_DAYS if args.window_days == 0
+                                    else args.window_days)
+    cfg = dataclasses.replace(PRESETS[args.preset], **overrides)
+    try:
+        cfg.validate()
+    except ValueError as err:
+        raise SystemExit(f"planner: {err}") from err
+    return cfg
+
+
+def stage_plan(args):
+    cfg = planner_config(args)
+    n_days = args.segments * args.segment_days
+    last_lookahead_end = (args.segments - 1) * args.segment_days \
+        + cfg.lookahead_days
+    ref_path, ref_meta, refs = load_references(
+        args, max(n_days, last_lookahead_end))
+    m = build_model()
+    entry, carry = load_ic(m, args, ref_path)
+    ocean_w = domain_weights(m["lats"], m["ocean"], m["land"])["ocean"]
+    belief = (args.efficacy if args.planner_efficacy is None
+              else args.planner_efficacy)
+
+    def make_policy(member, c, warming):
+        # A perfect-model planner (Experiment 3a): it knows the warming; its
+        # belief about the spraying strength is --planner-efficacy.
+        return Planner(m["step_fn"], m["patterns"], ocean_w,
+                       refs["normal_sst"], c["ocn"]["forcing"].q_flux,
+                       warming, belief, cfg,
+                       seed_offset=100 * entry["index"] + member)
+
+    t0 = time.time()
+    mean_fields, schedules, seeds, planners = run_members(
+        m, args, entry, carry, ref_meta["config"], make_policy)
+    summary = {"stage": "plan", "config": vars(args),
+               "planner": dataclasses.asdict(cfg),
+               "planner_efficacy": belief, "ic": entry,
+               "members": len(seeds), "member_seeds": seeds,
+               "reference_members": ref_meta["config"]["members"],
+               "schedules": [s.tolist() for s in schedules],
+               **score_runs(m, args, refs, mean_fields, schedules),
+               "planner_logs": [p.log for p in planners],
+               "references": str(ref_path), "git": git_provenance(),
+               "command": " ".join(sys.argv),
+               "seconds": round(time.time() - t0, 1)}
+    write_summary(args, summary, mean_fields, schedules)
 
 
 def main(argv=None):
     args = parse_args(argv)
     validate_args(args)
     print(f"JAX devices: {jax.devices()}")
-    if args.stage == "references":
-        stage_references(args)
-    else:
-        stage_episode(args)
+    {"references": stage_references, "episode": stage_episode,
+     "plan": stage_plan}[args.stage](args)
 
 
 if __name__ == "__main__":

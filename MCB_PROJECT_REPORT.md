@@ -2,7 +2,7 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16).*
 
 ---
 
@@ -1252,30 +1252,38 @@ describes them, apart from three small changes made before anything runs (steps 
   - how many weather samples to use;
   - the effort and change penalty weights;
   - whether rainfall and evaporation are scored over land, the globe, or both.
-13. **The planner:** every 14 days, starting from wherever the simulated climate actually is, choose
-    the five band settings that minimize the objective over a 60-day look-ahead using the gradient
-    Experiment 1 validated (averaged over three slightly nudged copies), apply them for 14 days, then
-    re-plan, because this is the new method: short, trustworthy steps that still see the ocean's
-    months-long memory.
-14. **Planner safeguards:** keep every band setting inside its allowed range through a smooth
-    transformation, log the gradient's noise-to-signal ratio at every re-plan, and always apply the
-    optimizer's last step rather than its best-looking one, because these guard against the three
-    failures behind the old "optimized" pattern: knobs stuck at a limit with no gradient, a gradient
-    that faded to nothing unnoticed, and keeping the luckiest of many noisy tries (Part 16.2).
-15. **Two comparison planners:** build the same planner with a 14-day look-ahead (Dubey et al.'s
-    setting) and with a 60-day look-ahead using ordinary backpropagation, because together with step
-    13 they show the dilemma and its fix: a short look-ahead is short-sighted, a long one without
-    snipping is noisy, and snipping is meant to give the long view without the noise.
+13. **The planner:** *built 2026-10-02* (`jcm/mcb/planner.py`; run it with `run_test_world.py
+    plan`). Every 14 days, starting from wherever the simulated climate actually is, choose the five
+    band settings that minimize the objective over a 60-day look-ahead using the gradient Experiment
+    1 validated (averaged over three slightly nudged copies), apply them for 14 days, then re-plan,
+    because this is the new method: short, trustworthy steps that still see the ocean's
+    months-long memory. Both optimizers in the settings table are built: Dubey et al.'s Adam steps,
+    and Gauss–Newton steps from the forward pass, which see the whole map's response at once.
+14. **Planner safeguards:** *built 2026-10-02.* Keep every band setting inside its allowed range
+    through a smooth transformation, log the gradient's noise-to-signal ratio at every re-plan, and
+    always apply the optimizer's last step rather than its best-looking one, because these guard
+    against the three failures behind the old "optimized" pattern: knobs stuck at a limit with no
+    gradient, a gradient that faded to nothing unnoticed, and keeping the luckiest of many noisy tries
+    (Part 16.2).
+15. **Two comparison planners:** *built 2026-10-02* as presets of the same planner (`short14`,
+    `bptt60`; the main one is `snipped60`). Build the same planner with a 14-day look-ahead (Dubey
+    et al.'s setting) and with a 60-day look-ahead using ordinary backpropagation, because together
+    with step 13 they show the dilemma and its fix: a short look-ahead is short-sighted, a long one
+    without snipping is noisy, and snipping is meant to give the long view without the noise.
 16. **Test the planner:** check that it finds the known best answer on a toy model, and that its
     forward-mode and backward-mode gradients agree on the real model, because a planner bug would
     silently corrupt every later result. Experiment 1 already logs this agreement on the real model
-    for every window (revision 0.4), so this step mainly tests the planner's own code.
+    for every window (revision 0.4), so this step mainly tests the planner's own code. *Done on
+    2026-10-02:*
+    - on a stand-in model whose best answer is known exactly, one Gauss–Newton step lands on it and
+      Adam converges to it;
+    - one re-plan also runs on the real model with both optimizers.
 17. **Measure what planning costs:** time one re-plan on the GPU for each candidate setting (copies
     run side by side; a forward-mode gradient with two or three Gauss–Newton steps versus Dubey et
     al.'s 15 Adam steps; a 14- versus a 60-day look-ahead), because at Dubey et al.'s settings a year of
     60-day planning could take roughly 20–50 GPU-hours, so the budget in the rules has to come from
     measured costs, not guesses. Experiment 1's forward-pass maps already give the GPU time of one
-    120-day forward-mode gradient.
+    120-day forward-mode gradient, and the planner logs the time of every re-plan.
 18. **The fixed-pattern ladder:** build Dubey et al.'s four fixed opponents (uniform brightening tuned
     to cancel the average warming, uniform brightening at the planner's effort, the planner's own
     average pattern held constant, and the classical linear-response design), because each rung
@@ -1472,6 +1480,7 @@ following two to four weeks, depending on the budget; a preprint roughly two mon
 - **`run_gradient_fidelity.py`** / **`analyze_gradient_fidelity.py`** — Experiment 1's driver and its pre-committed analysis (every threshold registered in Amendment 9).
 - **`run_generate_macro_ics.py`** — starting states from 16 genuinely different ocean states, in five disjoint roles (training on the even-numbered states, evaluation on the odd-numbered ones; revision 0.4).
 - **`run_campaign_step0_exp1.sh`** — the gated GPU script for the Q-flux re-settle, the macro starting states and Experiment 1 (~14 GPU-h).
+- **`jcm/mcb/planner.py`** — the receding-horizon planner of Part 18 steps 13–15: 14-day re-plans over a 60-day look-ahead with the 14-day snip, Adam or Gauss–Newton steps, three nudged copies, the safeguards, and the `snipped60` / `short14` / `bptt60` presets. `run_test_world.py plan` runs and scores it.
 - **`jcm/mcb/test_world.py`** / **`jcm/mcb/scores.py`** / **`run_test_world.py`** — the test world for Experiments 2 and 3 (Part 18 steps 10–12): warming in the controlled runs only, the normal-climate and warmed references, Dubey et al.'s objective, gain and effort, the episode runner every controller plugs into, and the planner's differentiable look-ahead objective.
 - **`jcm/mcb/qflux.py`** / **`run_qflux_base_climate.py`** — the ocean class with a monthly Q-flux, how the Q-flux is measured, and the settling run with its pre-written check (Amendment 9 revision 0.2), plus the one-step correction (revision 0.3). The Q-flux in use is `mcb_experiments/qflux/qflux_monthly_t30_v2.nc`; how it was derived is in `qflux_monthly_t30_v2_correction.json`, and its passing check is in `attempt2/`. The first attempt's file and summaries stay next to it as the record.
 

@@ -321,26 +321,25 @@ def reference_ensemble(carry: dict, segment_fn: Callable, num_days: int,
 
 # --- Step 12: the differentiable look-ahead objective ----------------------
 
-def make_lookahead_objective(step_fn: Callable, patterns, weights,
-                             num_days: int, alpha: float = PATTERN_ALPHA,
-                             beta: float = PATTERN_BETA, mu: float = 0.0,
-                             lam: float = 0.0) -> Callable:
-    """Return the map objective a planner minimizes over a ``num_days`` look-ahead.
+def make_lookahead_sst_fn(step_fn: Callable, patterns,
+                          num_days: int) -> Callable:
+    """Return the look-ahead's time-mean SST map as a function of the bands.
 
-    The returned function is
-    ``J(amplitudes, carry, target_sst_mean, previous, efficacy, q_base,
-    warming, window, atm_decay=None)``. The amplitudes are held for the whole
-    look-ahead, and the error map is the look-ahead's time-mean SST minus the
-    target's time-mean SST over the same days (the normal climate). The
-    atmosphere's derivatives are cut every ``window`` days counted from the
-    look-ahead's start, as in Experiment 1; ``NO_TRUNCATION_DAYS`` gives
-    ordinary backpropagation. Forward values do not depend on ``window``.
+    ``f(amplitudes, carry, efficacy, q_base, warming, window,
+    atm_decay=None)`` holds the amplitudes for ``num_days`` warmed coupled
+    days and returns the time-mean SST in kelvin relative to
+    ``MAP_REFERENCE_K``, shape ``(ix, il)``. The atmosphere's derivatives
+    are cut every ``window`` days counted from the look-ahead's start, as in
+    Experiment 1; ``NO_TRUNCATION_DAYS`` gives ordinary backpropagation.
+    Forward values do not depend on ``window``. Forward mode (``jax.jacfwd``)
+    gives the whole map's response to each band at once, which is what
+    Gauss-Newton planning uses.
     """
     if num_days < 1:
         raise ValueError("num_days must be >= 1")
 
-    def objective(amplitudes, carry, target_sst_mean, previous, efficacy,
-                  q_base, warming, window, atm_decay=None):
+    def mean_sst(amplitudes, carry, efficacy, q_base, warming, window,
+                 atm_decay=None):
         stepper = wrap_step_fn_with_warming(step_fn, q_base, warming)
         stepper = wrap_step_fn_with_atm_truncation(
             stepper, window, t0_seconds=carry["ocn"]["state"].sim_time,
@@ -355,7 +354,30 @@ def make_lookahead_objective(step_fn: Callable, patterns, weights,
 
         _, anomalies = lax.scan(jax.checkpoint(body), controlled,
                                 jnp.arange(num_days))
-        error = (jnp.mean(anomalies, axis=0)
+        return jnp.mean(anomalies, axis=0)
+
+    return mean_sst
+
+
+def make_lookahead_objective(step_fn: Callable, patterns, weights,
+                             num_days: int, alpha: float = PATTERN_ALPHA,
+                             beta: float = PATTERN_BETA, mu: float = 0.0,
+                             lam: float = 0.0) -> Callable:
+    """Return the map objective a planner minimizes over a ``num_days`` look-ahead.
+
+    The returned function is
+    ``J(amplitudes, carry, target_sst_mean, previous, efficacy, q_base,
+    warming, window, atm_decay=None)``. The amplitudes are held for the whole
+    look-ahead, and the error map is the look-ahead's time-mean SST
+    (``make_lookahead_sst_fn``) minus the target's time-mean SST over the same
+    days (the normal climate, in kelvin).
+    """
+    mean_sst = make_lookahead_sst_fn(step_fn, patterns, num_days)
+
+    def objective(amplitudes, carry, target_sst_mean, previous, efficacy,
+                  q_base, warming, window, atm_decay=None):
+        error = (mean_sst(amplitudes, carry, efficacy, q_base, warming,
+                          window, atm_decay)
                  - (target_sst_mean - MAP_REFERENCE_K))
         return segment_objective(error, weights, amplitudes, previous, alpha,
                                  beta, mu, lam)

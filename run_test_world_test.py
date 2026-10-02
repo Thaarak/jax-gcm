@@ -5,11 +5,13 @@ import unittest
 import numpy as np
 
 from jcm.mcb.test_world import BRIGHTENING_CAP
+from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
 from run_test_world import (
     check_role_allowed,
     check_warming_matches,
     episode_amplitudes,
     parse_args,
+    planner_config,
     validate_args,
 )
 
@@ -81,6 +83,36 @@ class EpisodeArgsTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             check_warming_matches(ref, self._args(
                 "--uniform", "0.05", "--warming-step-wm2", "2"))
+
+
+class PlanArgsTest(unittest.TestCase):
+    def _args(self, *extra):
+        return parse_args(["plan", "--ic-dir", "x", "--references", "r.npz",
+                           "--output", "o.json", "--segments", "3", *extra])
+
+    def test_default_is_the_snipped_60_day_planner(self):
+        args = self._args()
+        validate_args(args)
+        cfg = planner_config(args)
+        self.assertEqual((cfg.lookahead_days, cfg.window_days, cfg.copies,
+                          cfg.optimizer), (60, 14, 3, "adam"))
+
+    def test_presets_and_overrides(self):
+        cfg = planner_config(self._args("--preset", "short14"))
+        self.assertEqual((cfg.lookahead_days, cfg.window_days),
+                         (14, NO_TRUNCATION_DAYS))
+        cfg = planner_config(self._args("--window-days", "0", "--optimizer",
+                                        "gauss_newton", "--iterations", "3",
+                                        "--mu", "0.5"))
+        self.assertEqual((cfg.window_days, cfg.optimizer, cfg.iterations,
+                          cfg.mu), (NO_TRUNCATION_DAYS, "gauss_newton", 3,
+                                    0.5))
+
+    def test_rejects_bad_planner_settings(self):
+        for extra in (("--copies", "0"), ("--lookahead-days", "0"),
+                      ("--planner-efficacy", "0"), ("--learning-rate", "-1")):
+            with self.assertRaises(SystemExit, msg=str(extra)):
+                validate_args(self._args(*extra))
 
 
 if __name__ == "__main__":
