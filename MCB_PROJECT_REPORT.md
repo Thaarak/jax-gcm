@@ -2,7 +2,7 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12).*
 
 ---
 
@@ -1209,19 +1209,49 @@ describes them, apart from three small changes made before anything runs (steps 
 
 ### Phase C — build the new test world (code, in parallel with Phase B)
 
-10. **Warming only where we control:** add a steady extra heat input to the slab ocean, only in the
-    runs being controlled, using the same fixed-heating slot a Q-flux uses, because this warms the
-    ocean steadily the way greenhouse gases do, and unlike the CO2 knob (Part 15) it does not cancel
-    out of the comparison.
-11. **The normal-climate target:** for every starting state, average five runs with no warming and no
-    brightening into one smooth "normal climate" path, because controllers then steer toward, and are
-    judged against, the model's own normal climate while living with their own weather, which replaces
-    the perfect same-weather-twin sensor that Part 16 put first among its concerns.
-12. **A map-shaped objective and fair scores:** implement Dubey et al.'s pattern objective for ocean
-    temperature (the average error squared, plus half of the error map's variance, plus small
-    penalties on effort and on sudden changes) and their gain and effort scores, and apply the gain
-    also to land temperature, rainfall and evaporation, which the objective never sees, because a
-    map-shaped target forces genuinely spatial designs and out-of-objective scores catch side effects.
+10. **Warming only where we control:** *built 2026-10-01.* Add a steady extra heat input to the slab
+    ocean, only in the runs being controlled, using the same fixed-heating slot a Q-flux uses, because
+    this warms the ocean steadily the way greenhouse gases do, and unlike the CO2 knob (Part 15) it does
+    not cancel out of the comparison. The warming can be steady, growing, or both. On the real model,
+    zero warming changes nothing bit for bit, and 20 W/m² warms the ocean by the textbook amount.
+11. **The normal-climate target:** *built 2026-10-01.* For every starting state, average five runs
+    with no warming and no brightening into one smooth "normal climate" path, because controllers then
+    steer toward, and are judged against, the model's own normal climate while living with their own
+    weather, which replaces the perfect same-weather-twin sensor that Part 16 put first among its
+    concerns. The same code also builds the uncontrolled warmed run that the gain compares with.
+12. **A map-shaped objective and fair scores:** *built 2026-10-01.* Implement Dubey et al.'s pattern
+    objective for ocean temperature (the average error squared, plus half of the error map's variance,
+    plus small penalties on effort and on sudden changes) and their gain and effort scores, and apply
+    the gain also to land temperature, rainfall and evaporation, which the objective never sees,
+    because a map-shaped target forces genuinely spatial designs and out-of-objective scores catch side
+    effects. The objective can also be differentiated through the 14-day snip, ready for the planner.
+
+**The test world as built** (`jcm/mcb/test_world.py`, `jcm/mcb/scores.py`, `run_test_world.py`;
+2026-10-01):
+
+- *What it is.* Warming in the controlled runs only; the normal-climate and warmed references for each
+  starting state; Dubey et al.'s objective, gain and effort; and an "episode" runner that asks a
+  controller for its five band settings every few days. Fixed patterns, the feedback controller, the
+  planner and the student all plug into the same runner. A "hidden spraying strength" setting is
+  included for Experiment 3b.
+- *Checked:*
+  - 24 tests on a small stand-in model, and 4 on the real coupled model with the corrected Q-flux.
+  - Rainfall in the settled Step-0 climate averages 2.9–3.5 mm/day, close to Earth's, which
+    confirms the units.
+  - Our five bands reproduce Dubey et al.'s stated 0.925 area mean of the summed band profile.
+  - An end-to-end smoke run on a laptop worked.
+- *A fairness rule found while testing.* Scoring one weather sample against a five-sample average
+  made rainfall look about twice as damaged as it was, because the average had shed most of its
+  weather noise and the single sample hadn't. Each scored run is now averaged over as many weather
+  samples as the references, started from the same seeds.
+- *A guard.* The code refuses to build references for evaluation states unless told to, and they are
+  built only after revision 1 is frozen, so no design choice can be tuned on them.
+- *Left to the pilot (step 23) and revision 1:*
+  - how strong the warming is and whether it grows;
+  - run and scoring-window lengths;
+  - how many weather samples to use;
+  - the effort and change penalty weights;
+  - whether rainfall and evaporation are scored over land, the globe, or both.
 13. **The planner:** every 14 days, starting from wherever the simulated climate actually is, choose
     the five band settings that minimize the objective over a 60-day look-ahead using the gradient
     Experiment 1 validated (averaged over three slightly nudged copies), apply them for 14 days, then
@@ -1442,6 +1472,7 @@ following two to four weeks, depending on the budget; a preprint roughly two mon
 - **`run_gradient_fidelity.py`** / **`analyze_gradient_fidelity.py`** — Experiment 1's driver and its pre-committed analysis (every threshold registered in Amendment 9).
 - **`run_generate_macro_ics.py`** — starting states from 16 genuinely different ocean states, in five disjoint roles (training on the even-numbered states, evaluation on the odd-numbered ones; revision 0.4).
 - **`run_campaign_step0_exp1.sh`** — the gated GPU script for the Q-flux re-settle, the macro starting states and Experiment 1 (~14 GPU-h).
+- **`jcm/mcb/test_world.py`** / **`jcm/mcb/scores.py`** / **`run_test_world.py`** — the test world for Experiments 2 and 3 (Part 18 steps 10–12): warming in the controlled runs only, the normal-climate and warmed references, Dubey et al.'s objective, gain and effort, the episode runner every controller plugs into, and the planner's differentiable look-ahead objective.
 - **`jcm/mcb/qflux.py`** / **`run_qflux_base_climate.py`** — the ocean class with a monthly Q-flux, how the Q-flux is measured, and the settling run with its pre-written check (Amendment 9 revision 0.2), plus the one-step correction (revision 0.3). The Q-flux in use is `mcb_experiments/qflux/qflux_monthly_t30_v2.nc`; how it was derived is in `qflux_monthly_t30_v2_correction.json`, and its passing check is in `attempt2/`. The first attempt's file and summaries stay next to it as the record.
 
 ---
