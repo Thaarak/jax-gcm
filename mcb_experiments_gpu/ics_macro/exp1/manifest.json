@@ -1,0 +1,99 @@
+{
+  "start_date": "2000-01-01",
+  "coupling_timestep_days": 1,
+  "horizon": 120,
+  "num_train": 0,
+  "num_heldout": 8,
+  "decorr_days": 30,
+  "perturb_amp": 0.05,
+  "independent_trajectories": true,
+  "realistic_terrain": true,
+  "terrain_source": "jcm/data/bc/t30/clim/terrain.nc",
+  "macro_role": "exp1",
+  "macro_spacing_days": 730,
+  "base_carry": "mcb_experiments_gpu/equilibrated_qflux/base_carry.pkl",
+  "seed0": 12000,
+  "preregistration": "PREREGISTRATION.md Amendment 9 (plan: revision 0.4)",
+  "ics": [
+    {
+      "index": 0,
+      "split": "heldout",
+      "seed": 12000,
+      "macro_index": 0,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m00_b0_heldout_seed12000_carry.pkl",
+      "baseline_file": "ic_m00_b0_heldout_seed12000_baseline120d.pkl"
+    },
+    {
+      "index": 200,
+      "split": "heldout",
+      "seed": 12200,
+      "macro_index": 2,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m02_b0_heldout_seed12200_carry.pkl",
+      "baseline_file": "ic_m02_b0_heldout_seed12200_baseline120d.pkl"
+    },
+    {
+      "index": 400,
+      "split": "heldout",
+      "seed": 12400,
+      "macro_index": 4,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m04_b0_heldout_seed12400_carry.pkl",
+      "baseline_file": "ic_m04_b0_heldout_seed12400_baseline120d.pkl"
+    },
+    {
+      "index": 600,
+      "split": "heldout",
+      "seed": 12600,
+      "macro_index": 6,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m06_b0_heldout_seed12600_carry.pkl",
+      "baseline_file": "ic_m06_b0_heldout_seed12600_baseline120d.pkl"
+    },
+    {
+      "index": 800,
+      "split": "heldout",
+      "seed": 12800,
+      "macro_index": 8,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m08_b0_heldout_seed12800_carry.pkl",
+      "baseline_file": "ic_m08_b0_heldout_seed12800_baseline120d.pkl"
+    },
+    {
+      "index": 1000,
+      "split": "heldout",
+      "seed": 13000,
+      "macro_index": 10,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m10_b0_heldout_seed13000_carry.pkl",
+      "baseline_file": "ic_m10_b0_heldout_seed13000_baseline120d.pkl"
+    },
+    {
+      "index": 1200,
+      "split": "heldout",
+      "seed": 13200,
+      "macro_index": 12,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m12_b0_heldout_seed13200_carry.pkl",
+      "baseline_file": "ic_m12_b0_heldout_seed13200_baseline120d.pkl"
+    },
+    {
+      "index": 1400,
+      "split": "heldout",
+      "seed": 13400,
+      "macro_index": 14,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m14_b0_heldout_seed13400_carry.pkl",
+      "baseline_file": "ic_m14_b0_heldout_seed13400_baseline120d.pkl"
+    }
+  ]
+}

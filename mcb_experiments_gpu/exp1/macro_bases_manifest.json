@@ -1,0 +1,273 @@
+{
+  "base_carry": "mcb_experiments_gpu/equilibrated_qflux/base_carry.pkl",
+  "base_qflux_max_abs_wm2": 1305.670166015625,
+  "spacing_days": 730,
+  "num_macro": 16,
+  "macro_states": [
+    {
+      "macro_index": 0,
+      "day_offset": 0,
+      "ocn_sim_time": 315360000.0,
+      "carry_file": "macro_00_carry.pkl"
+    },
+    {
+      "macro_index": 1,
+      "day_offset": 730,
+      "ocn_sim_time": 378432000.0,
+      "carry_file": "macro_01_carry.pkl"
+    },
+    {
+      "macro_index": 2,
+      "day_offset": 1460,
+      "ocn_sim_time": 441504000.0,
+      "carry_file": "macro_02_carry.pkl"
+    },
+    {
+      "macro_index": 3,
+      "day_offset": 2190,
+      "ocn_sim_time": 504576000.0,
+      "carry_file": "macro_03_carry.pkl"
+    },
+    {
+      "macro_index": 4,
+      "day_offset": 2920,
+      "ocn_sim_time": 567648000.0,
+      "carry_file": "macro_04_carry.pkl"
+    },
+    {
+      "macro_index": 5,
+      "day_offset": 3650,
+      "ocn_sim_time": 630720000.0,
+      "carry_file": "macro_05_carry.pkl"
+    },
+    {
+      "macro_index": 6,
+      "day_offset": 4380,
+      "ocn_sim_time": 693792000.0,
+      "carry_file": "macro_06_carry.pkl"
+    },
+    {
+      "macro_index": 7,
+      "day_offset": 5110,
+      "ocn_sim_time": 756864000.0,
+      "carry_file": "macro_07_carry.pkl"
+    },
+    {
+      "macro_index": 8,
+      "day_offset": 5840,
+      "ocn_sim_time": 819936000.0,
+      "carry_file": "macro_08_carry.pkl"
+    },
+    {
+      "macro_index": 9,
+      "day_offset": 6570,
+      "ocn_sim_time": 883008000.0,
+      "carry_file": "macro_09_carry.pkl"
+    },
+    {
+      "macro_index": 10,
+      "day_offset": 7300,
+      "ocn_sim_time": 946080000.0,
+      "carry_file": "macro_10_carry.pkl"
+    },
+    {
+      "macro_index": 11,
+      "day_offset": 8030,
+      "ocn_sim_time": 1009152000.0,
+      "carry_file": "macro_11_carry.pkl"
+    },
+    {
+      "macro_index": 12,
+      "day_offset": 8760,
+      "ocn_sim_time": 1072224000.0,
+      "carry_file": "macro_12_carry.pkl"
+    },
+    {
+      "macro_index": 13,
+      "day_offset": 9490,
+      "ocn_sim_time": 1135296000.0,
+      "carry_file": "macro_13_carry.pkl"
+    },
+    {
+      "macro_index": 14,
+      "day_offset": 10220,
+      "ocn_sim_time": 1198368000.0,
+      "carry_file": "macro_14_carry.pkl"
+    },
+    {
+      "macro_index": 15,
+      "day_offset": 10950,
+      "ocn_sim_time": 1261440000.0,
+      "carry_file": "macro_15_carry.pkl"
+    }
+  ],
+  "diagnostics": {
+    "ocean_mean_sst_K": [
+      289.85387284008004,
+      289.69899492508034,
+      289.85221209265035,
+      289.969471009117,
+      289.5059807464978,
+      289.65229849597813,
+      289.8254130904985,
+      289.8288491450903,
+      289.4749537722394,
+      289.3946733023654,
+      289.521168772872,
+      290.03640714604126,
+      289.5338165222729,
+      289.4307498304435,
+      289.32301805909407,
+      289.2664656295075
+    ],
+    "neighbour_similarity": [
+      {
+        "pattern_corr": 0.7117543275431568,
+        "rms_diff_K": 1.1319243974950957
+      },
+      {
+        "pattern_corr": 0.6828374964852116,
+        "rms_diff_K": 1.0651847019927545
+      },
+      {
+        "pattern_corr": 0.44561018497610716,
+        "rms_diff_K": 1.2634419929663474
+      },
+      {
+        "pattern_corr": 0.2639166331172591,
+        "rms_diff_K": 1.3032245181892697
+      },
+      {
+        "pattern_corr": 0.00766127372505785,
+        "rms_diff_K": 1.3431226985833304
+      },
+      {
+        "pattern_corr": 0.2215371270589686,
+        "rms_diff_K": 1.1343053606621614
+      },
+      {
+        "pattern_corr": 0.03861962282310331,
+        "rms_diff_K": 1.1436124295890329
+      },
+      {
+        "pattern_corr": -0.06382366325238548,
+        "rms_diff_K": 1.1961521599131217
+      },
+      {
+        "pattern_corr": 0.24281366337725754,
+        "rms_diff_K": 0.9911555951354932
+      },
+      {
+        "pattern_corr": 0.27296156553534906,
+        "rms_diff_K": 1.063972242484245
+      },
+      {
+        "pattern_corr": 0.014525350545336229,
+        "rms_diff_K": 1.8104913531909683
+      },
+      {
+        "pattern_corr": -0.020272369181103915,
+        "rms_diff_K": 1.874187248554177
+      },
+      {
+        "pattern_corr": 0.605480511196054,
+        "rms_diff_K": 0.9220622527444404
+      },
+      {
+        "pattern_corr": 0.6371428698832858,
+        "rms_diff_K": 1.0854851318820145
+      },
+      {
+        "pattern_corr": 0.6867480398659267,
+        "rms_diff_K": 1.1052645253088547
+      }
+    ],
+    "two_apart_similarity": [
+      {
+        "pattern_corr": 0.7591965687701623,
+        "rms_diff_K": 1.0089392376069553
+      },
+      {
+        "pattern_corr": 0.431690377782957,
+        "rms_diff_K": 1.3963341177640143
+      },
+      {
+        "pattern_corr": 0.32229155253229297,
+        "rms_diff_K": 1.2842428678382618
+      },
+      {
+        "pattern_corr": 0.15148124111281616,
+        "rms_diff_K": 1.3986818994228971
+      },
+      {
+        "pattern_corr": -0.08984763094228754,
+        "rms_diff_K": 1.3376422504983219
+      },
+      {
+        "pattern_corr": -0.05219373597356796,
+        "rms_diff_K": 1.270559496133342
+      },
+      {
+        "pattern_corr": -0.2929883556975634,
+        "rms_diff_K": 1.3738066038424275
+      },
+      {
+        "pattern_corr": -0.22031433604192666,
+        "rms_diff_K": 1.2075551942497953
+      },
+      {
+        "pattern_corr": 0.1506100621277039,
+        "rms_diff_K": 1.1984711968883255
+      },
+      {
+        "pattern_corr": -0.1869698074692216,
+        "rms_diff_K": 1.8337520498260382
+      },
+      {
+        "pattern_corr": 0.2694215812520458,
+        "rms_diff_K": 1.2263072949391676
+      },
+      {
+        "pattern_corr": 0.323054046666777,
+        "rms_diff_K": 1.5481531827625605
+      },
+      {
+        "pattern_corr": 0.4686038372281078,
+        "rms_diff_K": 1.2938370388877651
+      },
+      {
+        "pattern_corr": 0.7226652616131768,
+        "rms_diff_K": 0.965458100830072
+      }
+    ],
+    "trend_K_per_decade": {
+      "slope": -0.15337066192722984,
+      "se": 0.052540858921570906
+    },
+    "split_balance": {
+      "train_macros": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14
+      ],
+      "eval_macros": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15
+      ],
+      "train_mean_K": 289.6113044870256,
+      "eval_mean_K": 289.6597386854529,
+      "eval_minus_train_K": 0.048434198427287356
+    }
+  }
+}

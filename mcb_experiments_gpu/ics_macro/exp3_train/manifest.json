@@ -1,0 +1,259 @@
+{
+  "start_date": "2000-01-01",
+  "coupling_timestep_days": 1,
+  "horizon": 60,
+  "num_train": 16,
+  "num_heldout": 8,
+  "decorr_days": 30,
+  "perturb_amp": 0.05,
+  "independent_trajectories": true,
+  "realistic_terrain": true,
+  "terrain_source": "jcm/data/bc/t30/clim/terrain.nc",
+  "macro_role": "exp3_train",
+  "macro_spacing_days": 730,
+  "base_carry": "mcb_experiments_gpu/equilibrated_qflux/base_carry.pkl",
+  "seed0": 12000,
+  "preregistration": "PREREGISTRATION.md Amendment 9 (plan: revision 0.4)",
+  "ics": [
+    {
+      "index": 2,
+      "split": "train",
+      "seed": 12002,
+      "macro_index": 0,
+      "branch": 2,
+      "spinup_days": 30,
+      "carry_file": "ic_m00_b2_train_seed12002_carry.pkl",
+      "baseline_file": "ic_m00_b2_train_seed12002_baseline60d.pkl"
+    },
+    {
+      "index": 3,
+      "split": "train",
+      "seed": 12003,
+      "macro_index": 0,
+      "branch": 3,
+      "spinup_days": 30,
+      "carry_file": "ic_m00_b3_train_seed12003_carry.pkl",
+      "baseline_file": "ic_m00_b3_train_seed12003_baseline60d.pkl"
+    },
+    {
+      "index": 202,
+      "split": "train",
+      "seed": 12202,
+      "macro_index": 2,
+      "branch": 2,
+      "spinup_days": 30,
+      "carry_file": "ic_m02_b2_train_seed12202_carry.pkl",
+      "baseline_file": "ic_m02_b2_train_seed12202_baseline60d.pkl"
+    },
+    {
+      "index": 203,
+      "split": "train",
+      "seed": 12203,
+      "macro_index": 2,
+      "branch": 3,
+      "spinup_days": 30,
+      "carry_file": "ic_m02_b3_train_seed12203_carry.pkl",
+      "baseline_file": "ic_m02_b3_train_seed12203_baseline60d.pkl"
+    },
+    {
+      "index": 402,
+      "split": "train",
+      "seed": 12402,
+      "macro_index": 4,
+      "branch": 2,
+      "spinup_days": 30,
+      "carry_file": "ic_m04_b2_train_seed12402_carry.pkl",
+      "baseline_file": "ic_m04_b2_train_seed12402_baseline60d.pkl"
+    },
+    {
+      "index": 403,
+      "split": "train",
+      "seed": 12403,
+      "macro_index": 4,
+      "branch": 3,
+      "spinup_days": 30,
+      "carry_file": "ic_m04_b3_train_seed12403_carry.pkl",
+      "baseline_file": "ic_m04_b3_train_seed12403_baseline60d.pkl"
+    },
+    {
+      "index": 602,
+      "split": "train",
+      "seed": 12602,
+      "macro_index": 6,
+      "branch": 2,
+      "spinup_days": 30,
+      "carry_file": "ic_m06_b2_train_seed12602_carry.pkl",
+      "baseline_file": "ic_m06_b2_train_seed12602_baseline60d.pkl"
+    },
+    {
+      "index": 603,
+      "split": "train",
+      "seed": 12603,
+      "macro_index": 6,
+      "branch": 3,
+      "spinup_days": 30,
+      "carry_file": "ic_m06_b3_train_seed12603_carry.pkl",
+      "baseline_file": "ic_m06_b3_train_seed12603_baseline60d.pkl"
+    },
+    {
+      "index": 802,
+      "split": "train",
+      "seed": 12802,
+      "macro_index": 8,
+      "branch": 2,
+      "spinup_days": 30,
+      "carry_file": "ic_m08_b2_train_seed12802_carry.pkl",
+      "baseline_file": "ic_m08_b2_train_seed12802_baseline60d.pkl"
+    },
+    {
+      "index": 803,
+      "split": "train",
+      "seed": 12803,
+      "macro_index": 8,
+      "branch": 3,
+      "spinup_days": 30,
+      "carry_file": "ic_m08_b3_train_seed12803_carry.pkl",
+      "baseline_file": "ic_m08_b3_train_seed12803_baseline60d.pkl"
+    },
+    {
+      "index": 1002,
+      "split": "train",
+      "seed": 13002,
+      "macro_index": 10,
+      "branch": 2,
+      "spinup_days": 30,
+      "carry_file": "ic_m10_b2_train_seed13002_carry.pkl",
+      "baseline_file": "ic_m10_b2_train_seed13002_baseline60d.pkl"
+    },
+    {
+      "index": 1003,
+      "split": "train",
+      "seed": 13003,
+      "macro_index": 10,
+      "branch": 3,
+      "spinup_days": 30,
+      "carry_file": "ic_m10_b3_train_seed13003_carry.pkl",
+      "baseline_file": "ic_m10_b3_train_seed13003_baseline60d.pkl"
+    },
+    {
+      "index": 1202,
+      "split": "train",
+      "seed": 13202,
+      "macro_index": 12,
+      "branch": 2,
+      "spinup_days": 30,
+      "carry_file": "ic_m12_b2_train_seed13202_carry.pkl",
+      "baseline_file": "ic_m12_b2_train_seed13202_baseline60d.pkl"
+    },
+    {
+      "index": 1203,
+      "split": "train",
+      "seed": 13203,
+      "macro_index": 12,
+      "branch": 3,
+      "spinup_days": 30,
+      "carry_file": "ic_m12_b3_train_seed13203_carry.pkl",
+      "baseline_file": "ic_m12_b3_train_seed13203_baseline60d.pkl"
+    },
+    {
+      "index": 1402,
+      "split": "train",
+      "seed": 13402,
+      "macro_index": 14,
+      "branch": 2,
+      "spinup_days": 30,
+      "carry_file": "ic_m14_b2_train_seed13402_carry.pkl",
+      "baseline_file": "ic_m14_b2_train_seed13402_baseline60d.pkl"
+    },
+    {
+      "index": 1403,
+      "split": "train",
+      "seed": 13403,
+      "macro_index": 14,
+      "branch": 3,
+      "spinup_days": 30,
+      "carry_file": "ic_m14_b3_train_seed13403_carry.pkl",
+      "baseline_file": "ic_m14_b3_train_seed13403_baseline60d.pkl"
+    },
+    {
+      "index": 4,
+      "split": "heldout",
+      "seed": 12004,
+      "macro_index": 0,
+      "branch": 4,
+      "spinup_days": 30,
+      "carry_file": "ic_m00_b4_heldout_seed12004_carry.pkl",
+      "baseline_file": "ic_m00_b4_heldout_seed12004_baseline60d.pkl"
+    },
+    {
+      "index": 204,
+      "split": "heldout",
+      "seed": 12204,
+      "macro_index": 2,
+      "branch": 4,
+      "spinup_days": 30,
+      "carry_file": "ic_m02_b4_heldout_seed12204_carry.pkl",
+      "baseline_file": "ic_m02_b4_heldout_seed12204_baseline60d.pkl"
+    },
+    {
+      "index": 404,
+      "split": "heldout",
+      "seed": 12404,
+      "macro_index": 4,
+      "branch": 4,
+      "spinup_days": 30,
+      "carry_file": "ic_m04_b4_heldout_seed12404_carry.pkl",
+      "baseline_file": "ic_m04_b4_heldout_seed12404_baseline60d.pkl"
+    },
+    {
+      "index": 604,
+      "split": "heldout",
+      "seed": 12604,
+      "macro_index": 6,
+      "branch": 4,
+      "spinup_days": 30,
+      "carry_file": "ic_m06_b4_heldout_seed12604_carry.pkl",
+      "baseline_file": "ic_m06_b4_heldout_seed12604_baseline60d.pkl"
+    },
+    {
+      "index": 804,
+      "split": "heldout",
+      "seed": 12804,
+      "macro_index": 8,
+      "branch": 4,
+      "spinup_days": 30,
+      "carry_file": "ic_m08_b4_heldout_seed12804_carry.pkl",
+      "baseline_file": "ic_m08_b4_heldout_seed12804_baseline60d.pkl"
+    },
+    {
+      "index": 1004,
+      "split": "heldout",
+      "seed": 13004,
+      "macro_index": 10,
+      "branch": 4,
+      "spinup_days": 30,
+      "carry_file": "ic_m10_b4_heldout_seed13004_carry.pkl",
+      "baseline_file": "ic_m10_b4_heldout_seed13004_baseline60d.pkl"
+    },
+    {
+      "index": 1204,
+      "split": "heldout",
+      "seed": 13204,
+      "macro_index": 12,
+      "branch": 4,
+      "spinup_days": 30,
+      "carry_file": "ic_m12_b4_heldout_seed13204_carry.pkl",
+      "baseline_file": "ic_m12_b4_heldout_seed13204_baseline60d.pkl"
+    },
+    {
+      "index": 1404,
+      "split": "heldout",
+      "seed": 13404,
+      "macro_index": 14,
+      "branch": 4,
+      "spinup_days": 30,
+      "carry_file": "ic_m14_b4_heldout_seed13404_carry.pkl",
+      "baseline_file": "ic_m14_b4_heldout_seed13404_baseline60d.pkl"
+    }
+  ]
+}
