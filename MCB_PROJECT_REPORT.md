@@ -1246,6 +1246,14 @@ describes them, apart from three small changes made before anything runs (steps 
   samples as the references, started from the same seeds.
 - *A guard.* The code refuses to build references for evaluation states unless told to, and they are
   built only after revision 1 is frozen, so no design choice can be tuned on them.
+- *Training-state references, built 2026-10-02 on the GPU* (`run_campaign_test_world_refs.sh`; 32
+  starting states; 1.4 hours, run alongside the vLLM server without stopping it):
+  - A steady 4 W/m² probe warming heats the ocean by 0.10 K after 60 days, 0.19 K after 120 and
+    0.36 K after 240 (0.31–0.39 across states), within a few percent of the simple slab estimate.
+  - The normal climate rains 3.26 mm/day and evaporates 3.27 mm/day.
+  - Weather noise in a five-sample average is about 15 thousandths of a degree, so the warming
+    stands about 24 times above the noise by day 240. The pilot can scale this probe linearly to
+    whatever warming it chooses.
 - *Left to the pilot (step 23) and revision 1:*
   - how strong the warming is and whether it grows;
   - run and scoring-window lengths;
