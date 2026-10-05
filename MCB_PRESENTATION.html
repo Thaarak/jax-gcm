@@ -449,6 +449,66 @@
         .big-number.orange {
             color: #ff9800;
         }
+
+        /* October 2026 update section */
+        .upd .card li {
+            font-size: 1em;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .upd table.compact th,
+        .upd table.compact td {
+            padding: 9px 14px;
+            font-size: 0.95em;
+        }
+
+        .upd .note {
+            color: #888;
+            font-size: 1em;
+            margin-top: 18px;
+        }
+
+        .upd .tag {
+            display: inline-block;
+            padding: 2px 12px;
+            border-radius: 999px;
+            background: #1f3b2a;
+            color: #4caf50;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .upd .rung {
+            display: grid;
+            grid-template-columns: 70px 1fr 160px;
+            align-items: center;
+            gap: 20px;
+            background: linear-gradient(145deg, #1a1a2e, #16213e);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 16px 22px;
+            margin-bottom: 14px;
+        }
+
+        .upd .rung .n {
+            font-size: 2em;
+            font-weight: 700;
+            color: #667eea;
+            text-align: center;
+        }
+
+        .upd .rung .what {
+            font-size: 1.1em;
+            color: #ddd;
+        }
+
+        .upd .rung .isolates {
+            text-align: center;
+            color: #ff9800;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
     </style>
 </head>
 <body>
@@ -1129,6 +1189,266 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
         <div class="slide-number">21 / 21</div>
     </div>
 
+    <!-- ===================== October 2026 update ===================== -->
+
+    <!-- Update 1: section title -->
+    <div class="slide title-slide upd">
+        <h1>October 2026 Update</h1>
+        <h3>Planning months ahead, and the five methods it has to beat</h3>
+        <p style="margin-top: 50px; color: #666;">Project report, Part 18 steps 10&ndash;22 &middot; slides added 2026-10-05</p>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 2: where the project stands -->
+    <div class="slide upd">
+        <h2>Where the Project Stands</h2>
+        <p class="subtitle">The gradient is trustworthy for months if we "snip" the atmosphere every two weeks</p>
+        <div class="three-column" style="flex: 0;">
+            <div class="stat-box">
+                <div class="number">14 days</div>
+                <div class="label">Best snip window (Experiment 1, registered result)</div>
+            </div>
+            <div class="stat-box">
+                <div class="number">~4 months</div>
+                <div class="label">How long the snipped gradient stays useful<br>(8&deg; off at 120 days; plain backprop 95&deg;)</div>
+            </div>
+            <div class="stat-box">
+                <div class="number">2 min</div>
+                <div class="label">One Gauss&ndash;Newton re-plan on the GX10<br>(60-day look-ahead)</div>
+            </div>
+        </div>
+        <div class="two-column" style="margin-top: 30px;">
+            <div class="card success">
+                <h4>The test world <span class="tag">built</span></h4>
+                <ul>
+                    <li>Warming is added only to the runs being controlled</li>
+                    <li>The target is the model's own normal climate, not a same-weather twin</li>
+                    <li>Scored like Dubey et al. (gain and effort), plus land temperature and rain the controller never sees</li>
+                </ul>
+            </div>
+            <div class="card success">
+                <h4>The planner <span class="tag">built &middot; costed</span></h4>
+                <ul>
+                    <li>Every 14 days, re-plan from wherever the climate actually is</li>
+                    <li>Look 60 days ahead through the ocean with the snipped gradient</li>
+                    <li>About 0.5 GPU-hours per six-month run; a pilot on training states is fixing its settings now</li>
+                </ul>
+            </div>
+        </div>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 3: the five methods -->
+    <div class="slide upd">
+        <h2>Five Methods the Planner Must Beat</h2>
+        <p class="subtitle">Built on 2026-10-05 as code with tests; nothing has run on the GPU and no evaluation state was touched</p>
+        <table class="compact">
+            <tr><th>Step</th><th>Method</th><th>The question it answers</th><th>Status</th></tr>
+            <tr><td>18</td><td><span class="highlight">Fixed-pattern ladder</span> (4 rungs)</td><td>Where does a planner's win come from: how much, where, when, or how the design was found?</td><td><span class="tag">11 tests</span></td></tr>
+            <tr><td>19</td><td><span class="highlight">Classical feedback</span> (GLENS-style + the old adaptive law)</td><td>Does planning beat the feedback the field actually uses? Does integral action matter?</td><td><span class="tag">16 tests</span></td></tr>
+            <tr><td>20</td><td><span class="highlight">Student network</span> (113 numbers)</td><td>Can a cheap controller that sees only real measurements do the job?</td><td><span class="tag">8 tests</span></td></tr>
+            <tr><td>21</td><td><span class="highlight">Copying loop</span> (DAgger, teacher knows more)</td><td>Can the student learn the planner's skill, including guessing the hidden spraying strength?</td><td><span class="tag">8 tests</span></td></tr>
+            <tr><td>22</td><td><span class="highlight">Direct training</span> (backprop, snipped, EKI)</td><td>Does training straight through the model work now, at the same GPU budget?</td><td><span class="tag">10 tests</span></td></tr>
+        </table>
+        <p class="note">Plus 7 tests for the two new runners (<code>run_controllers.py</code>, <code>run_student_training.py</code>) and a real-model smoke run of every stage on the laptop.</p>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 4: the ladder -->
+    <div class="slide upd">
+        <h2>Step 18: The Fixed-Pattern Ladder</h2>
+        <p class="subtitle">Each rung changes one thing, so the gaps between rungs show where a win comes from</p>
+        <div class="two-column" style="grid-template-columns: 1.6fr 1fr;">
+            <div class="column">
+                <div class="rung"><div class="n">1</div><div class="what">Same brightening in every band, sized to cancel the average warming</div><div class="isolates">HOW MUCH</div></div>
+                <div class="rung"><div class="n">2</div><div class="what">Same brightening in every band, at the planner's effort</div><div class="isolates">WHERE</div></div>
+                <div class="rung"><div class="n">3</div><div class="what">The planner's own average pattern, held fixed</div><div class="isolates">WHEN</div></div>
+                <div class="rung"><div class="n">4</div><div class="what">Classical linear-response design: brighten one band at a time, then solve for the best fixed setting</div><div class="isolates">HOW IT WAS DESIGNED</div></div>
+                <div class="card" style="margin-top: 10px;">
+                    <h4>Cost</h4>
+                    <p>About 5 GPU-minutes of one-band runs per training state.</p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="card">
+                    <h4>How rung 4 works</h4>
+                    <p>Five one-band runs give each band's cooling map. The best fixed setting inside the cap is then an exact bounded least-squares problem, pooled over training states.</p>
+                </div>
+                <div class="card success">
+                    <h4>Checked</h4>
+                    <p>On a linear stand-in model, the design's predicted score matches its actual run to round-off, and it beats uniform brightening.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 5: classical feedback -->
+    <div class="slide upd">
+        <h2>Step 19: Classical Feedback Controllers</h2>
+        <p class="subtitle">The method the field actually uses, with true integral action</p>
+        <div class="two-column">
+            <div class="column">
+                <div class="card success">
+                    <h4>GLENS-style controller</h4>
+                    <ul>
+                        <li>Holds three numbers on target: the ocean average, north minus south, equator minus poles</li>
+                        <li>Proportional plus <strong>integral</strong> action (a running memory of past error), with anti-windup</li>
+                        <li>Optional feedforward from the forecast warming, as GLENS does</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>Its sensitivities came free from Experiment 1</h4>
+                    <table class="compact">
+                        <tr><th>Band</th><th>45N</th><th>20N</th><th>0</th><th>20S</th><th>45S</th></tr>
+                        <tr><td>Ocean average</td><td>&minus;3.1</td><td>&minus;8.7</td><td>&minus;13.4</td><td>&minus;13.5</td><td>&minus;14.1</td></tr>
+                    </table>
+                    <p style="margin-top: 8px;">Thousandths of a degree per day, per unit albedo. The slab ocean acts like an integrator.</p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="card">
+                    <h4>One tuning number: how fast to correct</h4>
+                    <table class="compact">
+                        <tr><th>Closed-loop time scale</th><th>Ocean-average error (days 98&ndash;182)</th></tr>
+                        <tr><td>28 days</td><td>0.022 K</td></tr>
+                        <tr><td><strong>42 days (default)</strong></td><td><strong>0.019 K</strong></td></tr>
+                        <tr><td>56 days</td><td>0.026 K</td></tr>
+                        <tr><td>84 days</td><td>0.050 K</td></tr>
+                        <tr><td>No control</td><td>0.19 K</td></tr>
+                    </table>
+                    <p style="margin-top: 8px;">Simulated with the measured sensor noise (0.022 K per two-week reading). Faster gains chase noise; slower ones lag.</p>
+                </div>
+                <div class="card">
+                    <h4>The old adaptive law, kept for continuity</h4>
+                    <p>Estimates how strongly the spraying works and divides it out. In tests it recovers a hidden strength of 0.5, 1 or 2 to within 20%.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 6: student and copying loop -->
+    <div class="slide upd">
+        <h2>Steps 20&ndash;21: The Student and the Copying Loop</h2>
+        <p class="subtitle">A tiny network learns the planner's skill without ever seeing the model's insides</p>
+        <div class="two-column">
+            <div class="column">
+                <div class="architecture-diagram" style="padding: 25px;">
+                    <h4 style="color: #667eea; margin-bottom: 10px;">The student (113 adjustable numbers)</h4>
+                    <div class="flow-box" style="margin: 5px;">Ocean temperature anomaly under each band (5)</div>
+                    <div class="flow-box" style="margin: 5px;">Season (2)</div>
+                    <div class="flow-box" style="margin: 5px;">Its own previous settings (5)</div>
+                    <div class="flow-arrow" style="margin: 2px 0;">&darr;</div>
+                    <div class="flow-box" style="margin: 5px; border-color: #4caf50;">6 hidden units</div>
+                    <div class="flow-arrow" style="margin: 2px 0;">&darr;</div>
+                    <div class="flow-box" style="margin: 5px;">Five band settings, always inside the cap</div>
+                </div>
+                <div class="card warning" style="margin-top: 20px;">
+                    <h4>A caveat for the rules</h4>
+                    <p>Every start is on the same date, so "season" also tells the student how long the run has gone. It can be switched off.</p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="card success">
+                    <h4>DAgger with a teacher that knows more</h4>
+                    <ul>
+                        <li><strong>Round 0:</strong> the planner, told the hidden spraying strength, drives; every state is recorded</li>
+                        <li><strong>Round 1+:</strong> the student drives; the planner is asked "what would you do here?"</li>
+                        <li>The student is refitted on everything collected</li>
+                        <li><strong>Why:</strong> plain copying fails once the student's mistakes take it where the teacher never went, and the hidden strength must be inferred from how the ocean responds</li>
+                    </ul>
+                </div>
+                <div class="card success">
+                    <h4>Checked</h4>
+                    <p>With the real planner as teacher: told a weaker spraying, it asks for more brightening, and the student's copying error falls each round.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 7: direct training -->
+    <div class="slide upd">
+        <h2>Step 22: Training Straight Through the Model</h2>
+        <p class="subtitle">The project's founding bet, re-tested with a small network and trustworthy gradients</p>
+        <div class="three-column" style="flex: 0;">
+            <div class="card">
+                <h4>Plain backpropagation</h4>
+                <p>Exact gradients through the whole six months. Experiment 1 says they turn to noise after about two months.</p>
+            </div>
+            <div class="card success">
+                <h4>Snipped gradient</h4>
+                <p>The atmosphere is snipped every 14 days. Experiment 1 says this stays useful for about four months.</p>
+            </div>
+            <div class="card">
+                <h4>Ensemble Kalman inversion</h4>
+                <p>The climate community's standard gradient-free method: 32 copies of the network run side by side and move toward a lower error.</p>
+            </div>
+        </div>
+        <div class="two-column" style="margin-top: 30px;">
+            <div class="card success">
+                <h4>A fair fight</h4>
+                <p>Each method gets exactly the GPU-seconds the copying loop used, <strong>including its teacher</strong>, and stops when they run out.</p>
+            </div>
+            <div class="card success">
+                <h4>Checked</h4>
+                <p>The whole closed loop runs inside JAX and reproduces the ordinary episode runner to round-off. Its gradient matches finite differences, and all three methods lower the error on a stand-in model.</p>
+            </div>
+        </div>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 8: what's next -->
+    <div class="slide upd">
+        <h2>What Happens Next</h2>
+        <div class="timeline">
+            <div class="timeline-item completed">
+                <div class="dot">&#10003;</div>
+                <div class="label">Experiment 1<br><span class="checkmark">Done</span></div>
+            </div>
+            <div class="timeline-item completed">
+                <div class="dot">&#10003;</div>
+                <div class="label">Test world, planner,<br>5 methods<br><span class="checkmark">Built</span></div>
+            </div>
+            <div class="timeline-item current">
+                <div class="dot">23</div>
+                <div class="label">Pilot on<br>training states<br><span class="pending-mark">Running</span></div>
+            </div>
+            <div class="timeline-item pending">
+                <div class="dot">24</div>
+                <div class="label">Freeze the rules<br>(revision 1, OSF)</div>
+            </div>
+            <div class="timeline-item pending">
+                <div class="dot">E2</div>
+                <div class="label">Experiment 2<br>fixed designs</div>
+            </div>
+            <div class="timeline-item pending">
+                <div class="dot">E3</div>
+                <div class="label">Experiment 3<br>planning vs the rest</div>
+            </div>
+        </div>
+        <div class="two-column" style="margin-top: 10px; align-items: start;">
+            <div class="card">
+                <h4>Decisions for the frozen rules</h4>
+                <ul>
+                    <li>The feedback controller's time scale, and whether it gets the forecast</li>
+                    <li>The ladder's design window and the hidden-strength range</li>
+                    <li>Whether steps 20&ndash;22 run at all: the October 2 advisor meeting deferred them "unless time allows"</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h4>What it will cost (from measured speeds)</h4>
+                <ul>
+                    <li>Planner: about 0.5 GPU-hours per six-month run</li>
+                    <li>Ladder response runs: about 5 GPU-minutes per training state</li>
+                    <li>Copying loop: about 3.6 GPU-hours per round of 8 episodes; each direct method gets the same total</li>
+                </ul>
+            </div>
+        </div>
+        <div class="slide-number"></div>
+    </div>
+
     <div class="nav-hint">Use arrow keys or click to navigate</div>
 
     <script>
@@ -1136,6 +1456,13 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
         const slides = document.querySelectorAll('.slide');
         const totalSlides = slides.length;
         const progressBar = document.getElementById('progress');
+
+        // Number the slides from their order, so added slides stay numbered.
+        slides.forEach((slide, i) => {
+            const label = slide.querySelector('.slide-number');
+            if (label) label.textContent = (i + 1) + ' / ' + totalSlides;
+        });
+        progressBar.style.width = (1 / totalSlides * 100) + '%';
 
         function showSlide(n) {
             slides[currentSlide].classList.remove('active');

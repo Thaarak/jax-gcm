@@ -92,19 +92,51 @@ from run_stage5_training import START_DATE
 K_BANDS = 5          # the default band layout (jcm.mcb.band_basis)
 
 
+def add_warming_args(sp):
+    """Add the warming options (shared with the other Experiment 3 runners)."""
+    sp.add_argument("--warming-step-wm2", type=float, default=4.0,
+                    help="Steady heat into the ocean, W m-2 "
+                         "(placeholder until the pilot).")
+    sp.add_argument("--warming-ramp-wm2-per-day", type=float,
+                    default=0.0,
+                    help="Growth of the heat input, W m-2 per day.")
+
+
+def add_run_args(sp):
+    """Add the options of one scored episode (shared with other runners)."""
+    sp.add_argument("--ic-dir", required=True)
+    sp.add_argument("--ic-position", type=int, default=0,
+                    help="Position of the IC in the manifest's list.")
+    sp.add_argument("--references", required=True,
+                    help="That IC's ic<index>_references.npz.")
+    sp.add_argument("--segments", type=int, required=True)
+    sp.add_argument("--segment-days", type=int, default=14,
+                    help="Days between decisions (re-plans).")
+    sp.add_argument("--efficacy", type=float, default=1.0,
+                    help="True strength of the spraying (1 = nominal).")
+    sp.add_argument("--members", type=int, default=None,
+                    help="Members to run and average before scoring "
+                         "(default: as many as the references, from the "
+                         "same member seeds, so both sides carry the "
+                         "same weather noise).")
+    sp.add_argument("--score-start-day", type=int, default=0)
+    sp.add_argument("--score-end-day", type=int, default=None,
+                    help="Default: the end of the episode.")
+    sp.add_argument("--alpha", type=float, default=PATTERN_ALPHA)
+    sp.add_argument("--beta", type=float, default=PATTERN_BETA)
+    sp.add_argument("--mu", type=float, default=0.0)
+    sp.add_argument("--lam", type=float, default=0.0)
+    sp.add_argument("--output", required=True, help="JSON summary path.")
+    sp.add_argument("--save-fields", action="store_true",
+                    help="Also write the daily fields next to the JSON.")
+    add_warming_args(sp)
+
+
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="stage", required=True)
-
-    def warming_args(sp):
-        sp.add_argument("--warming-step-wm2", type=float, default=4.0,
-                        help="Steady heat into the ocean, W m-2 "
-                             "(placeholder until the pilot).")
-        sp.add_argument("--warming-ramp-wm2-per-day", type=float,
-                        default=0.0,
-                        help="Growth of the heat input, W m-2 per day.")
 
     r = sub.add_parser("references", help="normal-climate and warmed "
                                           "reference ensembles")
@@ -124,45 +156,17 @@ def parse_args(argv=None):
                    help="Build only the normal climate.")
     r.add_argument("--allow-eval-roles", action="store_true",
                    help="Allow *_eval roles (only after revision 1).")
-    warming_args(r)
-
-    def run_args(sp):
-        sp.add_argument("--ic-dir", required=True)
-        sp.add_argument("--ic-position", type=int, default=0,
-                        help="Position of the IC in the manifest's list.")
-        sp.add_argument("--references", required=True,
-                        help="That IC's ic<index>_references.npz.")
-        sp.add_argument("--segments", type=int, required=True)
-        sp.add_argument("--segment-days", type=int, default=14,
-                        help="Days between decisions (re-plans).")
-        sp.add_argument("--efficacy", type=float, default=1.0,
-                        help="True strength of the spraying (1 = nominal).")
-        sp.add_argument("--members", type=int, default=None,
-                        help="Members to run and average before scoring "
-                             "(default: as many as the references, from the "
-                             "same member seeds, so both sides carry the "
-                             "same weather noise).")
-        sp.add_argument("--score-start-day", type=int, default=0)
-        sp.add_argument("--score-end-day", type=int, default=None,
-                        help="Default: the end of the episode.")
-        sp.add_argument("--alpha", type=float, default=PATTERN_ALPHA)
-        sp.add_argument("--beta", type=float, default=PATTERN_BETA)
-        sp.add_argument("--mu", type=float, default=0.0)
-        sp.add_argument("--lam", type=float, default=0.0)
-        sp.add_argument("--output", required=True, help="JSON summary path.")
-        sp.add_argument("--save-fields", action="store_true",
-                        help="Also write the daily fields next to the JSON.")
-        warming_args(sp)
+    add_warming_args(r)
 
     e = sub.add_parser("episode", help="one scored episode, fixed design")
-    run_args(e)
+    add_run_args(e)
     amp = e.add_mutually_exclusive_group(required=True)
     amp.add_argument("--amplitudes", type=float, nargs=K_BANDS)
     amp.add_argument("--uniform", type=float)
 
     pl = sub.add_parser("plan", help="one scored episode, driven by the "
                                      "receding-horizon planner")
-    run_args(pl)
+    add_run_args(pl)
     pl.add_argument("--preset", default="snipped60", choices=sorted(PRESETS),
                     help="snipped60 (60-day look-ahead, W* = 14), short14 "
                          "(Dubey et al.'s 14 days, exact BPTT), bptt60.")
@@ -190,17 +194,7 @@ def validate_args(args):
             raise SystemExit("--member-block-days must be 0 or divide "
                              "--days")
     else:
-        if args.segments < 1 or args.segment_days < 1:
-            raise SystemExit("--segments and --segment-days must be >= 1")
-        n_days = args.segments * args.segment_days
-        end = n_days if args.score_end_day is None else args.score_end_day
-        if not 0 <= args.score_start_day < end <= n_days:
-            raise SystemExit("need 0 <= --score-start-day < "
-                             "--score-end-day <= segments * segment-days")
-        if args.efficacy < 0.0:
-            raise SystemExit("--efficacy must be >= 0")
-        if args.members is not None and args.members < 1:
-            raise SystemExit("--members must be >= 1")
+        validate_run_args(args)
         if args.stage == "episode":
             a = episode_amplitudes(args)
             if np.any(a < 0.0) or np.any(a > BRIGHTENING_CAP):
@@ -211,6 +205,21 @@ def validate_args(args):
             if args.planner_efficacy is not None and \
                     args.planner_efficacy <= 0.0:
                 raise SystemExit("--planner-efficacy must be > 0")
+
+
+def validate_run_args(args):
+    """Fail fast on episode settings that cannot be run or scored."""
+    if args.segments < 1 or args.segment_days < 1:
+        raise SystemExit("--segments and --segment-days must be >= 1")
+    n_days = args.segments * args.segment_days
+    end = n_days if args.score_end_day is None else args.score_end_day
+    if not 0 <= args.score_start_day < end <= n_days:
+        raise SystemExit("need 0 <= --score-start-day < "
+                         "--score-end-day <= segments * segment-days")
+    if args.efficacy < 0.0:
+        raise SystemExit("--efficacy must be >= 0")
+    if args.members is not None and args.members < 1:
+        raise SystemExit("--members must be >= 1")
 
 
 def episode_amplitudes(args) -> np.ndarray:
