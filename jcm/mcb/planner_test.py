@@ -154,6 +154,38 @@ class SafeguardTest(_Toy):
             planner.target_mean(3 * L - 2)
 
 
+class SideBySideTest(_Toy):
+    """Copies run side by side (one vmapped call) give the same plan."""
+
+    def test_batched_copies_match_sequential(self):
+        for opt, iters in (("adam", 4), ("gauss_newton", 2)):
+            kw = dict(optimizer=opt, iterations=iters, copies=3,
+                      copy_amp=0.05)
+            seq, bat = self.planner(**kw), self.planner(batch_copies=True,
+                                                        **kw)
+            np.testing.assert_allclose(bat(self.state()), seq(self.state()),
+                                       rtol=1e-5, atol=1e-7, err_msg=opt)
+            np.testing.assert_allclose(bat.log[0]["objective"],
+                                       seq.log[0]["objective"], rtol=1e-5,
+                                       err_msg=opt)
+            self.assertAlmostEqual(bat.log[0]["noise_to_signal"],
+                                   seq.log[0]["noise_to_signal"], places=5,
+                                   msg=opt)
+
+    def test_evaluate_copies_shapes(self):
+        gn = self.planner(optimizer="gauss_newton", copies=3,
+                          batch_copies=True)
+        jacs, maps = gn.evaluate_copies(np.full(2, 0.5),
+                                        gn.prepare_copies(self.carry, 0))
+        self.assertEqual(jacs.shape, (3,) + OCEAN.shape + (2,))
+        self.assertEqual(maps.shape, (3,) + OCEAN.shape)
+        adam = self.planner(optimizer="adam", copies=3)
+        vals, grads = adam.evaluate_copies(np.zeros(2),
+                                           adam.prepare_copies(self.carry, 0),
+                                           adam.target_mean(0), np.zeros(2))
+        self.assertEqual((vals.shape, grads.shape), ((3,), (3, 2)))
+
+
 class PolicyTest(_Toy):
     def test_planner_drives_an_episode(self):
         planner = self.planner(iterations=2)

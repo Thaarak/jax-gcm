@@ -1,0 +1,424 @@
+{
+  "step": "Part 18 step 17: planning cost",
+  "config": {
+    "ic_dir": "mcb_experiments_gpu/ics_macro/exp3_train",
+    "ic_position": 0,
+    "references": "mcb_experiments_gpu/test_world_refs/exp3_train/ic0002_references.npz",
+    "optimizers": [
+      "adam",
+      "gauss_newton"
+    ],
+    "lookaheads": [
+      14,
+      60,
+      120
+    ],
+    "window_days": 14,
+    "copies": 3,
+    "repeats": 2,
+    "adam_iterations": 15,
+    "gn_iterations": 3,
+    "full_bptt_check": true,
+    "full_bptt_lookahead": 60,
+    "warming_step_wm2": 4.0,
+    "output": "mcb_experiments_gpu/planner_cost.json",
+    "single": null,
+    "sequential_only": false
+  },
+  "episode_days": 182,
+  "segment_days": 14,
+  "forward_s_per_day": 0.068,
+  "started_utc": "2026-10-05T20:05:02.887704+00:00",
+  "results": [
+    {
+      "optimizer": "adam",
+      "lookahead_days": 14,
+      "window_days": 14,
+      "copies": 3,
+      "ic_index": 2,
+      "modes": {
+        "sequential": {
+          "first_call_s": 79.00471210479736,
+          "steady_calls_s": [
+            18.419962882995605,
+            18.326160192489624
+          ],
+          "call_s": 18.373061537742615,
+          "compile_s": 60.63165056705475,
+          "peak_memory_gb": 0.478717952
+        },
+        "side_by_side": {
+          "first_call_s": 74.00628328323364,
+          "steady_calls_s": [
+            9.656628847122192,
+            9.654580116271973
+          ],
+          "call_s": 9.655604481697083,
+          "compile_s": 64.35067880153656,
+          "peak_memory_gb": 1.204849408
+        }
+      },
+      "side_by_side_vs_sequential_rel_diff": [
+        0.010268334474218144,
+        0.022320943117081334
+      ]
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 60,
+      "window_days": 14,
+      "copies": 3,
+      "ic_index": 2,
+      "modes": {
+        "sequential": {
+          "first_call_s": 139.24677300453186,
+          "steady_calls_s": [
+            78.6483564376831,
+            78.695645570755
+          ],
+          "call_s": 78.67200100421906,
+          "compile_s": 60.574772000312805,
+          "peak_memory_gb": 1.405417216
+        },
+        "side_by_side": {
+          "first_call_s": 109.869961977005,
+          "steady_calls_s": [
+            41.27010989189148,
+            41.286994218826294
+          ],
+          "call_s": 41.27855205535889,
+          "compile_s": 68.59140992164612,
+          "peak_memory_gb": 4.039277568
+        }
+      },
+      "side_by_side_vs_sequential_rel_diff": [
+        0.16651833186533574,
+        0.10057014336042489
+      ]
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 120,
+      "window_days": 14,
+      "copies": 3,
+      "ic_index": 2,
+      "modes": {
+        "sequential": {
+          "first_call_s": 218.46911883354187,
+          "steady_calls_s": [
+            157.2542679309845,
+            157.26198625564575
+          ],
+          "call_s": 157.25812709331512,
+          "compile_s": 61.210991740226746,
+          "peak_memory_gb": 2.638025728
+        },
+        "side_by_side": {
+          "first_call_s": 151.11722564697266,
+          "steady_calls_s": [
+            83.9469702243805,
+            83.80159378051758
+          ],
+          "call_s": 83.87428200244904,
+          "compile_s": 67.24294364452362,
+          "peak_memory_gb": 7.729870592
+        }
+      },
+      "side_by_side_vs_sequential_rel_diff": [
+        0.32158361006058217,
+        0.1828480357726424
+      ]
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 14,
+      "window_days": 14,
+      "copies": 3,
+      "ic_index": 2,
+      "modes": {
+        "sequential": {
+          "first_call_s": 36.157665729522705,
+          "steady_calls_s": [
+            9.994335412979126,
+            10.000729084014893
+          ],
+          "call_s": 9.99753224849701,
+          "compile_s": 26.160133481025696,
+          "peak_memory_gb": 0.435290368
+        },
+        "side_by_side": {
+          "first_call_s": 33.48591732978821,
+          "steady_calls_s": [
+            9.794043779373169,
+            9.789829969406128
+          ],
+          "call_s": 9.791936874389648,
+          "compile_s": 23.69398045539856,
+          "peak_memory_gb": 0.435290368
+        }
+      },
+      "side_by_side_vs_sequential_rel_diff": [
+        0.12766071958598382,
+        0.0010716680181635265
+      ]
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 60,
+      "window_days": 14,
+      "copies": 3,
+      "ic_index": 2,
+      "modes": {
+        "sequential": {
+          "first_call_s": 69.08347964286804,
+          "steady_calls_s": [
+            42.62928295135498,
+            42.70166373252869
+          ],
+          "call_s": 42.66547334194183,
+          "compile_s": 26.41800630092621,
+          "peak_memory_gb": 0.435294976
+        },
+        "side_by_side": {
+          "first_call_s": 66.39348125457764,
+          "steady_calls_s": [
+            42.11648511886597,
+            42.127288818359375
+          ],
+          "call_s": 42.12188696861267,
+          "compile_s": 24.271594285964966,
+          "peak_memory_gb": 0.435294976
+        }
+      },
+      "side_by_side_vs_sequential_rel_diff": [
+        0.13897762903177857,
+        0.015005509625405252
+      ]
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 120,
+      "window_days": 14,
+      "copies": 3,
+      "ic_index": 2,
+      "modes": {
+        "sequential": {
+          "first_call_s": 111.62611842155457,
+          "steady_calls_s": [
+            85.89074349403381,
+            85.87767195701599
+          ],
+          "call_s": 85.8842077255249,
+          "compile_s": 25.741910696029663,
+          "peak_memory_gb": 0.44537088
+        },
+        "side_by_side": {
+          "first_call_s": 109.30731844902039,
+          "steady_calls_s": [
+            84.73899126052856,
+            84.611403465271
+          ],
+          "call_s": 84.67519736289978,
+          "compile_s": 24.632121086120605,
+          "peak_memory_gb": 0.44537088
+        }
+      },
+      "side_by_side_vs_sequential_rel_diff": [
+        0.20215180195295,
+        0.0266518389684293
+      ]
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 60,
+      "window_days": 0,
+      "copies": 3,
+      "ic_index": 2,
+      "modes": {
+        "sequential": {
+          "first_call_s": 139.54214525222778,
+          "steady_calls_s": [
+            79.01093578338623,
+            79.01319861412048
+          ],
+          "call_s": 79.01206719875336,
+          "compile_s": 60.530078053474426,
+          "peak_memory_gb": 1.40205184
+        }
+      }
+    }
+  ],
+  "failures": [],
+  "rows": [
+    {
+      "optimizer": "adam",
+      "lookahead_days": 14,
+      "window_days": 14,
+      "mode": "sequential",
+      "call_s": 18.373061537742615,
+      "compile_s": 60.63165056705475,
+      "peak_memory_gb": 0.478717952,
+      "iterations": 15,
+      "replan_s": 275.5959230661392,
+      "episode_h": 0.9986452777388362,
+      "gpu_h_per_100_episodes": 99.86452777388362
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 14,
+      "window_days": 14,
+      "mode": "side_by_side",
+      "call_s": 9.655604481697083,
+      "compile_s": 64.35067880153656,
+      "peak_memory_gb": 1.204849408,
+      "iterations": 15,
+      "replan_s": 144.83406722545624,
+      "episode_h": 0.5264496872030364,
+      "gpu_h_per_100_episodes": 52.644968720303645
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 60,
+      "window_days": 14,
+      "mode": "sequential",
+      "call_s": 78.67200100421906,
+      "compile_s": 60.574772000312805,
+      "peak_memory_gb": 1.405417216,
+      "iterations": 15,
+      "replan_s": 1180.0800150632858,
+      "episode_h": 4.264837832172977,
+      "gpu_h_per_100_episodes": 426.4837832172977
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 60,
+      "window_days": 14,
+      "mode": "side_by_side",
+      "call_s": 41.27855205535889,
+      "compile_s": 68.59140992164612,
+      "peak_memory_gb": 4.039277568,
+      "iterations": 15,
+      "replan_s": 619.1782808303833,
+      "episode_h": 2.2393593474430507,
+      "gpu_h_per_100_episodes": 223.93593474430506
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 120,
+      "window_days": 14,
+      "mode": "sequential",
+      "call_s": 157.25812709331512,
+      "compile_s": 61.210991740226746,
+      "peak_memory_gb": 2.638025728,
+      "iterations": 15,
+      "replan_s": 2358.871906399727,
+      "episode_h": 8.52158632866568,
+      "gpu_h_per_100_episodes": 852.158632866568
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 120,
+      "window_days": 14,
+      "mode": "side_by_side",
+      "call_s": 83.87428200244904,
+      "compile_s": 67.24294364452362,
+      "peak_memory_gb": 7.729870592,
+      "iterations": 15,
+      "replan_s": 1258.1142300367355,
+      "episode_h": 4.546628052910434,
+      "gpu_h_per_100_episodes": 454.6628052910434
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 14,
+      "window_days": 14,
+      "mode": "sequential",
+      "call_s": 9.99753224849701,
+      "compile_s": 26.160133481025696,
+      "peak_memory_gb": 0.435290368,
+      "iterations": 3,
+      "replan_s": 29.992596745491028,
+      "episode_h": 0.11174437713649538,
+      "gpu_h_per_100_episodes": 11.174437713649537
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 14,
+      "window_days": 14,
+      "mode": "side_by_side",
+      "call_s": 9.791936874389648,
+      "compile_s": 23.69398045539856,
+      "peak_memory_gb": 0.435290368,
+      "iterations": 3,
+      "replan_s": 29.375810623168945,
+      "episode_h": 0.10951709391699896,
+      "gpu_h_per_100_episodes": 10.951709391699897
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 60,
+      "window_days": 14,
+      "mode": "sequential",
+      "call_s": 42.66547334194183,
+      "compile_s": 26.41800630092621,
+      "peak_memory_gb": 0.435294976,
+      "iterations": 3,
+      "replan_s": 127.9964200258255,
+      "episode_h": 0.46564707231548097,
+      "gpu_h_per_100_episodes": 46.5647072315481
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 60,
+      "window_days": 14,
+      "mode": "side_by_side",
+      "call_s": 42.12188696861267,
+      "compile_s": 24.271594285964966,
+      "peak_memory_gb": 0.435294976,
+      "iterations": 3,
+      "replan_s": 126.36566090583801,
+      "episode_h": 0.45975821993774835,
+      "gpu_h_per_100_episodes": 45.97582199377484
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 120,
+      "window_days": 14,
+      "mode": "sequential",
+      "call_s": 85.8842077255249,
+      "compile_s": 25.741910696029663,
+      "peak_memory_gb": 0.44537088,
+      "iterations": 3,
+      "replan_s": 257.6526231765747,
+      "episode_h": 0.933850028137631,
+      "gpu_h_per_100_episodes": 93.3850028137631
+    },
+    {
+      "optimizer": "gauss_newton",
+      "lookahead_days": 120,
+      "window_days": 14,
+      "mode": "side_by_side",
+      "call_s": 84.67519736289978,
+      "compile_s": 24.632121086120605,
+      "peak_memory_gb": 0.44537088,
+      "iterations": 3,
+      "replan_s": 254.02559208869934,
+      "episode_h": 0.9207524158758588,
+      "gpu_h_per_100_episodes": 92.07524158758588
+    },
+    {
+      "optimizer": "adam",
+      "lookahead_days": 60,
+      "window_days": 0,
+      "mode": "sequential",
+      "call_s": 79.01206719875336,
+      "compile_s": 60.530078053474426,
+      "peak_memory_gb": 1.40205184,
+      "iterations": 15,
+      "replan_s": 1185.1810079813004,
+      "episode_h": 4.283258084376918,
+      "gpu_h_per_100_episodes": 428.32580843769176
+    }
+  ],
+  "finished_utc": "2026-10-05T20:55:31.860898+00:00"
+}

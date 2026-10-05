@@ -9,7 +9,16 @@ segment, then plans again.
 * *The gradient.* It is the one Experiment 1 validated: the atmosphere's
   derivatives snipped every 14 days (W* = 14, Amendment 9 outcome A').
 * *Copies.* Every gradient or Jacobian is averaged over ``copies`` slightly
-  nudged copies of the current state (Dubey et al. use three).
+  nudged copies of the current state (Dubey et al. use three). With
+  ``batch_copies`` the copies run side by side in one vmapped call. On the
+  GPU this halves Adam's cost and leaves Gauss-Newton's unchanged
+  (step 17, ``run_planner_cost.py``).
+  - *Over a few days* the two modes agree to float32 round-off (about 1e-3
+    on the real model; exactly on the toy).
+  - *Over two weeks or more* chaos amplifies that round-off, so on the GPU
+    each mode samples different weather, as forward and backward mode did
+    in Experiment 1. The results are then the same statistically, not
+    bitwise.
 
 Two optimizers, as Part 18 plans; the pilot (step 23) picks one:
 
@@ -79,6 +88,7 @@ class PlannerConfig:
     copies: int = 3
     copy_amp: float = 0.001
     copy_seed0: int = 97000
+    batch_copies: bool = False
     optimizer: str = "adam"
     iterations: int = 15
     learning_rate: float = 0.1
@@ -136,6 +146,11 @@ def to_logits(amplitudes, cap: float, margin: float) -> np.ndarray:
     p = np.clip(np.asarray(amplitudes, np.float64) / cap, margin,
                 1.0 - margin)
     return np.log(p / (1.0 - p))
+
+
+def stack_carries(carries: Sequence[dict]) -> dict:
+    """Stack copies of a carry along a new leading axis (for ``jax.vmap``)."""
+    return jax.tree_util.tree_map(lambda *xs: jnp.stack(xs), *carries)
 
 
 def noise_to_signal(gradients: Sequence[np.ndarray]) -> Optional[float]:
@@ -233,8 +248,8 @@ class Planner:
                                  target_mean, previous, eff, q_base, warming,
                                  window)
 
-            self._value_and_grad = jax.jit(jax.value_and_grad(
-                objective_of_logits))
+            evaluate = jax.value_and_grad(objective_of_logits)
+            axes = (None, 0, None, None)
         else:
             mean_sst = make_lookahead_sst_fn(step_fn, patterns,
                                              config.lookahead_days)
@@ -244,8 +259,12 @@ class Planner:
                 return out, out
 
             # (jacobian (ix, il, K), map (ix, il)) from ONE forward pass.
-            self._jacobian_and_map = jax.jit(jax.jacfwd(map_twice,
-                                                        has_aux=True))
+            evaluate = jax.jacfwd(map_twice, has_aux=True)
+            axes = (None, 0)
+        # Side by side, every copy goes through one vmapped call; otherwise
+        # the copies run one after another through the same jitted function.
+        self._evaluate = jax.jit(jax.vmap(evaluate, in_axes=axes)
+                                 if config.batch_copies else evaluate)
 
     def target_mean(self, day: int) -> np.ndarray:
         """Return the normal climate's time-mean SST over the look-ahead from ``day``."""
@@ -262,13 +281,43 @@ class Planner:
         return [perturb_member(carry, base + c, self.cfg.copy_amp)
                 for c in range(self.cfg.copies)]
 
+    def prepare_copies(self, carry: dict, day: int):
+        """Return the copies as ``evaluate_copies`` takes them.
+
+        This is a list when they run one after another, and one stacked
+        carry when they run side by side.
+        """
+        copies = self.copies_of(carry, day)
+        return stack_carries(copies) if self.cfg.batch_copies else copies
+
+    def evaluate_copies(self, x, copies, target_mean=None, previous=None):
+        """Return the planner's expensive call, for every copy.
+
+        For Adam, at logits ``x``, it returns per-copy objective values
+        ``(C,)`` and gradients ``(C, K)``. For Gauss-Newton, at amplitudes
+        ``x``, it returns per-copy Jacobians ``(C, ix, il, K)`` and look-ahead
+        mean-SST maps ``(C, ix, il)``. ``copies`` comes from
+        ``prepare_copies``. A re-plan is ``iterations`` of these calls plus
+        some cheap host arithmetic, which is what step 17 times.
+        """
+        x = jnp.asarray(x, jnp.float32)
+        extra = ((jnp.asarray(target_mean), jnp.asarray(previous))
+                 if self.cfg.optimizer == "adam" else ())
+        if self.cfg.batch_copies:
+            first, second = self._evaluate(x, copies, *extra)
+            return (np.asarray(first, np.float64),
+                    np.asarray(second, np.float64))
+        outs = [self._evaluate(x, c, *extra) for c in copies]
+        return (np.stack([np.asarray(o[0], np.float64) for o in outs]),
+                np.stack([np.asarray(o[1], np.float64) for o in outs]))
+
     def __call__(self, state: EpisodeState) -> np.ndarray:
         t0 = time.time()
         cfg = self.cfg
         previous = np.asarray(state.previous, np.float32)
         start = (np.full(self.k, cfg.first_guess * cfg.cap, np.float32)
                  if state.segment == 0 else previous)
-        copies = self.copies_of(state.carry, state.day)
+        copies = self.prepare_copies(state.carry, state.day)
         target_mean = self.target_mean(state.day)
         if cfg.optimizer == "adam":
             final, record = self._adam(start, copies, target_mean, previous)
@@ -287,19 +336,14 @@ class Planner:
         z = to_logits(start, cfg.cap, cfg.edge_margin)
         m1, m2 = np.zeros_like(z), np.zeros_like(z)
         b1, b2 = _ADAM_BETAS
-        tm, prev = jnp.asarray(target_mean), jnp.asarray(previous)
         values, nts = [], None
         for it in range(cfg.iterations):
-            vals, grads = [], []
-            for carry in copies:
-                val, g = self._value_and_grad(jnp.asarray(z, jnp.float32),
-                                              carry, tm, prev)
-                vals.append(float(val))
-                grads.append(np.asarray(g, np.float64))
+            vals, grads = self.evaluate_copies(z, copies, target_mean,
+                                               previous)
             if it == 0:
-                nts = noise_to_signal(grads)
+                nts = noise_to_signal(list(grads))
             values.append(float(np.mean(vals)))
-            g = np.mean(grads, axis=0)
+            g = grads.mean(axis=0)
             m1 = b1 * m1 + (1.0 - b1) * g
             m2 = b2 * m2 + (1.0 - b2) * g * g
             step = (m1 / (1.0 - b1 ** (it + 1))) / (
@@ -315,21 +359,19 @@ class Planner:
                           - MAP_REFERENCE_K)
         values, nts = [], None
         for it in range(cfg.iterations):
+            jacs, maps = self.evaluate_copies(a, copies)
             normal = np.zeros((self.k, self.k))
             rhs = np.zeros(self.k)
             total, grads = 0.0, []
-            for carry in copies:
-                jac, mean_map = self._jacobian_and_map(
-                    jnp.asarray(a, jnp.float32), carry)
+            for jac, mean_map in zip(jacs, maps):
                 r, big_r = gauss_newton_residuals(
-                    np.asarray(mean_map, np.float64) - target_anomaly,
-                    np.asarray(jac), self.weights, a, previous, cfg.alpha,
-                    cfg.beta, cfg.mu, cfg.lam)
+                    mean_map - target_anomaly, jac, self.weights, a,
+                    previous, cfg.alpha, cfg.beta, cfg.mu, cfg.lam)
                 normal += big_r.T @ big_r
                 rhs += big_r.T @ r
                 total += float(r @ r)
                 grads.append(2.0 * big_r.T @ r)
-            n = len(copies)
+            n = len(grads)
             normal, rhs = normal / n, rhs / n
             if it == 0:
                 nts = noise_to_signal(grads)
