@@ -1,0 +1,652 @@
+{
+  "stage": "offline",
+  "rules": ", written before any ``ic`` output existed (2026-10-05).\n``J`` is the true objective (alpha = 1, beta = 0.5) of the member-mean\ntime-mean SST error over the look-ahead; differences are paired over the\ntraining states, with SE = sd / sqrt(n):\n\nR1  Optimizer. GN, unless Adam's J60 (map) is lower than GN 60 (map, 3\n    iterations) by more than 2 SE and by at least 5%. Iterations: the\n    smallest k in {1, 2, 3} whose J60 is within 2% of iteration 3's or\n    within 1 SE of it.\nR2  Copies. One copy if the one-copy solutions' J60 is within 5% of the\n    three-copy solution's (mean over states and copies) and the median\n    noise-to-signal ratio at the first iterate is below 0.5; otherwise 3.\nR3  Look-ahead of the long planner. 120 days if GN 120's J120 (in the\n    chosen representation) is lower than GN 60's by more than 2 SE and by\n    at least 5%; otherwise 60 days.\nR4  Score representation. The finest of grid-point map, zonal-mean profile,\n    band means and ocean mean whose ocean-SST signal is at least 3 times the\n    noise (mean-square) in the scoring window with five members at the\n    chosen warming. The planner's objective uses the same representation,\n    unless the map-objective planner beats it on that representation's\n    J60 by more than 2 SE.\nR5  Warming. A ramp from 0 at day 0 to F_end at day 182 (Experiment 3a's\n    \"steadily growing warming\"). F_end is the smallest of 4, 6 and 8 W m-2\n    that meets R4's 3-to-1 rule in the zonal-mean profile; the pilot then\n    reports the brightening it needs, as a share of the cap, which must\n    stay below 40% at nominal strength so that a hidden strength of 0.5\n    still leaves headroom.\nR6  Scoring window [98, 182): the last 12 weeks of a 182-day episode;\n    five members, from the references' seeds.\nR7  Penalties. Dubey et al.'s weights translated into albedo units:\n    mu = 0.01 s^2 and lam = 0.1 s^2, with s the mean over bands and states\n    of the ocean-mean response (K per unit albedo) over the chosen\n    look-ahead. Kept unless, in the linearized solution, mu costs more than\n    10% of the objective reduction; then mu and lam are divided by 10 until\n    it costs at most 10%.\nR8  Rainfall, evaporation and land temperature are scored on a domain only\n    if their zonal-mean signal is at least the noise (mean-square) at the\n    chosen warming; otherwise they are reported descriptively.\n\nExample (GX10, alongside vLLM):\n    python run_planner_pilot.py ic --ic-dir mcb_experiments_gpu/ics_macro/exp3_train \\\n        --ic-position 0 --references \\\n        mcb_experiments_gpu/test_world_refs/exp3_train/ic0002_references.npz \\\n        --output-dir mcb_experiments_gpu/pilot_step23\n",
+  "created_utc": "2026-10-05T20:50:58.504912+00:00",
+  "maps_check": {
+    "60d_W14": [
+      {
+        "band": 0,
+        "ocean": {
+          "pattern_corr": 0.18112767376362932,
+          "truth_reliability": 0.1159772127522283,
+          "corr_over_ceiling": 0.5318614042075462,
+          "slope_truth_on_grad": 0.9800987103249863,
+          "mean_truth": -0.09357322855233893,
+          "mean_grad": -0.0803992917888704,
+          "mean_diff_se": 0.01157644500881895
+        },
+        "far": {
+          "pattern_corr": 0.03705003540497759,
+          "truth_reliability": 0.081391296466215,
+          "corr_over_ceiling": 0.12986724997660287,
+          "slope_truth_on_grad": 1.9530647778227177,
+          "mean_truth": -0.017801854465000766,
+          "mean_grad": -0.005695975307056102,
+          "mean_diff_se": 0.014654239670213943
+        }
+      },
+      {
+        "band": 1,
+        "ocean": {
+          "pattern_corr": 0.3835573712605079,
+          "truth_reliability": 0.2984612739774071,
+          "corr_over_ceiling": 0.702079575999189,
+          "slope_truth_on_grad": 1.0857155685272404,
+          "mean_truth": -0.2604749359459466,
+          "mean_grad": -0.23442107979457952,
+          "mean_diff_se": 0.01293987624821339
+        },
+        "far": {
+          "pattern_corr": 0.032977225656572386,
+          "truth_reliability": 0.18713174380449105,
+          "corr_over_ceiling": 0.0762325388462196,
+          "slope_truth_on_grad": 0.9728946833051888,
+          "mean_truth": 0.0025975005840785746,
+          "mean_grad": -0.011914890572877652,
+          "mean_diff_se": 0.009784261210131756
+        }
+      },
+      {
+        "band": 2,
+        "ocean": {
+          "pattern_corr": 0.5528833033886195,
+          "truth_reliability": 0.23584388165741932,
+          "corr_over_ceiling": 1.1384688906445026,
+          "slope_truth_on_grad": 1.100159029716391,
+          "mean_truth": -0.4077657074909543,
+          "mean_grad": -0.3616529084520026,
+          "mean_diff_se": 0.010980445083197137
+        },
+        "far": {
+          "pattern_corr": 0.06315064274489439,
+          "truth_reliability": -0.16299410484320132,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 2.2074513628273116,
+          "mean_truth": -0.007030446067314582,
+          "mean_grad": -0.005646542223242453,
+          "mean_diff_se": 0.01926358865994091
+        }
+      },
+      {
+        "band": 3,
+        "ocean": {
+          "pattern_corr": 0.5180585257659988,
+          "truth_reliability": 0.40292535077267644,
+          "corr_over_ceiling": 0.8161435054187567,
+          "slope_truth_on_grad": 1.04689520207348,
+          "mean_truth": -0.41575005175855423,
+          "mean_grad": -0.3768783558340826,
+          "mean_diff_se": 0.013594264513399634
+        },
+        "far": {
+          "pattern_corr": 0.12624255841262697,
+          "truth_reliability": 0.17874194148542666,
+          "corr_over_ceiling": 0.2986018897135408,
+          "slope_truth_on_grad": 3.46558127703047,
+          "mean_truth": -0.03448525052745091,
+          "mean_grad": -0.012599477361064905,
+          "mean_diff_se": 0.024587232603559966
+        }
+      },
+      {
+        "band": 4,
+        "ocean": {
+          "pattern_corr": 0.5375777657975829,
+          "truth_reliability": 0.2816537958690703,
+          "corr_over_ceiling": 1.012939469061413,
+          "slope_truth_on_grad": 1.0022841436305672,
+          "mean_truth": -0.4254329021729067,
+          "mean_grad": -0.385434656297334,
+          "mean_diff_se": 0.006359403352939086
+        },
+        "far": {
+          "pattern_corr": 0.030600021985086358,
+          "truth_reliability": 0.02408095045731716,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 1.0829792517350425,
+          "mean_truth": -0.03428218054077008,
+          "mean_grad": -0.01169988897477051,
+          "mean_diff_se": 0.006636559139271382
+        }
+      }
+    ],
+    "60d_BPTT": [
+      {
+        "band": 0,
+        "ocean": {
+          "pattern_corr": 0.08754605279968977,
+          "truth_reliability": 0.1159772127522283,
+          "corr_over_ceiling": 0.25706931253163795,
+          "slope_truth_on_grad": 0.13044771264071092,
+          "mean_truth": -0.09357322855233893,
+          "mean_grad": -0.07877304262218934,
+          "mean_diff_se": 0.01866166029402725
+        },
+        "far": {
+          "pattern_corr": 0.05448511892173996,
+          "truth_reliability": 0.081391296466215,
+          "corr_over_ceiling": 0.19098045336992894,
+          "slope_truth_on_grad": 0.09690161536831304,
+          "mean_truth": -0.017801854465000766,
+          "mean_grad": 1.745199169284539e-05,
+          "mean_diff_se": 0.01805707974788361
+        }
+      },
+      {
+        "band": 1,
+        "ocean": {
+          "pattern_corr": 0.10232942483552156,
+          "truth_reliability": 0.2984612739774071,
+          "corr_over_ceiling": 0.18730809152398906,
+          "slope_truth_on_grad": 0.08958468532814638,
+          "mean_truth": -0.2604749359459466,
+          "mean_grad": -0.23879718442819953,
+          "mean_diff_se": 0.026701091177749114
+        },
+        "far": {
+          "pattern_corr": -0.019415126023006306,
+          "truth_reliability": 0.18713174380449105,
+          "corr_over_ceiling": -0.04488140889008046,
+          "slope_truth_on_grad": -0.017981713115430616,
+          "mean_truth": 0.0025975005840785746,
+          "mean_grad": -0.028167167337231513,
+          "mean_diff_se": 0.02308939477675258
+        }
+      },
+      {
+        "band": 2,
+        "ocean": {
+          "pattern_corr": 0.18375436771350287,
+          "truth_reliability": 0.23584388165741932,
+          "corr_over_ceiling": 0.378377552513697,
+          "slope_truth_on_grad": 0.13726831161449365,
+          "mean_truth": -0.4077657074909543,
+          "mean_grad": -0.39600463212841486,
+          "mean_diff_se": 0.021176120876245166
+        },
+        "far": {
+          "pattern_corr": -0.04625154600658271,
+          "truth_reliability": -0.16299410484320132,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": -0.027098147905104293,
+          "mean_truth": -0.007030446067314582,
+          "mean_grad": -0.04093750318781199,
+          "mean_diff_se": 0.04168855031360113
+        }
+      },
+      {
+        "band": 3,
+        "ocean": {
+          "pattern_corr": 0.13959929796733375,
+          "truth_reliability": 0.40292535077267644,
+          "corr_over_ceiling": 0.21992314522494621,
+          "slope_truth_on_grad": 0.07837299846232901,
+          "mean_truth": -0.41575005175855423,
+          "mean_grad": -0.41395237445053007,
+          "mean_diff_se": 0.027402861946148615
+        },
+        "far": {
+          "pattern_corr": 0.029270363187541212,
+          "truth_reliability": 0.17874194148542666,
+          "corr_over_ceiling": 0.06923327497715905,
+          "slope_truth_on_grad": 0.018362113914415716,
+          "mean_truth": -0.03448525052745091,
+          "mean_grad": -0.06269906342504916,
+          "mean_diff_se": 0.0561548625575783
+        }
+      },
+      {
+        "band": 4,
+        "ocean": {
+          "pattern_corr": 0.20873820134344703,
+          "truth_reliability": 0.2816537958690703,
+          "corr_over_ceiling": 0.39331828117549034,
+          "slope_truth_on_grad": 0.18360250198190942,
+          "mean_truth": -0.4254329021729067,
+          "mean_grad": -0.3453844758864343,
+          "mean_diff_se": 0.04670020841056976
+        },
+        "far": {
+          "pattern_corr": -0.03511906356851147,
+          "truth_reliability": 0.02408095045731716,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": -0.05399113321791471,
+          "mean_truth": -0.03428218054077008,
+          "mean_grad": -0.02684993731785884,
+          "mean_diff_se": 0.021850472612209078
+        }
+      }
+    ],
+    "120d_W14": [
+      {
+        "band": 0,
+        "ocean": {
+          "pattern_corr": 0.23446521882925933,
+          "truth_reliability": -0.06798885956119304,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 1.212946746866861,
+          "mean_truth": -0.17148900112943402,
+          "mean_grad": -0.18589308640962082,
+          "mean_diff_se": 0.04533725838754476
+        },
+        "far": {
+          "pattern_corr": 0.053843003367553675,
+          "truth_reliability": -0.09688284681920588,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 2.4845148031399003,
+          "mean_truth": 0.06044442278725125,
+          "mean_grad": -0.015410901618838867,
+          "mean_diff_se": 0.059446648862403986
+        }
+      },
+      {
+        "band": 1,
+        "ocean": {
+          "pattern_corr": 0.3570365076709004,
+          "truth_reliability": 0.3192272133610906,
+          "corr_over_ceiling": 0.6319208317042221,
+          "slope_truth_on_grad": 1.1855085359851587,
+          "mean_truth": -0.543877181483209,
+          "mean_grad": -0.4476668091205229,
+          "mean_diff_se": 0.023195886310393772
+        },
+        "far": {
+          "pattern_corr": 0.04531080379327204,
+          "truth_reliability": 0.2256217112128683,
+          "corr_over_ceiling": 0.09539186111529527,
+          "slope_truth_on_grad": 1.0134778722976756,
+          "mean_truth": -0.056680054156131573,
+          "mean_grad": -0.03455809701653337,
+          "mean_diff_se": 0.029448028737289477
+        }
+      },
+      {
+        "band": 2,
+        "ocean": {
+          "pattern_corr": 0.4577317543331843,
+          "truth_reliability": 0.18333064320914857,
+          "corr_over_ceiling": 1.06903890562175,
+          "slope_truth_on_grad": 1.1802967027501152,
+          "mean_truth": -0.8325879727364182,
+          "mean_grad": -0.6051503327055774,
+          "mean_diff_se": 0.015256628250483982
+        },
+        "far": {
+          "pattern_corr": 0.002386126012461682,
+          "truth_reliability": -0.07885256239066323,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 0.052704529609534784,
+          "mean_truth": -0.10419462826728866,
+          "mean_grad": -0.009350483804864404,
+          "mean_diff_se": 0.04567699250316773
+        }
+      },
+      {
+        "band": 3,
+        "ocean": {
+          "pattern_corr": 0.4517229076728642,
+          "truth_reliability": 0.25818626157777813,
+          "corr_over_ceiling": 0.8890077569422794,
+          "slope_truth_on_grad": 1.2377964589510921,
+          "mean_truth": -0.7620436954818692,
+          "mean_grad": -0.5987757934482554,
+          "mean_diff_se": 0.048968163951502615
+        },
+        "far": {
+          "pattern_corr": 0.12261767475974439,
+          "truth_reliability": 0.05261072446267804,
+          "corr_over_ceiling": 0.534583973959466,
+          "slope_truth_on_grad": 2.947210606357225,
+          "mean_truth": -0.06587352536293226,
+          "mean_grad": -0.021974230717286138,
+          "mean_diff_se": 0.06063917759750195
+        }
+      },
+      {
+        "band": 4,
+        "ocean": {
+          "pattern_corr": 0.45610103781695766,
+          "truth_reliability": 0.1461729022769586,
+          "corr_over_ceiling": 1.1929647890370791,
+          "slope_truth_on_grad": 1.0637836197755024,
+          "mean_truth": -0.755140134398248,
+          "mean_grad": -0.6566415697777233,
+          "mean_diff_se": 0.03196297666512598
+        },
+        "far": {
+          "pattern_corr": 0.05110627363808856,
+          "truth_reliability": -0.0744991517152161,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 1.7360579767927555,
+          "mean_truth": -0.04374416597224088,
+          "mean_grad": -0.028731601411900436,
+          "mean_diff_se": 0.042485127062774
+        }
+      }
+    ],
+    "120d_BPTT": [
+      {
+        "band": 0,
+        "ocean": {
+          "pattern_corr": 0.0016064797498592251,
+          "truth_reliability": -0.06798885956119304,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 2.3167474692302998e-07,
+          "mean_truth": -0.17148900112943402,
+          "mean_grad": -382.8963894772705,
+          "mean_diff_se": 316.525506073462
+        },
+        "far": {
+          "pattern_corr": 0.016636569889134433,
+          "truth_reliability": -0.09688284681920588,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 2.1037270450140057e-06,
+          "mean_truth": 0.06044442278725125,
+          "mean_grad": -242.7820327560362,
+          "mean_diff_se": 374.4930683213773
+        }
+      },
+      {
+        "band": 1,
+        "ocean": {
+          "pattern_corr": -0.025407757535787723,
+          "truth_reliability": 0.3192272133610906,
+          "corr_over_ceiling": -0.04496932646605871,
+          "slope_truth_on_grad": -1.5827775717555925e-06,
+          "mean_truth": -0.543877181483209,
+          "mean_grad": -608.0521100638139,
+          "mean_diff_se": 574.3744708189453
+        },
+        "far": {
+          "pattern_corr": -0.014488292947789564,
+          "truth_reliability": 0.2256217112128683,
+          "corr_over_ceiling": -0.03050189166757773,
+          "slope_truth_on_grad": -6.900101681625135e-07,
+          "mean_truth": -0.056680054156131573,
+          "mean_grad": -532.5312966847741,
+          "mean_diff_se": 675.4497390709618
+        }
+      },
+      {
+        "band": 2,
+        "ocean": {
+          "pattern_corr": -0.01702330442650908,
+          "truth_reliability": 0.18333064320914857,
+          "corr_over_ceiling": -0.03975816526142594,
+          "slope_truth_on_grad": -1.0143343924012704e-06,
+          "mean_truth": -0.8325879727364182,
+          "mean_grad": 1219.7504597222191,
+          "mean_diff_se": 804.8248381029576
+        },
+        "far": {
+          "pattern_corr": -0.032274038439933234,
+          "truth_reliability": -0.07885256239066323,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": -1.4480364508058663e-06,
+          "mean_truth": -0.10419462826728866,
+          "mean_grad": 1315.0015991397024,
+          "mean_diff_se": 858.491618433714
+        }
+      },
+      {
+        "band": 3,
+        "ocean": {
+          "pattern_corr": -0.050801945254437646,
+          "truth_reliability": 0.25818626157777813,
+          "corr_over_ceiling": -0.0999801485198514,
+          "slope_truth_on_grad": -8.700533533472781e-07,
+          "mean_truth": -0.7620436954818692,
+          "mean_grad": -800.5543232986315,
+          "mean_diff_se": 2493.4587096986193
+        },
+        "far": {
+          "pattern_corr": -0.04026606282627492,
+          "truth_reliability": 0.05261072446267804,
+          "corr_over_ceiling": -0.17555048180083793,
+          "slope_truth_on_grad": -9.911144518332769e-07,
+          "mean_truth": -0.06587352536293226,
+          "mean_grad": -773.6465164690151,
+          "mean_diff_se": 2098.1469673788356
+        }
+      },
+      {
+        "band": 4,
+        "ocean": {
+          "pattern_corr": 0.04715969535066072,
+          "truth_reliability": 0.1461729022769586,
+          "corr_over_ceiling": 0.12334954615392056,
+          "slope_truth_on_grad": 1.568544084086025e-06,
+          "mean_truth": -0.755140134398248,
+          "mean_grad": -1087.10531959321,
+          "mean_diff_se": 1081.990415092231
+        },
+        "far": {
+          "pattern_corr": 0.02107248431516436,
+          "truth_reliability": -0.0744991517152161,
+          "corr_over_ceiling": null,
+          "slope_truth_on_grad": 1.0553445169958577e-06,
+          "mean_truth": -0.04374416597224088,
+          "mean_grad": -720.5829765636787,
+          "mean_diff_se": 911.9224273324605
+        }
+      }
+    ]
+  },
+  "signal_noise": {
+    "window": [
+      98,
+      182
+    ],
+    "states": [
+      "ic0002_references.npz",
+      "ic0202_references.npz",
+      "ic0402_references.npz",
+      "ic0602_references.npz",
+      "ic0802_references.npz",
+      "ic1002_references.npz",
+      "ic1202_references.npz",
+      "ic1402_references.npz"
+    ],
+    "probe_wm2": 4.0,
+    "probe": {
+      "sst@ocean:map": {
+        "probe_signal_ms": 0.05093271817308569,
+        "noise_ms": 0.07049778268983424,
+        "probe_ratio": 0.7224726258011825
+      },
+      "sst@ocean:zonal": {
+        "probe_signal_ms": 0.04952670044963271,
+        "noise_ms": 0.005465509585847713,
+        "probe_ratio": 9.061680282818681
+      },
+      "sst@ocean:mean": {
+        "probe_signal_ms": 0.04814098760467916,
+        "noise_ms": 0.00021889481047553024,
+        "probe_ratio": 219.92749622568476
+      },
+      "land_temperature@land:map": {
+        "probe_signal_ms": 0.030179341518326495,
+        "noise_ms": 0.24340850449345908,
+        "probe_ratio": 0.12398638897655065
+      },
+      "land_temperature@land:zonal": {
+        "probe_signal_ms": 0.01853372260338891,
+        "noise_ms": 0.04552377681522617,
+        "probe_ratio": 0.40712181413713466
+      },
+      "land_temperature@land:mean": {
+        "probe_signal_ms": 0.007892369621921545,
+        "noise_ms": 0.005562875529199512,
+        "probe_ratio": 1.418757184210671
+      },
+      "precipitation@land:map": {
+        "probe_signal_ms": 0.05823780933304582,
+        "noise_ms": 0.5186659099855134,
+        "probe_ratio": 0.11228385789741306
+      },
+      "precipitation@land:zonal": {
+        "probe_signal_ms": 0.01576971507027037,
+        "noise_ms": 0.03855972239876985,
+        "probe_ratio": 0.4089685840366284
+      },
+      "precipitation@land:mean": {
+        "probe_signal_ms": -0.0013343366425820596,
+        "noise_ms": 0.0018067720771929694,
+        "probe_ratio": -0.738519628139874
+      },
+      "precipitation@global:map": {
+        "probe_signal_ms": 0.17088959040056856,
+        "noise_ms": 0.9108439510062891,
+        "probe_ratio": 0.18761675939305725
+      },
+      "precipitation@global:zonal": {
+        "probe_signal_ms": 0.018018175782918262,
+        "noise_ms": 0.028140849333330054,
+        "probe_ratio": 0.6402854288259706
+      },
+      "precipitation@global:mean": {
+        "probe_signal_ms": 0.0009550992367587327,
+        "noise_ms": 6.455599780964712e-05,
+        "probe_ratio": 14.794895426680316
+      },
+      "evaporation@land:map": {
+        "probe_signal_ms": 0.0012729641638578458,
+        "noise_ms": 0.01233477504318527,
+        "probe_ratio": 0.10320124683272067
+      },
+      "evaporation@land:zonal": {
+        "probe_signal_ms": 0.00038078375448992387,
+        "noise_ms": 0.0011146712071819673,
+        "probe_ratio": 0.3416108284097463
+      },
+      "evaporation@land:mean": {
+        "probe_signal_ms": 0.00034880195578381856,
+        "noise_ms": 6.854896645505362e-05,
+        "probe_ratio": 5.08836199612903
+      },
+      "evaporation@global:map": {
+        "probe_signal_ms": 0.0034858214288110453,
+        "noise_ms": 0.027977284224713576,
+        "probe_ratio": 0.12459470336051648
+      },
+      "evaporation@global:zonal": {
+        "probe_signal_ms": 0.0013662100987503656,
+        "noise_ms": 0.0011854930646399094,
+        "probe_ratio": 1.152440397587099
+      },
+      "evaporation@global:mean": {
+        "probe_signal_ms": 0.001111326259348992,
+        "noise_ms": 5.984241415035027e-05,
+        "probe_ratio": 18.570879452771663
+      }
+    },
+    "ramps": {
+      "4.0": {
+        "ocean_mean_anomaly_day182_K": 0.14368446859575665,
+        "window_mean_anomaly_K": 0.08891263445103086,
+        "ms_scale_vs_probe": 0.16397265506072178,
+        "ratios": {
+          "sst@ocean:map": 0.11846575466131123,
+          "sst@ocean:zonal": 1.4858677752851714,
+          "sst@ocean:mean": 36.0620954769824,
+          "land_temperature@land:map": 0.020330377391876417,
+          "land_temperature@land:zonal": 0.06675684479720367,
+          "land_temperature@land:mean": 0.23263738238149725,
+          "precipitation@land:map": 0.018411482299899612,
+          "precipitation@land:zonal": 0.06705966456090988,
+          "precipitation@land:mean": -0.12109702424055209,
+          "precipitation@global:map": 0.030764018171568208,
+          "precipitation@global:zonal": 0.10498930176128721,
+          "precipitation@global:mean": 2.4259582844585017,
+          "evaporation@land:map": 0.016922182448738114,
+          "evaporation@land:zonal": 0.05601483453183875,
+          "evaporation@land:mean": 0.8343522264153511,
+          "evaporation@global:map": 0.02043012431652692,
+          "evaporation@global:zonal": 0.18896871179159044,
+          "evaporation@global:mean": 3.0451164106835735
+        }
+      },
+      "6.0": {
+        "ocean_mean_anomaly_day182_K": 0.21552670289363496,
+        "window_mean_anomaly_K": 0.13336895167654628,
+        "ms_scale_vs_probe": 0.368938473886624,
+        "ratios": {
+          "sst@ocean:map": 0.26654794798795023,
+          "sst@ocean:zonal": 3.3432024943916354,
+          "sst@ocean:mean": 81.1397148232104,
+          "land_temperature@land:map": 0.045743349131721935,
+          "land_temperature@land:zonal": 0.15020290079370824,
+          "land_temperature@land:mean": 0.5234341103583688,
+          "precipitation@land:map": 0.04142583517477413,
+          "precipitation@land:zonal": 0.15088424526204722,
+          "precipitation@land:mean": -0.27246830454124216,
+          "precipitation@global:map": 0.06921904088602847,
+          "precipitation@global:zonal": 0.2362259289628962,
+          "precipitation@global:mean": 5.458406140031628,
+          "evaporation@land:map": 0.03807491050966075,
+          "evaporation@land:zonal": 0.1260333776966372,
+          "evaporation@land:mean": 1.87729250943454,
+          "evaporation@global:map": 0.04596777971218557,
+          "evaporation@global:zonal": 0.4251796015310785,
+          "evaporation@global:mean": 6.85151192403804
+        }
+      },
+      "8.0": {
+        "ocean_mean_anomaly_day182_K": 0.2873689371915133,
+        "window_mean_anomaly_K": 0.1778252689020617,
+        "ms_scale_vs_probe": 0.6558906202428871,
+        "ratios": {
+          "sst@ocean:map": 0.47386301864524494,
+          "sst@ocean:zonal": 5.943471101140686,
+          "sst@ocean:mean": 144.2483819079296,
+          "land_temperature@land:map": 0.08132150956750567,
+          "land_temperature@land:zonal": 0.2670273791888147,
+          "land_temperature@land:mean": 0.930549529525989,
+          "precipitation@land:map": 0.07364592919959845,
+          "precipitation@land:zonal": 0.2682386582436395,
+          "precipitation@land:mean": -0.48438809696220836,
+          "precipitation@global:map": 0.12305607268627283,
+          "precipitation@global:zonal": 0.41995720704514883,
+          "precipitation@global:mean": 9.703833137834007,
+          "evaporation@land:map": 0.06768872979495245,
+          "evaporation@land:zonal": 0.224059338127355,
+          "evaporation@land:mean": 3.3374089056614045,
+          "evaporation@global:map": 0.08172049726610768,
+          "evaporation@global:zonal": 0.7558748471663618,
+          "evaporation@global:mean": 12.180465642734294
+        }
+      }
+    },
+    "step_response_K_per_wm2": {
+      "30": 0.01217971351671586,
+      "60": 0.022902865018733374,
+      "120": 0.04781839575008136,
+      "182": 0.07067781936496492,
+      "240": 0.08978263314149759
+    }
+  },
+  "warming_choice": {
+    "ramp_end_wm2": 6.0,
+    "ramp_wm2_per_day": 0.03296703296703297,
+    "representation": "zonal",
+    "sst_ratios": {
+      "map": 0.26654794798795023,
+      "zonal": 3.3432024943916354,
+      "mean": 81.1397148232104
+    },
+    "other_variables_scored_zonal": {
+      "land_temperature@land": false,
+      "precipitation@land": false,
+      "precipitation@global": false,
+      "evaporation@land": false,
+      "evaporation@global": false
+    },
+    "other_variables_ratio_zonal": {
+      "land_temperature@land": 0.15020290079370824,
+      "precipitation@land": 0.15088424526204722,
+      "precipitation@global": 0.2362259289628962,
+      "evaporation@land": 0.1260333776966372,
+      "evaporation@global": 0.4251796015310785
+    }
+  }
+}

@@ -1,0 +1,546 @@
+{
+  "stage": "references",
+  "role": "exp3_train",
+  "config": {
+    "stage": "references",
+    "ic_dir": "mcb_experiments_gpu/ics_macro/exp3_train",
+    "output_dir": "mcb_experiments_gpu/test_world_refs/exp3_train",
+    "split": "all",
+    "max_ics": null,
+    "days": 240,
+    "members": 5,
+    "member_seed0": 93000,
+    "member_amp": 0.001,
+    "member_block_days": 5,
+    "warmed": true,
+    "allow_eval_roles": false,
+    "warming_step_wm2": 4.0,
+    "warming_ramp_wm2_per_day": 0.0
+  },
+  "fields": [
+    "sst",
+    "land_temperature",
+    "precipitation",
+    "evaporation"
+  ],
+  "units": {
+    "sst": "K",
+    "land_temperature": "K",
+    "precipitation": "mm/day",
+    "evaporation": "mm/day"
+  },
+  "note": "Part 18 steps 10-11: normal climate (no warming, no brightening) and uncontrolled warmed run, each the mean of the members; member 0 is the IC itself",
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_test_world.py references --ic-dir mcb_experiments_gpu/ics_macro/exp3_train --days 240 --members 5 --member-block-days 5 --member-seed0 93000 --warming-step-wm2 4.0 --warming-ramp-wm2-per-day 0.0 --output-dir mcb_experiments_gpu/test_world_refs/exp3_train",
+  "started_utc": "2026-10-02T07:09:15.165327+00:00",
+  "ics": [
+    {
+      "entry": {
+        "index": 2,
+        "split": "train",
+        "seed": 12002,
+        "macro_index": 0,
+        "branch": 2,
+        "spinup_days": 30,
+        "carry_file": "ic_m00_b2_train_seed12002_carry.pkl",
+        "baseline_file": "ic_m00_b2_train_seed12002_baseline60d.pkl"
+      },
+      "file": "ic0002_references.npz",
+      "member_seeds": [
+        null,
+        93195,
+        93196,
+        93197,
+        93198
+      ],
+      "seconds": 165.7
+    },
+    {
+      "entry": {
+        "index": 3,
+        "split": "train",
+        "seed": 12003,
+        "macro_index": 0,
+        "branch": 3,
+        "spinup_days": 30,
+        "carry_file": "ic_m00_b3_train_seed12003_carry.pkl",
+        "baseline_file": "ic_m00_b3_train_seed12003_baseline60d.pkl"
+      },
+      "file": "ic0003_references.npz",
+      "member_seeds": [
+        null,
+        93292,
+        93293,
+        93294,
+        93295
+      ],
+      "seconds": 156.3
+    },
+    {
+      "entry": {
+        "index": 202,
+        "split": "train",
+        "seed": 12202,
+        "macro_index": 2,
+        "branch": 2,
+        "spinup_days": 30,
+        "carry_file": "ic_m02_b2_train_seed12202_carry.pkl",
+        "baseline_file": "ic_m02_b2_train_seed12202_baseline60d.pkl"
+      },
+      "file": "ic0202_references.npz",
+      "member_seeds": [
+        null,
+        112595,
+        112596,
+        112597,
+        112598
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 203,
+        "split": "train",
+        "seed": 12203,
+        "macro_index": 2,
+        "branch": 3,
+        "spinup_days": 30,
+        "carry_file": "ic_m02_b3_train_seed12203_carry.pkl",
+        "baseline_file": "ic_m02_b3_train_seed12203_baseline60d.pkl"
+      },
+      "file": "ic0203_references.npz",
+      "member_seeds": [
+        null,
+        112692,
+        112693,
+        112694,
+        112695
+      ],
+      "seconds": 156.1
+    },
+    {
+      "entry": {
+        "index": 402,
+        "split": "train",
+        "seed": 12402,
+        "macro_index": 4,
+        "branch": 2,
+        "spinup_days": 30,
+        "carry_file": "ic_m04_b2_train_seed12402_carry.pkl",
+        "baseline_file": "ic_m04_b2_train_seed12402_baseline60d.pkl"
+      },
+      "file": "ic0402_references.npz",
+      "member_seeds": [
+        null,
+        131995,
+        131996,
+        131997,
+        131998
+      ],
+      "seconds": 156.1
+    },
+    {
+      "entry": {
+        "index": 403,
+        "split": "train",
+        "seed": 12403,
+        "macro_index": 4,
+        "branch": 3,
+        "spinup_days": 30,
+        "carry_file": "ic_m04_b3_train_seed12403_carry.pkl",
+        "baseline_file": "ic_m04_b3_train_seed12403_baseline60d.pkl"
+      },
+      "file": "ic0403_references.npz",
+      "member_seeds": [
+        null,
+        132092,
+        132093,
+        132094,
+        132095
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 602,
+        "split": "train",
+        "seed": 12602,
+        "macro_index": 6,
+        "branch": 2,
+        "spinup_days": 30,
+        "carry_file": "ic_m06_b2_train_seed12602_carry.pkl",
+        "baseline_file": "ic_m06_b2_train_seed12602_baseline60d.pkl"
+      },
+      "file": "ic0602_references.npz",
+      "member_seeds": [
+        null,
+        151395,
+        151396,
+        151397,
+        151398
+      ],
+      "seconds": 156.3
+    },
+    {
+      "entry": {
+        "index": 603,
+        "split": "train",
+        "seed": 12603,
+        "macro_index": 6,
+        "branch": 3,
+        "spinup_days": 30,
+        "carry_file": "ic_m06_b3_train_seed12603_carry.pkl",
+        "baseline_file": "ic_m06_b3_train_seed12603_baseline60d.pkl"
+      },
+      "file": "ic0603_references.npz",
+      "member_seeds": [
+        null,
+        151492,
+        151493,
+        151494,
+        151495
+      ],
+      "seconds": 156.1
+    },
+    {
+      "entry": {
+        "index": 802,
+        "split": "train",
+        "seed": 12802,
+        "macro_index": 8,
+        "branch": 2,
+        "spinup_days": 30,
+        "carry_file": "ic_m08_b2_train_seed12802_carry.pkl",
+        "baseline_file": "ic_m08_b2_train_seed12802_baseline60d.pkl"
+      },
+      "file": "ic0802_references.npz",
+      "member_seeds": [
+        null,
+        170795,
+        170796,
+        170797,
+        170798
+      ],
+      "seconds": 156.1
+    },
+    {
+      "entry": {
+        "index": 803,
+        "split": "train",
+        "seed": 12803,
+        "macro_index": 8,
+        "branch": 3,
+        "spinup_days": 30,
+        "carry_file": "ic_m08_b3_train_seed12803_carry.pkl",
+        "baseline_file": "ic_m08_b3_train_seed12803_baseline60d.pkl"
+      },
+      "file": "ic0803_references.npz",
+      "member_seeds": [
+        null,
+        170892,
+        170893,
+        170894,
+        170895
+      ],
+      "seconds": 156.3
+    },
+    {
+      "entry": {
+        "index": 1002,
+        "split": "train",
+        "seed": 13002,
+        "macro_index": 10,
+        "branch": 2,
+        "spinup_days": 30,
+        "carry_file": "ic_m10_b2_train_seed13002_carry.pkl",
+        "baseline_file": "ic_m10_b2_train_seed13002_baseline60d.pkl"
+      },
+      "file": "ic1002_references.npz",
+      "member_seeds": [
+        null,
+        190195,
+        190196,
+        190197,
+        190198
+      ],
+      "seconds": 156.3
+    },
+    {
+      "entry": {
+        "index": 1003,
+        "split": "train",
+        "seed": 13003,
+        "macro_index": 10,
+        "branch": 3,
+        "spinup_days": 30,
+        "carry_file": "ic_m10_b3_train_seed13003_carry.pkl",
+        "baseline_file": "ic_m10_b3_train_seed13003_baseline60d.pkl"
+      },
+      "file": "ic1003_references.npz",
+      "member_seeds": [
+        null,
+        190292,
+        190293,
+        190294,
+        190295
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 1202,
+        "split": "train",
+        "seed": 13202,
+        "macro_index": 12,
+        "branch": 2,
+        "spinup_days": 30,
+        "carry_file": "ic_m12_b2_train_seed13202_carry.pkl",
+        "baseline_file": "ic_m12_b2_train_seed13202_baseline60d.pkl"
+      },
+      "file": "ic1202_references.npz",
+      "member_seeds": [
+        null,
+        209595,
+        209596,
+        209597,
+        209598
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 1203,
+        "split": "train",
+        "seed": 13203,
+        "macro_index": 12,
+        "branch": 3,
+        "spinup_days": 30,
+        "carry_file": "ic_m12_b3_train_seed13203_carry.pkl",
+        "baseline_file": "ic_m12_b3_train_seed13203_baseline60d.pkl"
+      },
+      "file": "ic1203_references.npz",
+      "member_seeds": [
+        null,
+        209692,
+        209693,
+        209694,
+        209695
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 1402,
+        "split": "train",
+        "seed": 13402,
+        "macro_index": 14,
+        "branch": 2,
+        "spinup_days": 30,
+        "carry_file": "ic_m14_b2_train_seed13402_carry.pkl",
+        "baseline_file": "ic_m14_b2_train_seed13402_baseline60d.pkl"
+      },
+      "file": "ic1402_references.npz",
+      "member_seeds": [
+        null,
+        228995,
+        228996,
+        228997,
+        228998
+      ],
+      "seconds": 157.1
+    },
+    {
+      "entry": {
+        "index": 1403,
+        "split": "train",
+        "seed": 13403,
+        "macro_index": 14,
+        "branch": 3,
+        "spinup_days": 30,
+        "carry_file": "ic_m14_b3_train_seed13403_carry.pkl",
+        "baseline_file": "ic_m14_b3_train_seed13403_baseline60d.pkl"
+      },
+      "file": "ic1403_references.npz",
+      "member_seeds": [
+        null,
+        229092,
+        229093,
+        229094,
+        229095
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 4,
+        "split": "heldout",
+        "seed": 12004,
+        "macro_index": 0,
+        "branch": 4,
+        "spinup_days": 30,
+        "carry_file": "ic_m00_b4_heldout_seed12004_carry.pkl",
+        "baseline_file": "ic_m00_b4_heldout_seed12004_baseline60d.pkl"
+      },
+      "file": "ic0004_references.npz",
+      "member_seeds": [
+        null,
+        93389,
+        93390,
+        93391,
+        93392
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 204,
+        "split": "heldout",
+        "seed": 12204,
+        "macro_index": 2,
+        "branch": 4,
+        "spinup_days": 30,
+        "carry_file": "ic_m02_b4_heldout_seed12204_carry.pkl",
+        "baseline_file": "ic_m02_b4_heldout_seed12204_baseline60d.pkl"
+      },
+      "file": "ic0204_references.npz",
+      "member_seeds": [
+        null,
+        112789,
+        112790,
+        112791,
+        112792
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 404,
+        "split": "heldout",
+        "seed": 12404,
+        "macro_index": 4,
+        "branch": 4,
+        "spinup_days": 30,
+        "carry_file": "ic_m04_b4_heldout_seed12404_carry.pkl",
+        "baseline_file": "ic_m04_b4_heldout_seed12404_baseline60d.pkl"
+      },
+      "file": "ic0404_references.npz",
+      "member_seeds": [
+        null,
+        132189,
+        132190,
+        132191,
+        132192
+      ],
+      "seconds": 156.1
+    },
+    {
+      "entry": {
+        "index": 604,
+        "split": "heldout",
+        "seed": 12604,
+        "macro_index": 6,
+        "branch": 4,
+        "spinup_days": 30,
+        "carry_file": "ic_m06_b4_heldout_seed12604_carry.pkl",
+        "baseline_file": "ic_m06_b4_heldout_seed12604_baseline60d.pkl"
+      },
+      "file": "ic0604_references.npz",
+      "member_seeds": [
+        null,
+        151589,
+        151590,
+        151591,
+        151592
+      ],
+      "seconds": 156.1
+    },
+    {
+      "entry": {
+        "index": 804,
+        "split": "heldout",
+        "seed": 12804,
+        "macro_index": 8,
+        "branch": 4,
+        "spinup_days": 30,
+        "carry_file": "ic_m08_b4_heldout_seed12804_carry.pkl",
+        "baseline_file": "ic_m08_b4_heldout_seed12804_baseline60d.pkl"
+      },
+      "file": "ic0804_references.npz",
+      "member_seeds": [
+        null,
+        170989,
+        170990,
+        170991,
+        170992
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 1004,
+        "split": "heldout",
+        "seed": 13004,
+        "macro_index": 10,
+        "branch": 4,
+        "spinup_days": 30,
+        "carry_file": "ic_m10_b4_heldout_seed13004_carry.pkl",
+        "baseline_file": "ic_m10_b4_heldout_seed13004_baseline60d.pkl"
+      },
+      "file": "ic1004_references.npz",
+      "member_seeds": [
+        null,
+        190389,
+        190390,
+        190391,
+        190392
+      ],
+      "seconds": 156.3
+    },
+    {
+      "entry": {
+        "index": 1204,
+        "split": "heldout",
+        "seed": 13204,
+        "macro_index": 12,
+        "branch": 4,
+        "spinup_days": 30,
+        "carry_file": "ic_m12_b4_heldout_seed13204_carry.pkl",
+        "baseline_file": "ic_m12_b4_heldout_seed13204_baseline60d.pkl"
+      },
+      "file": "ic1204_references.npz",
+      "member_seeds": [
+        null,
+        209789,
+        209790,
+        209791,
+        209792
+      ],
+      "seconds": 156.2
+    },
+    {
+      "entry": {
+        "index": 1404,
+        "split": "heldout",
+        "seed": 13404,
+        "macro_index": 14,
+        "branch": 4,
+        "spinup_days": 30,
+        "carry_file": "ic_m14_b4_heldout_seed13404_carry.pkl",
+        "baseline_file": "ic_m14_b4_heldout_seed13404_baseline60d.pkl"
+      },
+      "file": "ic1404_references.npz",
+      "member_seeds": [
+        null,
+        229189,
+        229190,
+        229191,
+        229192
+      ],
+      "seconds": 156.4
+    }
+  ],
+  "finished_utc": "2026-10-02T08:11:54.398889+00:00"
+}

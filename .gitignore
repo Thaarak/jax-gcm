@@ -181,3 +181,8 @@ mcb_experiments/qflux/**/*.pkl
 # Experiment 1 maps (Amendment 9 revision 0.4): about 250 MB, over GitHub's 100 MB file limit.
 # Kept on the GPU machine and on local disk, never in git.
 mcb_experiments_gpu/**/*_maps.npz
+
+# Test-world reference ensembles (Part 18 step 11): about 47 MB each, 376 MB for the 8 training
+# states. They are kept on the GPU machine and on local disk, never in git; their manifests and
+# grid.npz are tracked.
+mcb_experiments_gpu/**/*_references.npz

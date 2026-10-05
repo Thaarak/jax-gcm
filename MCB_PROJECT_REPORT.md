@@ -2,11 +2,16 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run.*
 
 ---
 
 ## The one-paragraph version
+
+> **Latest status (2026-10-02):** Experiment 1 passed (outcome A′; Part 20). After the advisor meeting, the
+> current plan is in **Part 21**: write up the controller/methods paper first (draft skeleton done), then
+> the gradient paper, with real MCB on the right clouds as a later third paper.
+
 
 We tried to teach a small AI to fight global warming inside a computer simulation of Earth's climate. The specific idea is **Marine Cloud Brightening (MCB)**: making low ocean clouds slightly whiter so they reflect more sunlight and cool the planet a little. We built the AI as a "controller" that watches the simulated climate and decides where and how much to brighten clouds, aiming to cool the ocean by a small target amount without wrecking rainfall in sensitive places like the Amazon. Along the way we discovered — twice — that our own results couldn't be trusted: an earlier version of the work was riddled with bugs and wishful statistics, and even the careful rebuild turned out to be measuring a 5-thousandths-of-a-degree signal with an instrument that jittered by 15, in an experiment accidentally designed so the AI could never win. So we tore it down twice, fixed the measurement, and finally gave the controller a problem worth solving: uncertainty about how strongly the cloud-seeding actually works. **The honest ending, in three acts:** the corrected method *does* find a good, on-target cloud-brightening plan (now confirmed with real statistical power); under realistic uncertainty a feedback controller *demonstrably* beats the fixed plan — our strongest statistical result, and finally the project's founding claim; but the winning neural controller got every bit of its skill by *imitating a hundred-year-old control-engineering formula* — training it through the climate simulation itself, the project's founding bet, never worked, and we measured exactly why. That's a real, defensible, and genuinely interesting scientific ending — just not the one we set out to find. **Then we did it twice more.** We gave the controller a genuine climate disturbance to fight — an artificial El Niño — and got the best-looking numbers of the whole project, only for our own audit to show the test had been rigged by our design once again: because we imposed only warm events, a blind controller that simply sprayed harder by a fixed amount scored just as well. We rebuilt it, and this time the controllers genuinely cancel **85–89%** of the El Niño's effect — replicated on two independent sets of fresh climates, and apparently the first time anyone has closed a control loop on cloud brightening against real year-to-year climate variability. Then we asked the sharper question: does the controller actually need to *watch* the El Niño? It does not. One that never looks at the Pacific does just as well, because the ocean temperature it is already measuring carries the signal by itself — a more useful answer than the win we set out to claim, and one we only reached by noticing that the obvious version of that experiment would have been rigged in our favour too.
 
@@ -1246,6 +1251,14 @@ describes them, apart from three small changes made before anything runs (steps 
   samples as the references, started from the same seeds.
 - *A guard.* The code refuses to build references for evaluation states unless told to, and they are
   built only after revision 1 is frozen, so no design choice can be tuned on them.
+- *Training-state references, built 2026-10-02 on the GPU* (`run_campaign_test_world_refs.sh`; 32
+  starting states; 1.4 hours, run alongside the vLLM server without stopping it):
+  - A steady 4 W/m² probe warming heats the ocean by 0.10 K after 60 days, 0.19 K after 120 and
+    0.36 K after 240 (0.31–0.39 across states), within a few percent of the simple slab estimate.
+  - The normal climate rains 3.26 mm/day and evaporates 3.27 mm/day.
+  - Weather noise in a five-sample average is about 15 thousandths of a degree, so the warming
+    stands about 24 times above the noise by day 240. The pilot can scale this probe linearly to
+    whatever warming it chooses.
 - *Left to the pilot (step 23) and revision 1:*
   - how strong the warming is and whether it grows;
   - run and scoring-window lengths;
@@ -1282,33 +1295,153 @@ describes them, apart from three small changes made before anything runs (steps 
     run side by side; a forward-mode gradient with two or three Gauss–Newton steps versus Dubey et
     al.'s 15 Adam steps; a 14- versus a 60-day look-ahead), because at Dubey et al.'s settings a year of
     60-day planning could take roughly 20–50 GPU-hours, so the budget in the rules has to come from
-    measured costs, not guesses. Experiment 1's forward-pass maps already give the GPU time of one
-    120-day forward-mode gradient, and the planner logs the time of every re-plan.
+    measured costs, not guesses. *Done 2026-10-05 on the GX10* (`run_planner_cost.py`; results in
+    `mcb_experiments_gpu/planner_cost.json`):
+
+    | One re-plan, 3 copies | 14-day look-ahead | 60-day | 120-day |
+    |---|---|---|---|
+    | Gauss–Newton (3 steps) | 0.5 min | 2.1 min | 4.3 min |
+    | Adam (15 steps), copies side by side | 2.4 min | 10.3 min | 21.0 min |
+    | Adam (15 steps), copies one after another | 4.6 min | 19.7 min | 39.3 min |
+
+    - *Per planned six-month run* (13 re-plans): about 0.5 GPU-hours with Gauss–Newton and a 60-day
+      look-ahead, against 2.2 (side by side) to 4.3 hours with Adam. A year of 60-day Adam planning
+      costs 4.5–8.5 GPU-hours, well under the 20–50 guessed above.
+    - *Running copies side by side* halves Adam's cost but does nothing for Gauss–Newton, whose
+      five forward-mode directions already fill the GPU.
+    - *Snipping is free:* 79.0 versus 78.7 seconds per call without and with it.
+    - *Memory* stays under 8 GB, so all of it runs alongside the vLLM server.
+    - *The two copy modes give statistically equivalent results, not identical ones:* after about
+      two weeks the GPU's chaotic weather makes them different weather samples, as forward and
+      backward mode were in Experiment 1.
 18. **The fixed-pattern ladder:** build Dubey et al.'s four fixed opponents (uniform brightening tuned
     to cancel the average warming, uniform brightening at the planner's effort, the planner's own
     average pattern held constant, and the classical linear-response design), because each rung
     isolates where a win comes from: how much is brightened, where, when it changes, or how the design
-    was found.
+    was found. *Built 2026-10-05: see "Steps 18–22 as built" below.*
 19. **The classical feedback controller:** build a controller that holds three numbers on target (the
     ocean average, the north–south difference and the equator-to-pole difference) with true integral
     action, as in the GLENS stratospheric-aerosol simulations, and keep the old adaptive controller for
     continuity, because this is the feedback method the field actually uses and it answers Part 15's
-    open question about integral action.
+    open question about integral action. *Built 2026-10-05 (below).*
 20. **The student network:** build a tiny network (about 100 adjustable numbers) that sees only what a
     real system could measure (ocean temperature anomalies against the normal climate, the season,
     and its own previous settings) and outputs the five band settings, because the goal is a
-    controller that is cheap to run and needs no access to the model's insides.
+    controller that is cheap to run and needs no access to the model's insides. *Built 2026-10-05
+    (below).*
 21. **The copying loop, with a teacher that knows more:** train the student to copy the planner, then
     repeatedly let the student drive, ask the planner what it would have done in each situation the
     student reached, and retrain on the growing set (the DAgger method), with the planner told the
     hidden spraying strength and the student not, because plain copying breaks down once the
     student's small errors take it where the teacher never went, and a teacher that knows the answer
-    lets the student learn to infer it from what it sees.
+    lets the student learn to infer it from what it sees. *Built 2026-10-05 (below).*
 22. **Direct-training comparisons:** train the same tiny network straight through the simulation with
     ordinary backpropagation, with the snipped gradient and with ensemble Kalman inversion, each at
     the same GPU budget as the copying route (whose budget includes its teacher), because this
     re-tests the project's founding bet, which failed in Part 9, now with a small network and
-    possibly trustworthy gradients.
+    possibly trustworthy gradients. *Built 2026-10-05 (below).*
+
+**Steps 18–22 as built** (2026-10-05; code and tests only: nothing has run on the GPU, and no
+evaluation state was touched). Part 21.3 deferred steps 20–22 "unless time allows". They were built
+anyway, at no GPU cost, while the pilot ran, so revision 1 can decide whether they run.
+
+- *The fixed-pattern ladder* (`jcm/mcb/ladder.py`, step 18). The four rungs are fixed band settings:
+  1. the same brightening in every band, sized to cancel the ocean-average warming over the scoring
+     window;
+  2. the same brightening in every band, at the planner's effort;
+  3. the planner's own time-average pattern;
+  4. the classical linear-response design.
+
+  Rung 4 is the best fixed setting inside the cap under a linear model built from runs that brighten
+  one band at a time (`run_controllers.py responses`, about 5 GPU-minutes per training state). Under
+  that model the objective is an exact sum of squares, so the design is an exact bounded
+  least-squares fit, pooled over training states. Any response maps can be plugged in, so the same
+  solver gives Experiment 2's sunlight-guess opponent (21.3) once its maps are written down. On the
+  toy model, the linear model predicts a design's actual objective to round-off, and the design beats
+  uniform brightening.
+- *The classical feedback controllers* (`jcm/mcb/feedback.py`, step 19).
+  - **GLENS-style.** It holds the ocean average, the north–south difference and the equator-to-pole
+    difference on target. It uses proportional and true integral action, maps them onto the five
+    bands through a sensitivity matrix, and has anti-windup, so the integral doesn't pile up while
+    the bands are at a limit. A feedforward from the forecast warming, as GLENS has, is optional.
+  - **Its sensitivities come free from Experiment 1's brute-force runs.** Per unit albedo held from
+    day 0, the ocean average cools by 3, 9, 13, 13 and 14 thousandths of a degree a day for the bands
+    at 45N, 20N, 0, 20S and 45S, nearly steadily, because the slab acts like an integrator. The
+    north–south and equator-to-pole rows change sign across the bands, so the five bands can steer
+    all three numbers.
+  - **One tuning number.** The gains follow from a single closed-loop time scale instead of a tuning
+    sweep. Each two-week ocean-average reading of a single weather sample is off by about 0.022 K
+    (measured from the references). In a simulated integrator world with that noise and Experiment
+    1's sensitivities, a 42-day time scale gave the smallest ocean-average error over days 98–182.
+    The error was 0.019 K, against 0.022 K at 28 days, 0.026 K at 56 days, 0.050 K at 84 days and
+    0.19 K with no control: faster gains chase noise and slower ones lag. 42 days is the default;
+    revision 1 freezes the value.
+  - **The old adaptive controller, ported for continuity.** It is one fixed pattern times one gain:
+    it estimates how strongly the spraying works from realized versus expected cooling and divides
+    that out. Its Tier 2 sensor (a same-weather twin) and target (a fixed cooling) don't exist in the
+    test world, so it now measures realized cooling against the model's forecast of the uncontrolled
+    warmed run and aims to cancel that forecast warming. In the integrator world it recovers hidden
+    strengths of 0.5, 1 and 2 to within 20% and cancels a growing warming to within 10%.
+  - **The tests check the textbook behaviour:**
+    - integral action removes a steady miss that proportional control alone would keep;
+    - the feedforward halves the error against a growing warming;
+    - anti-windup halves the overshoot after a spell at the cap.
+- *The student network* (`jcm/mcb/student.py`, step 20). It has 113 adjustable numbers.
+  - *Inputs:* the ocean temperature anomaly under each band over the last two weeks, against the
+    normal climate (5); the season (2); its own previous settings (5).
+  - *Network:* one hidden layer of 6 units.
+  - *Outputs:* five settings, always inside the cap.
+
+  Feeding back its previous settings makes integral-like behaviour learnable. **A caveat for
+  revision 1:** every macro state starts on the same calendar date, so "the season" also tells the
+  student how long the episode has run, and so how much warming to expect. `--no-season` switches it
+  off, and the July mini-replicate (21.3) would separate the two.
+- *The copying loop* (`jcm/mcb/imitation.py`, step 21). This is DAgger with a privileged teacher.
+  - In round 0 the planner, told the episode's hidden strength, drives.
+  - In every later round the student drives. The planner is asked what it would have done in each
+    state the student reached, and the student is refitted on everything collected.
+
+  It was tested on the toy with the real planner as the teacher. Told a weaker spraying, the planner
+  asks for more brightening, and the student's copying error falls across rounds.
+- *Direct training* (`jcm/mcb/direct_training.py`, step 22).
+  - **The closed loop inside JAX.** The student's whole episode is one differentiable function. It
+    reproduces the ordinary episode runner's settings and temperatures to round-off, and its gradient
+    matches finite differences.
+  - **Three trainers:**
+    - ordinary backpropagation;
+    - the snipped gradient (W* = 14);
+    - ensemble Kalman inversion. It uses forward runs only, with the ensemble run side by side. The
+      Kalman gain is computed in the ensemble's own space, so a misfit vector the size of a map costs
+      little.
+  - **Equal budgets.** Each method stops when its budget of GPU-seconds is spent. The copying loop's
+    log records its total, teacher included, which is the budget the direct methods get. All three
+    lower the objective on the toy.
+- *Runners.* `run_controllers.py` has the responses, ladder, feedback and student-episode stages;
+  `run_student_training.py` has the copying loop and direct training. Both refuse evaluation states,
+  and the training runner accepts only `*_train` roles. `run_test_world.py` now shares its episode
+  options with them; its behaviour is unchanged.
+- *Checked:* 60 new tests on the toy and on synthetic data, all passing, with lint clean.
+  - *Smoke run:* all nine stages ran on one real training state on the laptop CPU (two segments of
+    two days). In the copying loop's real-model smoke the student's copying error fell from 19% to
+    12% of the cap after one round, and each direct method was handed exactly the copying loop's 208
+    GPU-seconds.
+  - *One fix came out of it.* Ensemble Kalman inversion first set its noise level per misfit
+    component. With map-sized misfits and a small ensemble, that left the update undamped, and one
+    step shrank the ensemble's spread from 0.1 to 0.0013, which ends its search. The noise is now
+    scaled to the ensemble's own spread, and on the real model the spread narrows gently (0.10, 0.074,
+    0.057, 0.042). A test guards it: on a problem of the same shape the old scaling keeps 3% of the
+    spread after one step, the new one 55%.
+- *Left for revision 1:*
+  - the controller's time scale and whether it gets the forecast;
+  - the ladder's design window;
+  - the hidden-strength range (a placeholder of 0.5–2 here);
+  - the copying loop's rounds and episodes;
+  - the direct methods' step sizes and ensemble size;
+  - whether steps 20–22 run at all.
+- *GPU cost if they run* (step 17's speeds). One copying round of 8 episodes with the Gauss–Newton
+  60-day teacher is 8 × 13 re-plans × 2.1 minutes, about 3.6 GPU-hours. Four rounds are about 15
+  GPU-hours, which each direct method then also gets, so about 60 GPU-hours for steps 21–22
+  together.
 
 ### Phase D — fix the rules for Experiments 2 and 3 (after Experiment 1, before any of their data)
 
@@ -1409,6 +1542,19 @@ The planner and the copying loop are new and expensive, so this plan costs more 
 | G: Experiment 4 | none | 5–10 |
 | **Total** | **about 45–55** | **about 105–215** |
 
+*Measured planning costs (step 17, 2026-10-05) change the Experiment 3 row.* One planned six-month
+run costs about 0.5 GPU-hours with Gauss–Newton at a 60-day look-ahead (0.1 at 14 days), or 2.2 with
+Adam. The biggest lever is how many weather samples each evaluation state gets:
+
+| Experiment 3a planners | Gauss–Newton | Adam (side by side) |
+|---|---|---|
+| 24 states × 1 sample × 3 planners | about 25 GPU-hours | about 120 |
+| 24 states × 5 samples × 3 planners | about 125 GPU-hours | about 600 |
+
+The three planners are snipped60, short14 and bptt60. Five samples would match the references'
+noise level. Revision 1 should weigh Gauss–Newton and the number of samples against the budget the
+advisor chooses.
+
 Rough calendar: Phase A this week; Experiment 1's answer a few days after the GPU run starts; Phase C
 coded in the meantime; revision 1 about a week after Experiment 1; Experiments 2 and 3 over the
 following two to four weeks, depending on the budget; a preprint roughly two months from now.
@@ -1482,11 +1628,20 @@ following two to four weeks, depending on the budget; a preprint roughly two mon
 - **`run_campaign_step0_exp1.sh`** — the gated GPU script for the Q-flux re-settle, the macro starting states and Experiment 1 (~14 GPU-h).
 - **`jcm/mcb/planner.py`** — the receding-horizon planner of Part 18 steps 13–15: 14-day re-plans over a 60-day look-ahead with the 14-day snip, Adam or Gauss–Newton steps, three nudged copies, the safeguards, and the `snipped60` / `short14` / `bptt60` presets. `run_test_world.py plan` runs and scores it.
 - **`jcm/mcb/test_world.py`** / **`jcm/mcb/scores.py`** / **`run_test_world.py`** — the test world for Experiments 2 and 3 (Part 18 steps 10–12): warming in the controlled runs only, the normal-climate and warmed references, Dubey et al.'s objective, gain and effort, the episode runner every controller plugs into, and the planner's differentiable look-ahead objective.
+- **`jcm/mcb/ladder.py`** / **`jcm/mcb/feedback.py`** / **`run_controllers.py`** — Part 18 steps 18–19: the fixed-pattern ladder (with the exact bounded least-squares linear-response design), the GLENS-style controller with integral action and anti-windup, the ported Tier 2 adaptive law, and the stages that measure one-band responses, design the ladder and score the controllers.
+- **`jcm/mcb/student.py`** / **`jcm/mcb/imitation.py`** / **`jcm/mcb/direct_training.py`** / **`run_student_training.py`** — Part 18 steps 20–22: the 113-number student, the copying loop (DAgger with a teacher told the hidden strength), and direct training through the closed loop by backpropagation, the snipped gradient or ensemble Kalman inversion, at equal GPU budgets.
 - **`jcm/mcb/qflux.py`** / **`run_qflux_base_climate.py`** — the ocean class with a monthly Q-flux, how the Q-flux is measured, and the settling run with its pre-written check (Amendment 9 revision 0.2), plus the one-step correction (revision 0.3). The Q-flux in use is `mcb_experiments/qflux/qflux_monthly_t30_v2.nc`; how it was derived is in `qflux_monthly_t30_v2_correction.json`, and its passing check is in `attempt2/`. The first attempt's file and summaries stay next to it as the record.
 
 ---
 
 # Part 19 — What could actually be published: every idea, how finished it is, and what's left
+
+> **Superseded in part (2026-10-02).** Experiment 1 has now run (Part 20), and the advisor meeting
+> changed the paper plan (Part 21). Part 21 holds the current plan; this part is kept as the record of
+> the first sort. Corrections to it: #1 has run (outcome A′); #8's numbers are 83–89% (step) and
+> 61–67% (growing), measured on new *weather realizations* from one ocean state, and "possibly the
+> first feedback loop against El Niño" is dropped (the disturbance is a prescribed patch); "Paper B,
+> mostly writing" overstated its standalone value; and #9 is harder than "fairly cheap" (Part 20.4).
 
 *Added 2026-10-01.* The project has produced a lot of results, plus a lot of things that failed or
 were taken apart. This part sorts all of it into **ideas that could become published research**,
@@ -1536,3 +1691,196 @@ Part 4), the CO2 experiment (cancels out by design; it becomes an example for #6
 > over cold ocean that real MCB targets (Part 1). *Adaptive controller* = a controller that estimates
 > an unknown quantity (here, how strongly the spraying works) and adjusts for it; the correct name for
 > what earlier parts called "PI" (16.3).
+
+---
+
+# Part 20 — Experiment 1's answer, and four checks made after it
+
+*Added 2026-10-02.* Experiment 1 (Part 17) ran on the GPU on 2026-10-01 from 17:48 to 20:34. That is
+**2.8 hours instead of the estimated 12**: GPU work is about 4× cheaper than every plan so far assumed.
+The data and the frozen analysis are committed (`mcb_experiments_gpu/exp1_gradient_fidelity*`).
+
+## 20.1 The registered result: outcome A′, best window 14 days
+
+Snipping the atmosphere every 1, 7 or 14 days passed the pre-written test at 60 days; ordinary
+backpropagation was "inconclusive". So the frozen rule says: go ahead with Experiments 2–3 using the
+14-day snip (W* = 14). The numbers below are "how far one gradient run lands from the brute-force
+truth, as a share of the truth's size", and "what fraction of the true size it reports".
+
+| Looking ahead | Ordinary gradient | Snipped every 14 days |
+|---|---|---|
+| 15–30 days | excellent: each run within 4–7% | same |
+| 60 days | each run off by 42–74%; only the average of 8 runs is right | each run within 14–16%; reads 86–90% of the true size |
+| 120 days | **blown up**: every run 10,000–100,000× too big | each run within 30–33%; reads 69–75% of the true size |
+
+In plain words: the ordinary "what if I brighten here?" calculation is reliable for about a month on
+ocean goals (about twice Dubey et al.'s 2–4 weeks for land) and turns to nonsense by four months.
+Snipping keeps it usable for at least four months, but it comes out **steadily a little too small**,
+because it misses slow air feedbacks that take longer than two weeks to build. The shortfall shrinks
+as the window grows (1 → 7 → 14 days). The 7-day **fade** behaved like the 14-day snip, although the
+plan had expected it to be borderline.
+
+**The land prediction could not be tested.** Brightening the ocean bands moves land temperature too
+little to see against land weather (truth signal-to-noise 0.3–1.2 beyond 15 days), so the registered
+"snipping should fail on land" prediction is reported as untestable.
+
+## 20.2 Check 1 (after the results, so exploratory): a no-model guess gets the direction almost free
+
+With only five broad latitude bands, a guess that uses no model run at all (sunlight × cloud cover ×
+band area) points within 3–9° of the truth for the ocean average and the equator-to-pole contrast,
+about as close as the snipped gradient (2.5–9°). The gradient clearly wins on the **north–south
+contrast** (5° vs 13° at 60 days) and on the **size** of the effect. So the pass test on the ocean
+average was easy, and any paper must show what the model knows beyond geometry: the size, the
+contrasts, the response maps, and designs with many knobs.
+
+Duncan's own back-of-envelope (sunlight × cloud ÷ ocean heat capacity; the slab is 40 m deep at the
+equator and 60 m at the poles) points 8–20° off and predicts about **2× too much** cooling, because it
+ignores the air's feedbacks. The gradient beats it on both counts (0.3–10° off; 69–99% of the size).
+It is the right sanity check, and the gradient demonstrably knows more.
+
+## 20.3 Check 2: one gradient run is worth several brute-force runs
+
+For five knobs, one snipped-gradient run costs about the same GPU time as one round of brute-force runs
+(about 35 seconds each). Its accuracy equals **5–12 brute-force rounds at 1–2 months**, but only about
+**1.5–6 rounds at 4 months**, because its undercount does not average away. Brute force needs two extra
+runs per knob while the gradient's cost stays flat, so the advantage grows with the number of knobs.
+This is the answer to Duncan's question of whether gradients can stand in for large ensembles.
+
+## 20.4 Check 3: the model's low clouds, and why "real MCB" is a bigger job
+
+A one-year run of the Q-flux climate on the laptop measured both cloud types. The stratocumulus layer
+sits in the right places, but it is thin: about 19% average cover off Peru (54% in its strongest cell),
+16% off Namibia, 5% off California, against roughly half the sky in real decks. The current actuator's
+main cloud is anti-correlated with it (pattern correlation −0.64). Brightening only the low clouds
+gives about **1/12 of the cooling per unit of brightening**, so a realistic signal over 60 days would be
+about the size of the weather noise. Real MCB therefore needs months-to-year runs and bigger ensembles:
+a later paper (Part 21), and a natural use of the months-long gradients.
+
+## 20.5 Check 4: what "one Earth" looks like without the twin
+
+Every controller so far read a perfect twin run. In 9 years of one free-running model Earth, the ocean's
+average temperature wanders by about 83 mK on its own, and slowly (it barely changes over a month). A
+before/after check of whether brightening worked therefore has noise of **33 mK at 2 months, 49 mK at 4
+months and 88 mK at a year**: 2–3× the twin-based noise of all past results, and it grows the longer you
+wait. The adaptive controller's win (shrinking a 20 mK miss to 10 mK) and its estimate of the hidden
+spraying strength (worth up to about 40 mK) would be hard to see with one Earth, so they need
+re-testing. Because the wander is slow, it is also predictable: a model forecast of "what would have
+happened without brightening" could remove much of it.
+
+## 20.6 Other Step 0 facts
+
+The Q-flux climate passed its check again on the GPU (bias +0.08 K, drift −0.012 K per 60 days). The 16
+starting ocean states really differ (neighbouring states differ by about 1 K in their temperature
+patterns) but share a slow cooling trend of 0.15 ± 0.05 K per decade; the interleaved split balances
+it (evaluation minus training +0.05 K).
+
+> **New terms:** *A′ (A-prime)* = snipping passes and ordinary backpropagation is inconclusive.
+> *Undercount* = the snipped gradient's steady habit of reporting less than the true effect.
+> *One Earth* = measuring with a single realization and no twin, as a real deployment must.
+
+---
+
+# Part 21 — The advisor meeting and the current plan
+
+*Added 2026-10-02 (meeting with Duncan Watson-Parris that day). This part replaces the paper plan in
+Part 19. Parts 17–18 remain the experiment design; the changes to them are listed in 21.3.*
+
+## 21.1 What Duncan advised, and the verdict on each point
+
+| His advice | Verdict | Why |
+|---|---|---|
+| The weather noise is interesting in itself: can you even **detect** an intervention? | Strongly agree | It is what a real deployment faces, and his own field. Prior work exists on detection times (MacMartin et al. 2019; Diamond et al. 2022); the new angle is detection inside a feedback controller with one Earth (20.5) |
+| Use the model's **gradients**, Dubey-style, for better or faster control **without big ensembles** | Agree | Experiment 1 shows gradients last longer than he assumed (a month plain, four months snipped), and one gradient run stands in for 5–12 brute-force runs (20.3) |
+| Treat the model as a cheap **testbed for methods**, not for trusted predictions | Agree | Changes how Paper 1 is described (21.4) |
+| The methods paper should focus on **where to intervene and how much** | Agree | No existing controller chooses *where*: the classical laws and copied networks only scale one fixed map, so this is open territory |
+| A simple formula (sunlight × cloud × heat capacity) should roughly give the best places | Agree, as a sanity check | Tested in 20.2: right general direction, 2× too much cooling; the gradient knows more |
+| No machine learning **for its own sake** | Agree | Copying a formula cannot beat the formula. The "train the AI four ways" race and the copying student are dropped |
+| Rainfall is worth including (more nonlinear) but noisy | Partly | Even land temperature was undetectable after 2 weeks with 32 runs; rainfall goes into the detectability analysis first, not into control |
+| A more advanced ocean: **not now** | Agree | More complexity than it solves at this stage |
+| **Write up** methods and main results now; abstract last; a 4-page Climate Change AI workshop paper as a first target | Agree | Done for the methods paper (21.5) |
+
+Two points of nuance: in the slab ocean heat cannot move sideways through the water (only through the
+air), so "after long enough it doesn't matter where you brighten" may hold less well than in the real
+ocean, and is testable; and because the slab's wander is slow, "wait longer to beat the noise" helps
+less than for random noise (20.5).
+
+Things said slightly wrong in the meeting, to correct with him: the model adds no rain (it only makes
+clouds more reflective, and the storm-type clouds at that); the copying AI clearly beat the fixed map
+(the AI trained through the simulation did not); the classical controller does not choose regions (the
+southern-hemisphere map was the old fixed map); the 8 runs fixed the noise, while the 16 starting oceans
+fixed the "same ocean" problem.
+
+## 21.2 The current paper plan
+
+| Paper | Contents | Status | Target |
+|---|---|---|---|
+| **Paper 2 — methods/controllers (write-up first)** | Fixed map vs adaptive classical law vs neural controllers (trained through the model, copied, copied + fine-tuned) under hidden efficacy and a hidden tropical SST patch (Parts 8–10, 13–15); the noise floor and the six rigged-design traps as methods; then the new "one Earth" experiment (realistic sensing, patch removed from sensor and score) and **where and how much** to brighten, with a gradient-based (Dubey-style, receding-horizon) controller | Draft skeleton written (21.5); new experiments not yet run | Write-up for Duncan now; 4-page Climate Change AI workshop; then JAMES |
+| **Paper 1 — gradients** | Experiment 1 (20.1), gradients vs ensembles (20.3), the formula sanity check (20.2), and gradient design of maps with **many knobs** (Experiment 2), where gradients beat brute force | Experiment 1 done; Experiment 2 not yet run | JAMES or GMD; a write-up is not needed yet |
+| **Paper 3 — real MCB (later)** | Brighten the right (stratocumulus) clouds, ideally in the standard MCB regions, over months to a year, using Paper 1's method; can detection even succeed with one Earth? | Idea; 20.4 shows it needs long runs | After Papers 1–2 |
+
+The El Niño work is folded into Paper 2 rather than written as its own paper. A short "pitfalls" piece
+(noise floor + rigged designs) remains possible as a workshop paper or a section of Paper 2.
+
+How Papers 1 and 3 differ: Paper 1 is about the **tool** (can you predict months ahead and plan with
+it; which clouds get brightened doesn't matter). Paper 3 is about **MCB itself** (point that tool at
+the right clouds and ask how much they cool, where to brighten, and what side effects appear).
+
+## 21.3 Changes to the Part 17–18 experiment plan
+
+- **Kept:** the receding-horizon planner (Part 18 steps 13–16, built 2026-10-02) and the test world with
+  a normal-climate target instead of the twin (steps 10–12, built). They are exactly Duncan's
+  "gradients for control, one Earth" direction.
+- **Dropped or deferred:** the copying student and the four-way training race (steps 20–22), unless
+  time allows; the advanced ocean; rainfall as a control target.
+- **Added:** a **sunlight-guess design** as a required opponent in Experiment 2, with the many-knob design
+  as a main test (with five knobs, brute force is as cheap and as accurate); the response-**maps** check
+  (does the snipped gradient get effects outside the brightened bands right?); a short registered test
+  of **21- and 30-day** snips reusing Experiment 1's truth (about 1 GPU-hour); a **July** mini-replicate;
+  and the **one-Earth sensing** experiment for Paper 2 (twin vs before/after vs model forecast vs
+  pattern-matching ("fingerprint") sensing, crossed with fixed-map scaling vs gradient planning).
+- **Costs:** every GPU estimate in Part 18 can be divided by about 4 (20, opening paragraph).
+
+## 21.4 Paper 1 in plain words (updated after Duncan's framing)
+
+"Paper 1 is about a method, not a prediction. In a cheap, simple climate model, we show that the
+model's 'what if I brighten here?' calculation can replace lots of expensive repeat runs: one
+calculation does the job of about 5–12 runs when looking 1–2 months ahead. It stays usable for about
+four months if we only follow the weather two weeks at a time, though it comes out a little low. We
+check it against a simple sunlight-and-clouds formula and use it to find where brightening works
+best. The point is that this trick could later be used in big, realistic climate models where repeat
+runs are too expensive."
+
+## 21.5 The methods write-up (Paper 2 skeleton)
+
+Written 2026-10-02 in `~/workspace/mcb-methods-writeup/`, outside this repository on purpose (the
+GitHub fork is public). It follows the lab wiki's writing resources: one-line TL;DR comments over every
+paragraph, a multi-experiment structure, ACP's abstract and conclusion structure, and AGU's template
+rules.
+- `main.tex` (AGU JAMES layout; falls back to `agu-standin.sty` when AGU's class file is missing),
+  `references.bib` (28 entries, 22 generated from Crossref records), six figures regenerated from the
+  campaign pickles by `make_writeup_figures.py`, and three tables.
+- Compiles cleanly (20 pages; `main_preview.pdf`). For **OpenAI Prism**, import
+  `mcb_controller_writeup.zip` or the `upload/` folder (`README_UPLOAD.md`).
+- About 29 visible TODO notes: author details, training settings from the logs, and questions for
+  Duncan.
+
+## 21.6 Next steps
+
+1. Send Duncan the write-up and the Experiment 1 figure on Slack, with the corrections in 21.1; meet
+   every 1–2 weeks (next booked slot: October 20).
+2. Agree the answers to the open decisions (21.7).
+3. Paper 2's new experiments: one-Earth sensing, then where-to-intervene with the planner.
+4. Paper 1's next steps: the maps check, the 21/30-day snip test, then Experiment 2 with the
+   sunlight-guess opponent and many knobs.
+5. Housekeeping: report the jax-esm Q-flux month-indexing bug upstream; archive the data on Zenodo.
+
+## 21.7 Open decisions for Duncan
+
+1. Should the workshop paper be the controller comparison (the write-up) or the gradient story?
+2. Is detectability with one Earth part of Paper 2, or its own study?
+3. Should we contact Dubey et al. (same model; their next steps overlap the planner)?
+4. How should the AI use be disclosed, and what is the author list?
+
+> **New terms:** *Testbed* = a cheap model used to try out methods, not to make trusted predictions.
+> *Fingerprint sensing* = checking an observed map against the expected pattern of cooling, instead of
+> a single average, to pick a signal out of noise sooner.
