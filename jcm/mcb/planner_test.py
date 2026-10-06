@@ -25,7 +25,12 @@ from jcm.mcb.planner import (
     to_amplitudes,
     to_logits,
 )
-from jcm.mcb.scores import area_weights, segment_objective
+from jcm.mcb.scores import (
+    area_weights,
+    pattern_objective,
+    segment_objective,
+    zonal_projection,
+)
 from jcm.mcb.test_world import (
     EpisodeState,
     make_lookahead_sst_fn,
@@ -66,7 +71,8 @@ class _Toy(unittest.TestCase):
                             previous=np.asarray(previous, np.float32),
                             last_fields=None)
 
-    def known_optimum(self, mu=0.0, lam=0.0, previous=(0.0, 0.0)):
+    def known_optimum(self, mu=0.0, lam=0.0, previous=(0.0, 0.0),
+                      zonal=False):
         """Exact minimizer: the toy's look-ahead map is linear in a."""
         import jax
         f = make_lookahead_sst_fn(_toy_step, self.patterns, L)
@@ -78,9 +84,14 @@ class _Toy(unittest.TestCase):
         a0 = jnp.zeros(2)
         jac = np.asarray(jax.jacfwd(mean_map)(a0))
         target = self.target[:L].mean(axis=0) - MAP_REFERENCE_K
-        r, big_r = gauss_newton_residuals(np.asarray(mean_map(a0)) - target,
-                                          jac, self.w, np.zeros(2), previous,
-                                          1.0, 0.5, mu, lam)
+        error = np.asarray(mean_map(a0), np.float64) - target
+        if zonal:
+            error = zonal_projection(error, OCEAN)
+            jac = np.stack([zonal_projection(np.asarray(jac[..., k],
+                                                        np.float64), OCEAN)
+                            for k in range(2)], axis=-1)
+        r, big_r = gauss_newton_residuals(error, jac, self.w, np.zeros(2),
+                                          previous, 1.0, 0.5, mu, lam)
         return np.linalg.lstsq(big_r, -r, rcond=None)[0]
 
 
@@ -101,6 +112,15 @@ class KnownOptimumTest(_Toy):
                                mu=1e-4, lam=1e-4)
         a = planner(self.state(segment=1, previous=prev))
         np.testing.assert_allclose(a, self.known_optimum(1e-4, 1e-4, prev),
+                                   rtol=1e-3, atol=1e-5)
+
+    def test_zonal_gauss_newton_lands_on_the_zonal_optimum(self):
+        # The toy is the same at every longitude, so here the zonal optimum
+        # equals the map optimum; HelpersTest checks the projection itself.
+        a_zonal = self.known_optimum(zonal=True)
+        planner = self.planner(optimizer="gauss_newton", iterations=1,
+                               representation="zonal")
+        np.testing.assert_allclose(planner(self.state()), a_zonal,
                                    rtol=1e-3, atol=1e-5)
 
     def test_adam_converges_to_it(self):
@@ -222,6 +242,31 @@ class HelpersTest(unittest.TestCase):
         self.assertAlmostEqual(float(r @ r), float(j), places=6)
         self.assertEqual(big_r.shape, (r.size, 2))
 
+    def test_zonal_projection(self):
+        rng = np.random.default_rng(1)
+        w = np.asarray(area_weights(LATS, OCEAN))
+        x = rng.normal(size=OCEAN.shape)
+        z = zonal_projection(x, OCEAN)
+        self.assertIsInstance(z, np.ndarray)
+        for j in range(OCEAN.shape[1]):
+            vals = z[OCEAN[:, j] > 0, j]
+            if vals.size:
+                np.testing.assert_allclose(vals, vals[0])
+        np.testing.assert_array_equal(z[OCEAN == 0], 0.0)
+        self.assertAlmostEqual(float(np.sum(w * z)), float(np.sum(w * x)))
+        np.testing.assert_allclose(zonal_projection(z, OCEAN), z)
+        np.testing.assert_allclose(
+            np.asarray(zonal_projection(jnp.asarray(x, jnp.float32),
+                                        OCEAN)), z, rtol=1e-5, atol=1e-6)
+        # Zonal residuals reproduce the objective of the projected error.
+        r, _ = gauss_newton_residuals(z, np.zeros(OCEAN.shape + (2,)), w,
+                                      np.zeros(2), np.zeros(2), 1.0, 0.5,
+                                      0.0, 0.0)
+        self.assertAlmostEqual(float(r @ r), float(pattern_objective(z, w)))
+        # The zonal objective never exceeds the map objective.
+        self.assertLessEqual(float(pattern_objective(z, w)),
+                             float(pattern_objective(x, w)) + 1e-12)
+
     def test_noise_to_signal(self):
         self.assertIsNone(noise_to_signal([np.ones(3)]))
         self.assertEqual(noise_to_signal([np.ones(3), np.ones(3)]), 0.0)
@@ -239,7 +284,9 @@ class HelpersTest(unittest.TestCase):
                          (60, NO_TRUNCATION_DAYS))
         for bad in ({"copies": 0}, {"optimizer": "sgd"}, {"cap": 0.0},
                     {"first_guess": 1.0}, {"edge_margin": 0.6},
-                    {"mu": -1.0}, {"lookahead_days": 0}):
+                    {"mu": -1.0}, {"lookahead_days": 0},
+                    {"representation": "bands"},
+                    {"representation": "zonal", "optimizer": "adam"}):
             with self.assertRaises(ValueError, msg=str(bad)):
                 PlannerConfig(**bad).validate()
 

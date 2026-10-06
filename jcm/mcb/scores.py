@@ -66,6 +66,25 @@ def weighted_variance(field, weights):
     return weighted_mean((field - mean[..., None, None]) ** 2, weights)
 
 
+def zonal_projection(field, mask):
+    """Replace every cell of ``mask`` by its latitude's mean over ``mask``.
+
+    ``field`` is ``(..., ix, il)`` and ``mask`` ``(ix, il)`` (1 inside the
+    domain). Cells outside the mask become 0. All cells of a latitude have the
+    same area weight, so the projection keeps the domain's weighted mean, and
+    ``pattern_objective`` of the projection scores only the latitude
+    (zonal-mean) profile of the error. This is the representation the step-23
+    pilot chose (MCB_PROJECT_REPORT.md Part 22): grid-point SST errors are
+    mostly weather noise, while the zonal profile carries the signal.
+    """
+    # NumPy in, NumPy out (float64 on the host); JAX arrays stay in JAX.
+    xp = np if isinstance(field, np.ndarray) else jnp
+    m = xp.asarray(mask, field.dtype)
+    counts = xp.maximum(xp.sum(m, axis=0), 1.0)
+    zonal = xp.sum(field * m, axis=-2) / counts
+    return zonal[..., None, :] * m
+
+
 def pattern_objective(error_map, weights, alpha: float = PATTERN_ALPHA,
                       beta: float = PATTERN_BETA):
     """``alpha <d>_w^2 + beta Var_w(d)`` for a time-mean error map ``d``."""

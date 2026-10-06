@@ -41,6 +41,12 @@ Safeguards (step 14):
 * The optimizer's LAST iterate is applied, never the best-looking one,
   which would reward luck among noisy evaluations.
 
+The objective scores the ocean map, or with ``representation="zonal"``
+(Gauss-Newton only) its latitude profile: the error map and every band's
+response map are projected onto their ocean zonal means before the residuals
+are formed. The step-23 pilot chose the zonal one (MCB_PROJECT_REPORT.md
+Part 22).
+
 The comparison planners of step 15 are presets: ``short14`` is a 14-day
 look-ahead with exact backpropagation (Dubey et al.'s setting), and
 ``bptt60`` is 60 days without the snip.
@@ -56,7 +62,7 @@ import numpy as np
 
 from jcm.mcb.gradient_fidelity import MAP_REFERENCE_K
 from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
-from jcm.mcb.scores import PATTERN_ALPHA, PATTERN_BETA
+from jcm.mcb.scores import PATTERN_ALPHA, PATTERN_BETA, zonal_projection
 from jcm.mcb.test_world import (
     BRIGHTENING_CAP,
     EpisodeState,
@@ -69,6 +75,9 @@ from jcm.mcb.test_world import (
 # Experiment 1's registered choice of window (outcome A', 2026-10-01).
 W_STAR_DAYS = 14
 OPTIMIZERS = ("adam", "gauss_newton")
+# What the objective scores: the ocean map, or its latitude (zonal-mean)
+# profile, which the step-23 pilot chose (MCB_PROJECT_REPORT.md Part 22).
+REPRESENTATIONS = ("map", "zonal")
 _ADAM_BETAS = (0.9, 0.999)
 _ADAM_EPS = 1e-8
 
@@ -100,6 +109,7 @@ class PlannerConfig:
     first_guess: float = 0.5
     edge_margin: float = 0.02
     gn_damping: float = 1e-3
+    representation: str = "map"
 
     def validate(self):
         """Raise ValueError on settings the planner cannot use."""
@@ -119,6 +129,10 @@ class PlannerConfig:
             (0.0 < self.edge_margin < 0.5,
              "edge_margin must lie in (0, 0.5)"),
             (self.gn_damping >= 0.0, "gn_damping must be >= 0"),
+            (self.representation in REPRESENTATIONS,
+             f"representation must be one of {REPRESENTATIONS}"),
+            (self.representation == "map" or self.optimizer == "gauss_newton",
+             "the zonal representation is implemented for Gauss-Newton"),
         ]
         for ok, message in checks:
             if not ok:
@@ -331,6 +345,11 @@ class Planner:
         self.log.append(record)
         return final
 
+    def _zonal(self, field):
+        """Project ``field`` (..., ix, il) onto its ocean latitude profile."""
+        return zonal_projection(np.asarray(field, np.float64),
+                                self.weights > 0.0)
+
     def _adam(self, start, copies, target_mean, previous):
         cfg = self.cfg
         z = to_logits(start, cfg.cap, cfg.edge_margin)
@@ -364,8 +383,12 @@ class Planner:
             rhs = np.zeros(self.k)
             total, grads = 0.0, []
             for jac, mean_map in zip(jacs, maps):
+                error = mean_map - target_anomaly
+                if cfg.representation == "zonal":
+                    error, jac = self._zonal(error), np.moveaxis(
+                        self._zonal(np.moveaxis(jac, -1, 0)), 0, -1)
                 r, big_r = gauss_newton_residuals(
-                    mean_map - target_anomaly, jac, self.weights, a,
+                    error, jac, self.weights, a,
                     previous, cfg.alpha, cfg.beta, cfg.mu, cfg.lam)
                 normal += big_r.T @ big_r
                 rhs += big_r.T @ r

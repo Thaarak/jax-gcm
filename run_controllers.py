@@ -62,7 +62,12 @@ from jcm.mcb.feedback import (
     sensitivity_rates,
 )
 from jcm.mcb.ladder import ladder_designs, response_maps
-from jcm.mcb.scores import PATTERN_ALPHA, PATTERN_BETA, area_weights
+from jcm.mcb.scores import (
+    PATTERN_ALPHA,
+    PATTERN_BETA,
+    area_weights,
+    zonal_projection,
+)
 from jcm.mcb.student import (
     StudentPolicy,
     band_observation_weights,
@@ -108,6 +113,10 @@ def parse_args(argv=None):
     lad.add_argument("--beta", type=float, default=PATTERN_BETA)
     lad.add_argument("--mu", type=float, default=0.0)
     lad.add_argument("--cap", type=float, default=BRIGHTENING_CAP)
+    lad.add_argument("--representation", choices=["map", "zonal"],
+                     default="map",
+                     help="Design on the ocean map or on its zonal-mean "
+                          "profile (the pilot's choice).")
     lad.add_argument("--output", required=True)
 
     fb = sub.add_parser("feedback", help="one scored feedback episode")
@@ -117,6 +126,9 @@ def parse_args(argv=None):
     fb.add_argument("--sensitivity-from", nargs="+",
                     default=["experiment1"],
                     help="'experiment1' or response files.")
+    fb.add_argument("--sensitivity-references-dir", default=None,
+                    help="Where the response files' (training) references "
+                         "are (default: next to --references).")
     fb.add_argument("--fit-days", type=int, default=60)
     fb.add_argument("--closed-loop-days", type=float, default=42.0)
     fb.add_argument("--damping", type=float, default=1.0)
@@ -223,7 +235,10 @@ def controller_sensitivity(args, references_dir):
     if args.sensitivity_from == ["experiment1"]:
         series, source = experiment1_responses(), "experiment1"
     else:
-        series = responses_from_files(args.sensitivity_from, references_dir)
+        series = responses_from_files(
+            args.sensitivity_from,
+            getattr(args, "sensitivity_references_dir", None)
+            or references_dir)
         source = [str(p) for p in args.sensitivity_from]
     fit = range(min(args.fit_days, series.shape[0]))
     return sensitivity_rates(series, fit), source
@@ -309,15 +324,36 @@ def stage_ladder(args):
              for p in args.responses]
     warm = np.stack([w for w, _ in pairs])
     resp = np.stack([r for _, r in pairs])
+    if args.representation == "zonal":
+        # Score the latitude profile only (the pilot's choice, Part 22): the
+        # linear model is projected, so the design is the zonal optimum.
+        mask = np.asarray(ocean) > 0
+        warm = zonal_projection(warm, mask)
+        resp = zonal_projection(resp, mask)
+    plans = []
+    for path in args.planner_summaries:
+        with open(path) as f:
+            plans.append(json.load(f))
+    pooled_plan = {}
+    if plans:
+        # Rungs 2 and 3 from every planner run together: all their members'
+        # schedules, and their mean effort.
+        days = {p["config"]["segment_days"] for p in plans}
+        if len(days) != 1:
+            raise SystemExit(f"planner runs mix segment lengths {days}")
+        pooled_plan = dict(
+            planner_schedules=np.concatenate(
+                [np.asarray(p["schedules"], np.float64) for p in plans]),
+            planner_effort=float(np.mean([p["effort"] for p in plans])),
+            segment_days=days.pop())
     summary = {"stage": "ladder", "config": vars(args),
                "training_states": [str(p) for p in args.responses],
                "pooled": ladder_designs(warm, resp, weights, unit, sphere,
                                         alpha=args.alpha, beta=args.beta,
-                                        mu=args.mu, cap=args.cap),
+                                        mu=args.mu, cap=args.cap,
+                                        **pooled_plan),
                "per_planner_run": {}}
-    for path in args.planner_summaries:
-        with open(path) as f:
-            plan = json.load(f)
+    for path, plan in zip(args.planner_summaries, plans):
         designs = ladder_designs(
             warm, resp, weights, unit, sphere,
             planner_schedules=plan["schedules"],

@@ -60,13 +60,21 @@ from jcm.mcb.band_basis import gaussian_band_patterns
 from jcm.mcb.coupled_controller import create_coupled_step_fn
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
 from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
-from jcm.mcb.planner import OPTIMIZERS, PRESETS, Planner, PlannerConfig
+from jcm.mcb.planner import (
+    OPTIMIZERS,
+    PRESETS,
+    REPRESENTATIONS,
+    Planner,
+    PlannerConfig,
+)
 from jcm.mcb.scores import (
     PATTERN_ALPHA,
     PATTERN_BETA,
     effort,
     objective_terms,
+    pattern_objective,
     restoration_scores,
+    zonal_projection,
 )
 from jcm.mcb.test_world import (
     BRIGHTENING_CAP,
@@ -177,6 +185,11 @@ def parse_args(argv=None):
     pl.add_argument("--optimizer", choices=OPTIMIZERS, default=None)
     pl.add_argument("--iterations", type=int, default=None)
     pl.add_argument("--learning-rate", type=float, default=None)
+    pl.add_argument("--representation", choices=REPRESENTATIONS,
+                    default=None,
+                    help="What the planner's objective scores: the ocean "
+                         "map or its zonal-mean profile (the pilot's "
+                         "choice; Gauss-Newton only).")
     pl.add_argument("--planner-efficacy", type=float, default=None,
                     help="The spraying strength the planner believes in "
                          "(default: the true one, as in Experiment 3a).")
@@ -419,6 +432,14 @@ def score_runs(m, args, refs, mean_fields, schedules):
         t["movement"] = move
         t["total"] = (t["bias_sq"] + t["variance"] + t["amplitude"]
                       + t["movement"])
+        # The zonal-mean profile's pattern objective (no penalties): the
+        # representation the step-23 pilot chose for scoring.
+        zonal_error = zonal_projection(
+            np.asarray(fields["sst"] - tgt["sst"], np.float64),
+            np.asarray(m["ocean"]) > 0)
+        t["zonal_pattern"] = float(pattern_objective(
+            zonal_error, np.asarray(weights["ocean"], np.float64),
+            args.alpha, args.beta))
         terms[name] = t
     return {"score_window_days": [start, end],
             "gains": restoration_scores(ctrl, warm, tgt, weights),
@@ -468,7 +489,7 @@ def planner_config(args) -> PlannerConfig:
     overrides = {"alpha": args.alpha, "beta": args.beta, "mu": args.mu,
                  "lam": args.lam}
     for name in ("lookahead_days", "copies", "optimizer", "iterations",
-                 "learning_rate"):
+                 "learning_rate", "representation"):
         if getattr(args, name) is not None:
             overrides[name] = getattr(args, name)
     if args.window_days is not None:

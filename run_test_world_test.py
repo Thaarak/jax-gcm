@@ -108,9 +108,16 @@ class PlanArgsTest(unittest.TestCase):
                           cfg.mu), (NO_TRUNCATION_DAYS, "gauss_newton", 3,
                                     0.5))
 
+    def test_zonal_representation(self):
+        cfg = planner_config(self._args("--optimizer", "gauss_newton",
+                                        "--representation", "zonal"))
+        self.assertEqual(cfg.representation, "zonal")
+        self.assertEqual(planner_config(self._args()).representation, "map")
+
     def test_rejects_bad_planner_settings(self):
         for extra in (("--copies", "0"), ("--lookahead-days", "0"),
-                      ("--planner-efficacy", "0"), ("--learning-rate", "-1")):
+                      ("--planner-efficacy", "0"), ("--learning-rate", "-1"),
+                      ("--representation", "zonal")):        # Adam: no
             with self.assertRaises(SystemExit, msg=str(extra)):
                 validate_args(self._args(*extra))
 

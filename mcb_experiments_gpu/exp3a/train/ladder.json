@@ -1,0 +1,312 @@
+{
+  "stage": "ladder",
+  "config": {
+    "stage": "ladder",
+    "responses": [
+      "mcb_experiments_gpu/exp3a/train/responses/ic0002_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0003_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0202_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0203_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0402_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0403_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0602_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0603_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0802_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic0803_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic1002_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic1003_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic1202_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic1203_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic1402_responses.npz",
+      "mcb_experiments_gpu/exp3a/train/responses/ic1403_responses.npz"
+    ],
+    "references_dir": "mcb_experiments_gpu/test_world_refs_ramp6/exp3_train",
+    "window": [
+      98,
+      182
+    ],
+    "planner_summaries": [
+      "mcb_experiments_gpu/exp3a/train/plan120/ic0003.json",
+      "mcb_experiments_gpu/exp3a/train/plan120/ic0203.json",
+      "mcb_experiments_gpu/exp3a/train/plan120/ic0403.json",
+      "mcb_experiments_gpu/exp3a/train/plan120/ic0603.json",
+      "mcb_experiments_gpu/exp3a/train/plan120/ic0803.json",
+      "mcb_experiments_gpu/exp3a/train/plan120/ic1003.json",
+      "mcb_experiments_gpu/exp3a/train/plan120/ic1203.json",
+      "mcb_experiments_gpu/exp3a/train/plan120/ic1403.json"
+    ],
+    "alpha": 1.0,
+    "beta": 0.5,
+    "mu": 0.0006325,
+    "cap": 0.15,
+    "representation": "zonal",
+    "output": "mcb_experiments_gpu/exp3a/train/ladder.json"
+  },
+  "training_states": [
+    "mcb_experiments_gpu/exp3a/train/responses/ic0002_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0003_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0202_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0203_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0402_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0403_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0602_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0603_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0802_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic0803_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic1002_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic1003_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic1202_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic1203_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic1402_responses.npz",
+    "mcb_experiments_gpu/exp3a/train/responses/ic1403_responses.npz"
+  ],
+  "pooled": {
+    "uniform_cancel": {
+      "amplitudes": [
+        0.018499642750776826,
+        0.018499642750776826,
+        0.018499642750776826,
+        0.018499642750776826,
+        0.018499642750776826
+      ],
+      "uniform": 0.018499642750776826,
+      "clipped": false,
+      "predicted_objective": 0.00273109735361389
+    },
+    "uniform_effort": {
+      "amplitudes": [
+        0.03903331741649018,
+        0.03903331741649018,
+        0.03903331741649018,
+        0.03903331741649018,
+        0.03903331741649018
+      ],
+      "uniform": 0.03903331741649018,
+      "clipped": false,
+      "effort_per_unit": 0.9248698116747756,
+      "predicted_objective": 0.03022803089331615
+    },
+    "planner_average": {
+      "amplitudes": [
+        0.020734361802729275,
+        0.0310190108702255,
+        0.014944092262829565,
+        0.033764409139761344,
+        0.044670636765658855
+      ],
+      "predicted_objective": 0.010685727668816538
+    },
+    "linear_response": {
+      "amplitudes": [
+        0.02490899332288746,
+        0.02014812687536018,
+        0.010631502048496498,
+        0.01756718961163883,
+        0.020094413523978664
+      ],
+      "predicted_objective": 0.0023099849749243315
+    }
+  },
+  "per_planner_run": {
+    "mcb_experiments_gpu/exp3a/train/plan120/ic0003.json": {
+      "uniform_effort": {
+        "amplitudes": [
+          0.03729843571889812,
+          0.03729843571889812,
+          0.03729843571889812,
+          0.03729843571889812,
+          0.03729843571889812
+        ],
+        "uniform": 0.03729843571889812,
+        "clipped": false,
+        "effort_per_unit": 0.9248698116747756,
+        "predicted_objective": 0.02605914012230978
+      },
+      "planner_average": {
+        "amplitudes": [
+          0.021838333171147566,
+          0.015088375084675275,
+          0.01528166059198646,
+          0.03657460667622777,
+          0.04516316226755197
+        ],
+        "predicted_objective": 0.00966569421421527
+      }
+    },
+    "mcb_experiments_gpu/exp3a/train/plan120/ic0203.json": {
+      "uniform_effort": {
+        "amplitudes": [
+          0.040199646178655214,
+          0.040199646178655214,
+          0.040199646178655214,
+          0.040199646178655214,
+          0.040199646178655214
+        ],
+        "uniform": 0.040199646178655214,
+        "clipped": false,
+        "effort_per_unit": 0.9248698116747756,
+        "predicted_objective": 0.033222194135437644
+      },
+      "planner_average": {
+        "amplitudes": [
+          0.008979728158849936,
+          0.031389168893488556,
+          0.012220273868968854,
+          0.0494170973274427,
+          0.04051305656321347
+        ],
+        "predicted_objective": 0.014144062197558099
+      }
+    },
+    "mcb_experiments_gpu/exp3a/train/plan120/ic0403.json": {
+      "uniform_effort": {
+        "amplitudes": [
+          0.031124864882587845,
+          0.031124864882587845,
+          0.031124864882587845,
+          0.031124864882587845,
+          0.031124864882587845
+        ],
+        "uniform": 0.031124864882587845,
+        "clipped": false,
+        "effort_per_unit": 0.9248698116747756,
+        "predicted_objective": 0.0139871884136409
+      },
+      "planner_average": {
+        "amplitudes": [
+          0.011830494488374544,
+          0.023381598883133847,
+          0.018098499196080062,
+          0.030870867176697805,
+          0.04083735382972428
+        ],
+        "predicted_objective": 0.007980012865326187
+      }
+    },
+    "mcb_experiments_gpu/exp3a/train/plan120/ic0603.json": {
+      "uniform_effort": {
+        "amplitudes": [
+          0.03655102098896319,
+          0.03655102098896319,
+          0.03655102098896319,
+          0.03655102098896319,
+          0.03655102098896319
+        ],
+        "uniform": 0.03655102098896319,
+        "clipped": false,
+        "effort_per_unit": 0.9248698116747756,
+        "predicted_objective": 0.024368111567867265
+      },
+      "planner_average": {
+        "amplitudes": [
+          0.045199899934232235,
+          0.018718138408775512,
+          0.01940209886883027,
+          0.02410050940950616,
+          0.037823300737027936
+        ],
+        "predicted_objective": 0.007160174097968823
+      }
+    },
+    "mcb_experiments_gpu/exp3a/train/plan120/ic0803.json": {
+      "uniform_effort": {
+        "amplitudes": [
+          0.041311091977203986,
+          0.041311091977203986,
+          0.041311091977203986,
+          0.041311091977203986,
+          0.041311091977203986
+        ],
+        "uniform": 0.041311091977203986,
+        "clipped": false,
+        "effort_per_unit": 0.9248698116747756,
+        "predicted_objective": 0.036218734119683516
+      },
+      "planner_average": {
+        "amplitudes": [
+          0.029063529549882963,
+          0.0137948038486334,
+          0.030102500297988836,
+          0.02589100492724146,
+          0.05116091654277765
+        ],
+        "predicted_objective": 0.0129680424706343
+      }
+    },
+    "mcb_experiments_gpu/exp3a/train/plan120/ic1003.json": {
+      "uniform_effort": {
+        "amplitudes": [
+          0.03627892492920864,
+          0.03627892492920864,
+          0.03627892492920864,
+          0.03627892492920864,
+          0.03627892492920864
+        ],
+        "uniform": 0.03627892492920864,
+        "clipped": false,
+        "effort_per_unit": 0.9248698116747756,
+        "predicted_objective": 0.023768192244096258
+      },
+      "planner_average": {
+        "amplitudes": [
+          0.00296836425192081,
+          0.044209905255299345,
+          0.021414282337690774,
+          0.018362900170569237,
+          0.05433956261437673
+        ],
+        "predicted_objective": 0.013623621250015518
+      }
+    },
+    "mcb_experiments_gpu/exp3a/train/plan120/ic1203.json": {
+      "uniform_effort": {
+        "amplitudes": [
+          0.04634603872879249,
+          0.04634603872879249,
+          0.04634603872879249,
+          0.04634603872879249,
+          0.04634603872879249
+        ],
+        "uniform": 0.04634603872879249,
+        "clipped": false,
+        "effort_per_unit": 0.9248698116747756,
+        "predicted_objective": 0.05154467360173899
+      },
+      "planner_average": {
+        "amplitudes": [
+          0.030132318954341687,
+          0.047172678276323356,
+          0.002537085388142329,
+          0.032735959913295046,
+          0.058453794497136884
+        ],
+        "predicted_objective": 0.016080408417149947
+      }
+    },
+    "mcb_experiments_gpu/exp3a/train/plan120/ic1403.json": {
+      "uniform_effort": {
+        "amplitudes": [
+          0.043156515927611994,
+          0.043156515927611994,
+          0.043156515927611994,
+          0.043156515927611994,
+          0.043156515927611994
+        ],
+        "uniform": 0.043156515927611994,
+        "clipped": false,
+        "effort_per_unit": 0.9248698116747756,
+        "predicted_objective": 0.04150293989030706
+      },
+      "planner_average": {
+        "amplitudes": [
+          0.01586222591308447,
+          0.0543974183114747,
+          0.0004963375529489265,
+          0.05216232751711057,
+          0.029073947073461916
+        ],
+        "predicted_objective": 0.013371526354011764
+      }
+    }
+  }
+}
