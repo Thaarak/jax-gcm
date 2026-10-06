@@ -2,15 +2,17 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run.*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run; updated 2026-10-05 with the step-23 pilot, which fixes the planner's settings (Part 22).*
 
 ---
 
 ## The one-paragraph version
 
-> **Latest status (2026-10-02):** Experiment 1 passed (outcome A′; Part 20). After the advisor meeting, the
+> **Latest status (2026-10-05):** Experiment 1 passed (outcome A′; Part 20). After the advisor meeting, the
 > current plan is in **Part 21**: write up the controller/methods paper first (draft skeleton done), then
-> the gradient paper, with real MCB on the right clouds as a later third paper.
+> the gradient paper, with real MCB on the right clouds as a later third paper. The planner pilot
+> (**Part 22**) fixed the planner's settings: choosing *where* to brighten beats brightening everywhere
+> equally by about 30%, and the cheapest settings are enough.
 
 
 We tried to teach a small AI to fight global warming inside a computer simulation of Earth's climate. The specific idea is **Marine Cloud Brightening (MCB)**: making low ocean clouds slightly whiter so they reflect more sunlight and cool the planet a little. We built the AI as a "controller" that watches the simulated climate and decides where and how much to brighten clouds, aiming to cool the ocean by a small target amount without wrecking rainfall in sensitive places like the Amazon. Along the way we discovered — twice — that our own results couldn't be trusted: an earlier version of the work was riddled with bugs and wishful statistics, and even the careful rebuild turned out to be measuring a 5-thousandths-of-a-degree signal with an instrument that jittered by 15, in an experiment accidentally designed so the AI could never win. So we tore it down twice, fixed the measurement, and finally gave the controller a problem worth solving: uncertainty about how strongly the cloud-seeding actually works. **The honest ending, in three acts:** the corrected method *does* find a good, on-target cloud-brightening plan (now confirmed with real statistical power); under realistic uncertainty a feedback controller *demonstrably* beats the fixed plan — our strongest statistical result, and finally the project's founding claim; but the winning neural controller got every bit of its skill by *imitating a hundred-year-old control-engineering formula* — training it through the climate simulation itself, the project's founding bet, never worked, and we measured exactly why. That's a real, defensible, and genuinely interesting scientific ending — just not the one we set out to find. **Then we did it twice more.** We gave the controller a genuine climate disturbance to fight — an artificial El Niño — and got the best-looking numbers of the whole project, only for our own audit to show the test had been rigged by our design once again: because we imposed only warm events, a blind controller that simply sprayed harder by a fixed amount scored just as well. We rebuilt it, and this time the controllers genuinely cancel **85–89%** of the El Niño's effect — replicated on two independent sets of fresh climates, and apparently the first time anyone has closed a control loop on cloud brightening against real year-to-year climate variability. Then we asked the sharper question: does the controller actually need to *watch* the El Niño? It does not. One that never looks at the Pacific does just as well, because the ocean temperature it is already measuring carries the signal by itself — a more useful answer than the win we set out to claim, and one we only reached by noticing that the obvious version of that experiment would have been rigged in our favour too.
@@ -1509,7 +1511,7 @@ anyway, at no GPU cost, while the pilot ran, so revision 1 can decide whether th
     flagged, because every result depends on files that exist only on the GPU machine, and several
     problems got past more than one AI-run audit.
 
-## Planner settings to start from (fixed for good in step 23)
+## Planner settings to start from (fixed for good in step 23; the fixed values are in Part 22.4)
 
 | Setting | Starting value | Why |
 |---|---|---|
@@ -1884,3 +1886,105 @@ rules.
 > **New terms:** *Testbed* = a cheap model used to try out methods, not to make trusted predictions.
 > *Fingerprint sensing* = checking an observed map against the expected pattern of cooling, instead of
 > a single average, to pick a signal out of noise sooner.
+
+
+---
+
+# Part 22 — The pilot: the planner's settings, fixed by measurement
+
+*Added 2026-10-05 (Part 18 step 23). Code: `run_planner_pilot.py` (stages `offline`, `ic`, `analyze`,
+with decision rules R1–R8 written into its docstring before any data existed),
+`run_campaign_pilot.sh` (part 1) and `run_campaign_pilot_loop.sh` (part 2). Results:
+`mcb_experiments_gpu/pilot_step23/` (`pilot_offline.json`, `ic*_pilot.*`, `pilot_decisions.json`,
+`loop/`, scored by `run_pilot_loop_scores.py`). Training states only (exp3_train, branch 2 of macro states 0, 2, …, 14); no evaluation state
+was touched.*
+
+**In one sentence:** the pilot shows the planner works with the cheapest settings (one Gauss–Newton
+step, one weather copy), that choosing *where* to brighten beats brightening everywhere equally by about
+30%, and that a planner running from day 0 needs only about a fifth to a third of the brightening cap.
+
+*Analogy:* before a road trip you test-drive the car on a few local roads to choose the tyre pressure and
+gear settings, and write down beforehand what "good enough" means, so you can't fool yourself afterwards.
+
+## 22.1 What was run
+
+- **Offline (laptop, from Experiment 1's maps and the training references).**
+  - *Maps check:* the 14-day snipped gradient's per-band response maps match the brute-force truth up to
+    the truth's own noise (slope of truth on gradient 1.0–1.1 at 60 days, 1.06–1.24 at 120 days). It
+    misses part of the far-away cooling the air carries (for example −0.034 K true vs −0.012 K at 60 days
+    for the bands away from the brightening). Plain backpropagation is much worse by 60 days and blows up
+    by 120.
+  - *Signal to noise:* with a ramp to 6 W m⁻² by day 182, the warming stands 3.3× above the noise in
+    latitude averages (zonal), but only 0.27× on single grid points. So scoring uses latitude averages,
+    the warming is the 6 W m⁻² ramp (rule R5), and rainfall, evaporation and land temperature (0.13–0.43×)
+    are reported descriptively only (R8).
+- **Part 1 (GX10, 8 states, about 2 GPU-hours per state, 3 at a time; 13:56–20:09).** Each state runs
+  uncontrolled with the ramp to day 112, then re-plans once in every candidate setting: Gauss–Newton
+  after 1, 2 or 3 steps; each of 3 single copies; map vs latitude-average objective; 60 vs 120-day
+  look-ahead; Dubey's penalties; Adam (15 steps); the best uniform setting; and no brightening. Each
+  candidate is then held for 120 days in 8 shared weather samples to measure its true objective.
+- **Part 2 (GX10, about 25 minutes).** Whole 182-day episodes from day 0 with the chosen settings
+  (13 re-plans every 14 days), on 2 states, 1 weather sample each, against new ramp-6 references.
+
+## 22.2 Decisions (8 states; paired differences, SE over states)
+
+| Rule | Setting | Result | Decision |
+|---|---|---|---|
+| R1 | Optimizer | Adam vs Gauss–Newton: −0.2% (0.5 SE); Adam takes about 5× longer and moved at most 1.5 logits | **Gauss–Newton** |
+| R1 | Steps | 1 step vs 3: −0.6% (1.4 SE) | **1 step** |
+| R2 | Copies | single copies within −0.7% to +0.04% of 3 copies; median noise-to-signal 0.16 | **1 copy** |
+| R4 | Score and objective | grid points 0.27× noise, zonal 3.3×; the map-objective planner is 12% worse on the zonal score (2.8 SE) | **latitude averages for both** |
+| R3 | Look-ahead | 120 vs 60 days: 26% better over 120 days (3.3 SE) but 19% **worse** over the next 60 days (3.4 SE) | **120 days** (by the rule; the trade-off is reported) |
+| R7 | Penalties | Dubey's μ = 0.01 s², λ = 0.1 s² with s = 0.25 K per unit albedo (μ = 6.3×10⁻⁴, λ = 6.3×10⁻³); they cost 0.4% of the improvement | **kept** |
+| R5 | Cap headroom | late start (day 112): about 60% of the cap on average, bands at the cap in every state; from day 0: 21% over the episode, 29–32% in the scored window, no band at the cap | **passes from day 0** (fails at the late start; see 22.3) |
+| R6 | Scoring window | days 98–182, 5 members | as written |
+
+Also measured (zonal score over the next 60 days):
+- *Choosing where vs one uniform setting:* 31% less error (5.8 SE). This is the first direct evidence for
+  Paper 2's "where to intervene" question.
+- *Planning vs no brightening:* 75% less error (9.4 SE).
+
+## 22.3 The closed loop from day 0, and the cap problem
+
+| | ic0002 | ic0202 |
+|---|---|---|
+| Ocean-mean error, days 98–182: uncontrolled → controlled | +0.154 → −0.011 K | +0.125 → −0.013 K |
+| Zonal objective: uncontrolled (5-member mean) → controlled (1 member) | 0.0265 → 0.0060 | 0.0208 → 0.0044 |
+| Noise of a single member alone (zonal, estimated) | about 0.0035 | about 0.0041 |
+| Mean share of the cap: whole episode / scored window / last re-plan | 21% / 32% / 40% | 20% / 29% / 36% |
+| Error by fortnight, controlled (uncontrolled reaches +0.19–0.24 K) | between −0.040 and +0.012 K | between −0.026 and −0.002 K |
+
+- **The cap problem was mostly an artifact of the late start.** Starting at day 112 of an uncontrolled run
+  meant the ocean was already 0.14 K too warm, and brightening can only cool slowly, so the planner pushed
+  bands to the cap. Steering from day 0 keeps up with the warming at roughly a third of the cap, still
+  rising to about 40% by the end, because the warming keeps growing.
+- **Caveat for hidden efficacy 0.5:** about 40% at nominal strength becomes about 80% at half strength by
+  the end of the episode. That fits, but only just. Longer episodes or stronger warming will need a higher
+  cap or a weaker ramp.
+- **The controlled run cools slightly too much in the middle** (down to −0.04 K around days 70–110 in
+  ic0002). The 120-day look-ahead plans for warming still to come, which matches part 1's finding that
+  the long planner is a little worse over the next 60 days.
+- **Reading the full-map score.** The run's own map score (0.09 controlled vs 0.06 uncontrolled) is not
+  a fair comparison. One weather sample carries about 5× the grid-point noise of a 5-member mean (single
+  member alone ≈ 0.03–0.07). Scored runs must use matched members, as the fairness rule of step 11 says.
+- **Cost:** a re-plan takes about 90 s with these settings, and a whole episode about 25 minutes per state
+  with two side by side. That is about 3× cheaper than 3 steps × 3 copies at the same 120-day look-ahead
+  (4.3 minutes per re-plan in step 17).
+
+## 22.4 What this means for the plan
+
+- **Revision 1's planner settings are now fixed:** Gauss–Newton, 1 step, 1 copy, 14-day snip, 120-day
+  look-ahead, latitude-average objective, μ = 6.3×10⁻⁴ and λ = 6.3×10⁻³. Warming is a 6 W m⁻² ramp over
+  182 days, scored on days 98–182 with 5 members. The 60-day planner stays as a comparison, because of
+  the near-term trade-off.
+- **Code still to do:** `jcm/mcb/planner.py` has no latitude-average objective yet (part 2 used the map
+  objective), so add it before step 24. It is a small change, because the projection is linear
+  (`zonal_project` in `run_planner_pilot.py`).
+- **Budget:** at about 25 minutes per planned episode with one sample (two running side by side),
+  Experiment 3a's 3 planners × 24 evaluation states come to roughly 15 GPU-hours. That is below step 17's
+  estimate of about 25, and inside the lean budget.
+
+> **New terms:** *Pilot* = a small, cheap rehearsal that fixes settings before the real experiment.
+> *Closed loop* = the planner steers the whole run, re-planning as it goes, instead of planning once.
+> *Headroom* = how much of the allowed brightening is left unused, in case spraying works less well than
+> expected.
