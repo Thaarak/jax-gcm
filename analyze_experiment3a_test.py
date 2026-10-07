@@ -76,6 +76,23 @@ class StatsTest(unittest.TestCase):
         self.assertTrue(set(np.round(r1, 6)) <= {-0.5, -0.25, 0.0})
 
 
+class StateMetricsTest(unittest.TestCase):
+    def test_fixed_pattern_summary_has_no_schedules(self):
+        # Fixed-pattern episodes (run_test_world.py episode) store
+        # "amplitudes" (one constant pattern) instead of "schedules".
+        ocean = np.ones((IX, IL))
+        w = ocean / ocean.sum()
+        f = {"sst": np.zeros((DAYS, IX, IL))}
+        amps = [0.03, 0.0, 0.0, 0.0, 0.15]
+        fixed = ax.state_metrics(f, f["sst"], ocean, w,
+                                 {"amplitudes": amps, "effort": 0.01})
+        held = ax.state_metrics(f, f["sst"], ocean, w,
+                                {"schedules": [[amps] * 13], "effort": 0.01})
+        self.assertEqual(fixed, held)
+        self.assertAlmostEqual(fixed["cap_share"], 0.24)
+        self.assertAlmostEqual(fixed["max_band_share"], 1.0)
+
+
 class EndToEndTest(unittest.TestCase):
     def test_registered_analysis_on_a_synthetic_world(self):
         scale = {"uncontrolled": 1.0, "plan120": 0.3, "plan14": 0.6,

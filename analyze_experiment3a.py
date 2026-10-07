@@ -108,7 +108,12 @@ def state_metrics(fields, target_sst, ocean, w_ocean, summary,
     s, e = window
     err = (np.asarray(fields["sst"][s:e], np.float64).mean(0)
            - np.asarray(target_sst[s:e], np.float64).mean(0)) * ocean
-    sched = np.asarray(summary["schedules"], np.float64)     # (M, n_seg, K)
+    if "schedules" in summary:
+        sched = np.asarray(summary["schedules"], np.float64)  # (M, n_seg, K)
+    else:
+        # Fixed-pattern episodes store one constant pattern, held all episode.
+        sched = np.asarray(summary["amplitudes"], np.float64)[None, None, :]
+        sched = np.repeat(sched, -(-e // SEGMENT_DAYS), axis=1)
     daily = np.repeat(sched, SEGMENT_DAYS, axis=1)[:, s:e]
     return {"J_zonal": float(pattern_objective(zonal_projection(err, ocean),
                                                w_ocean, PATTERN_ALPHA,

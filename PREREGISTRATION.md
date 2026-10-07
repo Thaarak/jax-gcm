@@ -1471,3 +1471,15 @@ comparator B, `d = J_A - J_B` per state, and `rel = mean(d) / mean(J_B)`.
 **10. Posting.** Before any evaluation reference is built, this revision, the Experiment 1 result, the
 frozen designs and the frozen commit are posted to OSF (project https://osf.io/pqabf/), as Amendment 9
 was.
+
+**Amendment 9, revision 1 — Deviation D1 (logged 2026-10-07 12:10 PDT, before any Experiment 3a
+analysis output or score existed).** All 240 evaluation runs finished (05:27 PDT; none failed). The
+registered `analyze_experiment3a.py` then stopped with `KeyError: 'schedules'` while loading the runs.
+The five fixed-pattern arms (`uncontrolled`, `uniform_cancel`, `uniform_effort`, `planner_average`,
+`linear_response`) record their single constant pattern as `amplitudes`, not as a per-segment
+`schedules` table. The pre-launch check had loaded only planner files.
+
+The fix reads that constant pattern as the same setting in every segment, which is what those arms
+applied, and adds a unit test. It touches only two secondary descriptives (`cap_share` and
+`max_band_share`). The primary endpoint, every test, the verdicts and the gains are computed from the
+saved fields and are unchanged. No other line of the registered analysis changed.
