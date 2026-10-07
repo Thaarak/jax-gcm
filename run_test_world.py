@@ -64,9 +64,12 @@ from jcm.mcb.planner import (
     OPTIMIZERS,
     PRESETS,
     REPRESENTATIONS,
+    LearningPlanner,
     Planner,
     PlannerConfig,
 )
+from jcm.mcb.strength_estimator import MODES as LEARN_MODES
+from jcm.mcb.strength_estimator import EstimatorConfig
 from jcm.mcb.scores import (
     PATTERN_ALPHA,
     PATTERN_BETA,
@@ -120,8 +123,11 @@ def add_run_args(sp):
     sp.add_argument("--segments", type=int, required=True)
     sp.add_argument("--segment-days", type=int, default=14,
                     help="Days between decisions (re-plans).")
-    sp.add_argument("--efficacy", type=float, default=1.0,
-                    help="True strength of the spraying (1 = nominal).")
+    sp.add_argument("--efficacy", type=float, nargs="+", default=[1.0],
+                    help="True strength of the spraying (1 = nominal): one "
+                         "value for every band, or one per band "
+                         "(Experiment 3b). Only the simulated world sees "
+                         "it.")
     sp.add_argument("--members", type=int, default=None,
                     help="Members to run and average before scoring "
                          "(default: as many as the references, from the "
@@ -153,6 +159,10 @@ def parse_args(argv=None):
     r.add_argument("--split", default="all",
                    choices=["all", "train", "heldout"])
     r.add_argument("--max-ics", type=int, default=None)
+    r.add_argument("--branches", type=int, nargs="+", default=None,
+                   help="Only these weather branches (default: all), so "
+                        "branch sets can run side by side into separate "
+                        "output directories.")
     r.add_argument("--days", type=int, default=240,
                    help="Run length; an episode plus its last look-ahead.")
     r.add_argument("--members", type=int, default=5)
@@ -190,9 +200,21 @@ def parse_args(argv=None):
                     help="What the planner's objective scores: the ocean "
                          "map or its zonal-mean profile (the pilot's "
                          "choice; Gauss-Newton only).")
-    pl.add_argument("--planner-efficacy", type=float, default=None,
-                    help="The spraying strength the planner believes in "
-                         "(default: the true one, as in Experiment 3a).")
+    pl.add_argument("--planner-efficacy", type=float, nargs="+",
+                    default=None,
+                    help="The spraying strength the planner believes in, one "
+                         "value or one per band (default: the true one, as "
+                         "in Experiment 3a: the oracle).")
+    pl.add_argument("--learn-strength", choices=("off",) + LEARN_MODES,
+                    default="off",
+                    help="Learn the strength from forecast misses "
+                         "(Experiment 3b): per band, or one shared factor. "
+                         "Starts from nominal strength.")
+    pl.add_argument("--learn-noise-k", type=float, default=None,
+                    help="Typical forecast miss (K) when the strength is "
+                         "known; set from the pilot's oracle runs.")
+    pl.add_argument("--learn-prior-sd", type=float, default=1.0,
+                    help="Prior standard deviation of the strength.")
     return p.parse_args(argv)
 
 
@@ -214,10 +236,48 @@ def validate_args(args):
                 raise SystemExit(f"band amplitudes must lie in [0, "
                                  f"{BRIGHTENING_CAP}]")
         else:
-            planner_config(args)
+            cfg = planner_config(args)
             if args.planner_efficacy is not None and \
-                    args.planner_efficacy <= 0.0:
+                    np.any(strength_vector(args.planner_efficacy) <= 0.0):
                 raise SystemExit("--planner-efficacy must be > 0")
+            if args.learn_strength != "off":
+                validate_learning(args, cfg)
+
+
+def validate_learning(args, cfg):
+    """Fail fast on a learning planner that could not learn."""
+    if cfg.optimizer != "gauss_newton":
+        raise SystemExit("--learn-strength needs --optimizer gauss_newton")
+    if cfg.lookahead_days != args.segment_days:
+        raise SystemExit("--learn-strength needs the look-ahead to equal "
+                         "--segment-days")
+    if args.planner_efficacy is not None:
+        raise SystemExit("--learn-strength starts from nominal strength; "
+                         "drop --planner-efficacy")
+    if args.learn_noise_k is None:
+        raise SystemExit("--learn-strength needs --learn-noise-k")
+    try:
+        estimator_config(args).validate()
+    except ValueError as err:
+        raise SystemExit(f"learner: {err}") from err
+
+
+def estimator_config(args) -> EstimatorConfig:
+    """Return the learner's settings from the command line."""
+    return EstimatorConfig(noise_k=args.learn_noise_k,
+                           mode=args.learn_strength,
+                           prior_sd=args.learn_prior_sd)
+
+
+def strength_vector(values, k_bands: int = K_BANDS) -> np.ndarray:
+    """Return a strength as ``(k_bands,)``: one value for all bands, or one each."""
+    v = np.atleast_1d(np.asarray(values, np.float32))
+    if v.size == 1:
+        return np.full(k_bands, v[0], np.float32)
+    if v.size != k_bands:
+        raise SystemExit(f"a strength needs 1 or {k_bands} values, got "
+                         f"{v.size}")
+    return v
 
 
 def validate_run_args(args):
@@ -229,7 +289,7 @@ def validate_run_args(args):
     if not 0 <= args.score_start_day < end <= n_days:
         raise SystemExit("need 0 <= --score-start-day < "
                          "--score-end-day <= segments * segment-days")
-    if args.efficacy < 0.0:
+    if np.any(strength_vector(args.efficacy) < 0.0):
         raise SystemExit("--efficacy must be >= 0")
     if args.members is not None and args.members < 1:
         raise SystemExit("--members must be >= 1")
@@ -278,10 +338,21 @@ def build_model():
             "patterns": gaussian_band_patterns(lats, ocean)}
 
 
+def select_branches(ics, branches):
+    """Keep the ``(entry, carry)`` pairs on the given weather branches (None: all)."""
+    if branches is None:
+        return list(ics)
+    kept = [(e, c) for e, c in ics if e.get("branch") in branches]
+    if not kept:
+        raise SystemExit(f"no ICs on branches {branches}")
+    return kept
+
+
 def stage_references(args):
     m = build_model()
     manifest, ics = load_manifest_ics(args.ic_dir, args.split, args.max_ics,
                                       m["template"])
+    ics = select_branches(ics, args.branches)
     role = manifest.get("macro_role") or Path(args.ic_dir).name
     check_role_allowed(role, args.allow_eval_roles)
     out = Path(args.output_dir)
@@ -372,12 +443,16 @@ def run_members(m, args, entry, carry, ref_config, make_policy):
     the same member seeds, so both sides carry the same weather noise.
     ``make_policy(member, member_carry, warming)`` returns each member's
     policy. Returns the mean daily fields, each member's ``(n_segments, K)``
-    settings, the member seeds and the policies.
+    settings, the member seeds, the policies, and each member's daily ocean
+    latitude profile of SST ``(members, n_days, il)`` (small, and enough to
+    measure how weather noise falls with more members).
     """
     n_members = (ref_config["members"] if args.members is None
                  else args.members)
     seg = make_segment_fn(m["step_fn"], m["patterns"], args.segment_days)
-    runs, schedules, seeds, policies = [], [], [], []
+    runs, schedules, seeds, policies, profiles = [], [], [], [], []
+    ocean = np.asarray(m["ocean"], np.float64)
+    counts = np.maximum(ocean.sum(axis=0), 1.0)
     for member in range(n_members):
         seed = member_seed(ref_config["member_seed0"], entry["index"], member)
         c = carry if seed is None else perturb_member(
@@ -386,13 +461,15 @@ def run_members(m, args, entry, carry, ref_config, make_policy):
                                args.warming_ramp_wm2_per_day)
         policy = make_policy(member, c, warming)
         ep = run_episode(c, seg, policy, args.segments, args.segment_days,
-                         K_BANDS, warming, args.efficacy)
+                         K_BANDS, warming, strength_vector(args.efficacy))
         runs.append(ep.fields)
+        profiles.append(((np.asarray(ep.fields["sst"], np.float64) * ocean)
+                         .sum(axis=-2) / counts).astype(np.float32))
         schedules.append(ep.amplitudes)
         seeds.append(seed)
         policies.append(policy)
     mean_fields = {k: np.mean([r[k] for r in runs], axis=0) for k in runs[0]}
-    return mean_fields, schedules, seeds, policies
+    return mean_fields, schedules, seeds, policies, np.stack(profiles)
 
 
 def score_runs(m, args, refs, mean_fields, schedules):
@@ -448,14 +525,18 @@ def score_runs(m, args, refs, mean_fields, schedules):
             "objective": terms}
 
 
-def write_summary(args, summary, mean_fields, schedules):
+def write_summary(args, summary, mean_fields, schedules,
+                  member_profiles=None):
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as f:
         json.dump(summary, f, indent=2)
     if args.save_fields:
+        extra = ({} if member_profiles is None
+                 else {"member_zonal_sst": np.asarray(member_profiles)})
         np.savez_compressed(out.with_suffix(".fields.npz"),
-                            amplitudes=np.asarray(schedules), **mean_fields)
+                            amplitudes=np.asarray(schedules), **extra,
+                            **mean_fields)
     t = summary["objective"]
     print("gains:", {k: round(v, 3) for k, v in summary["gains"].items()})
     print(f"effort {summary['effort']:.4f} | objective controlled "
@@ -470,18 +551,19 @@ def stage_episode(args):
     entry, carry = load_ic(m, args, ref_path)
     a = episode_amplitudes(args)
     t0 = time.time()
-    mean_fields, schedules, seeds, _ = run_members(
+    mean_fields, schedules, seeds, _, profiles = run_members(
         m, args, entry, carry, ref_meta["config"],
         lambda member, c, warming: constant_policy(a))
     summary = {"stage": "episode", "config": vars(args), "ic": entry,
                "members": len(seeds), "member_seeds": seeds,
                "reference_members": ref_meta["config"]["members"],
                "amplitudes": a.tolist(),
+               "true_efficacy": strength_vector(args.efficacy).tolist(),
                **score_runs(m, args, refs, mean_fields, schedules),
                "references": str(ref_path), "git": git_provenance(),
                "command": " ".join(sys.argv),
                "seconds": round(time.time() - t0, 1)}
-    write_summary(args, summary, mean_fields, schedules)
+    write_summary(args, summary, mean_fields, schedules, profiles)
 
 
 def planner_config(args) -> PlannerConfig:
@@ -513,23 +595,34 @@ def stage_plan(args):
     m = build_model()
     entry, carry = load_ic(m, args, ref_path)
     ocean_w = domain_weights(m["lats"], m["ocean"], m["land"])["ocean"]
-    belief = (args.efficacy if args.planner_efficacy is None
-              else args.planner_efficacy)
+    learning = args.learn_strength != "off"
+    belief = strength_vector(args.efficacy if args.planner_efficacy is None
+                             else args.planner_efficacy)
 
     def make_policy(member, c, warming):
-        # A perfect-model planner (Experiment 3a): it knows the warming; its
-        # belief about the spraying strength is --planner-efficacy.
-        return Planner(m["step_fn"], m["patterns"], ocean_w,
-                       refs["normal_sst"], c["ocn"]["forcing"].q_flux,
-                       warming, belief, cfg,
+        # A perfect-model planner (Experiment 3a): it knows the warming. Its
+        # belief about the spraying strength is --planner-efficacy (the
+        # true one by default: the oracle), or, with --learn-strength,
+        # nominal at first and then learned from its forecast misses.
+        common = (m["step_fn"], m["patterns"], ocean_w, refs["normal_sst"],
+                  c["ocn"]["forcing"].q_flux, warming)
+        if learning:
+            return LearningPlanner(*common, estimator_config(args), cfg,
+                                   seed_offset=100 * entry["index"] + member)
+        return Planner(*common, belief, cfg,
                        seed_offset=100 * entry["index"] + member)
 
     t0 = time.time()
-    mean_fields, schedules, seeds, planners = run_members(
+    mean_fields, schedules, seeds, planners, profiles = run_members(
         m, args, entry, carry, ref_meta["config"], make_policy)
+    learner = ({"config": dataclasses.asdict(estimator_config(args)),
+                "logs": [p.estimator.log for p in planners]}
+               if learning else None)
     summary = {"stage": "plan", "config": vars(args),
                "planner": dataclasses.asdict(cfg),
-               "planner_efficacy": belief, "ic": entry,
+               "planner_efficacy": None if learning else belief.tolist(),
+               "true_efficacy": strength_vector(args.efficacy).tolist(),
+               "learner": learner, "ic": entry,
                "members": len(seeds), "member_seeds": seeds,
                "reference_members": ref_meta["config"]["members"],
                "schedules": [s.tolist() for s in schedules],
@@ -538,7 +631,7 @@ def stage_plan(args):
                "references": str(ref_path), "git": git_provenance(),
                "command": " ".join(sys.argv),
                "seconds": round(time.time() - t0, 1)}
-    write_summary(args, summary, mean_fields, schedules)
+    write_summary(args, summary, mean_fields, schedules, profiles)
 
 
 def main(argv=None):

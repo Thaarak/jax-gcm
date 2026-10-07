@@ -63,6 +63,7 @@ import numpy as np
 from jcm.mcb.gradient_fidelity import MAP_REFERENCE_K
 from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
 from jcm.mcb.scores import PATTERN_ALPHA, PATTERN_BETA, zonal_projection
+from jcm.mcb.strength_estimator import EstimatorConfig, StrengthEstimator
 from jcm.mcb.test_world import (
     BRIGHTENING_CAP,
     EpisodeState,
@@ -250,31 +251,44 @@ class Planner:
         self.target = np.asarray(target_sst_daily, np.float64)
         self.seed_offset = int(seed_offset)
         self.log: List[dict] = []
+        # The strength the planner believes in, one value per band. It is an
+        # argument of the jitted call, not a constant baked into it, so a
+        # learning planner can change it between re-plans without
+        # recompiling.
+        self.efficacy = np.broadcast_to(
+            np.asarray(efficacy, np.float32), (self.k,)).copy()
+        if not np.all(self.efficacy > 0.0):
+            raise ValueError("the believed strength must be > 0 in every band")
+        # Per-latitude ocean weights, for comparing forecast and observed
+        # latitude profiles.
+        lat_w = self.weights.sum(axis=0)
+        self.profile_weights = lat_w / lat_w.sum()
+        self.prediction: Optional[dict] = None
+        self.innovation: Optional[dict] = None
         window = jnp.asarray(config.window_days)
-        eff = jnp.asarray(efficacy, jnp.float32)
         if config.optimizer == "adam":
             objective = make_lookahead_objective(
                 step_fn, patterns, ocean_weights, config.lookahead_days,
                 config.alpha, config.beta, config.mu, config.lam)
 
-            def objective_of_logits(z, carry, target_mean, previous):
+            def objective_of_logits(z, carry, target_mean, previous, eff):
                 return objective(to_amplitudes(z, config.cap), carry,
                                  target_mean, previous, eff, q_base, warming,
                                  window)
 
             evaluate = jax.value_and_grad(objective_of_logits)
-            axes = (None, 0, None, None)
+            axes = (None, 0, None, None, None)
         else:
             mean_sst = make_lookahead_sst_fn(step_fn, patterns,
                                              config.lookahead_days)
 
-            def map_twice(a, carry):
+            def map_twice(a, carry, eff):
                 out = mean_sst(a, carry, eff, q_base, warming, window)
                 return out, out
 
             # (jacobian (ix, il, K), map (ix, il)) from ONE forward pass.
             evaluate = jax.jacfwd(map_twice, has_aux=True)
-            axes = (None, 0)
+            axes = (None, 0, None)
         # Side by side, every copy goes through one vmapped call; otherwise
         # the copies run one after another through the same jitted function.
         self._evaluate = jax.jit(jax.vmap(evaluate, in_axes=axes)
@@ -317,15 +331,54 @@ class Planner:
         x = jnp.asarray(x, jnp.float32)
         extra = ((jnp.asarray(target_mean), jnp.asarray(previous))
                  if self.cfg.optimizer == "adam" else ())
+        eff = jnp.asarray(self.efficacy, jnp.float32)
         if self.cfg.batch_copies:
-            first, second = self._evaluate(x, copies, *extra)
+            first, second = self._evaluate(x, copies, *extra, eff)
             return (np.asarray(first, np.float64),
                     np.asarray(second, np.float64))
-        outs = [self._evaluate(x, c, *extra) for c in copies]
+        outs = [self._evaluate(x, c, *extra, eff) for c in copies]
         return (np.stack([np.asarray(o[0], np.float64) for o in outs]),
                 np.stack([np.asarray(o[1], np.float64) for o in outs]))
 
+    def profile(self, field):
+        """Return the ocean latitude profile ``(..., il)`` of ``field`` (..., ix, il)."""
+        mask = (self.weights > 0.0).astype(np.float64)
+        counts = np.maximum(mask.sum(axis=0), 1.0)
+        return (np.asarray(field, np.float64) * mask).sum(axis=-2) / counts
+
+    def observe(self, state: EpisodeState) -> Optional[dict]:
+        """Compare the last re-plan's forecast with what happened.
+
+        With Gauss-Newton every re-plan forecasts the look-ahead's mean SST
+        and how it would change with each band's strength (from the Jacobian
+        it plans with). When the look-ahead equals the segment that has just
+        been run, the forecast and the observed latitude profiles are
+        directly comparable. Returns (and keeps in ``self.innovation``) the
+        observed and forecast profiles, the forecast's sensitivity to the
+        strengths and the strength it assumed, or None when there is nothing
+        to compare.
+        """
+        self.innovation = None
+        pred = self.prediction
+        if pred is None or state.last_fields is None:
+            return None
+        if state.day - pred["day"] != self.cfg.lookahead_days:
+            return None
+        sst = np.asarray(state.last_fields["sst"], np.float64).mean(axis=0)
+        self.innovation = {
+            "day": state.day,
+            "observed": self.profile(sst - MAP_REFERENCE_K),
+            "predicted": pred["profile"],
+            "sensitivity": pred["strength_jacobian"],
+            "belief": pred["efficacy"]}
+        return self.innovation
+
     def __call__(self, state: EpisodeState) -> np.ndarray:
+        self.observe(state)
+        return self.plan(state)
+
+    def plan(self, state: EpisodeState) -> np.ndarray:
+        """Choose the next segment's settings from the current state."""
         t0 = time.time()
         cfg = self.cfg
         previous = np.asarray(state.previous, np.float32)
@@ -336,14 +389,37 @@ class Planner:
         if cfg.optimizer == "adam":
             final, record = self._adam(start, copies, target_mean, previous)
         else:
-            final, record = self._gauss_newton(start, copies, target_mean,
-                                               previous)
+            final, record, last = self._gauss_newton(start, copies,
+                                                     target_mean, previous)
+            self._remember_forecast(state.day, final, *last)
+        if self.innovation is not None:
+            r = self.innovation["observed"] - self.innovation["predicted"]
+            record["innovation_ms"] = float(np.sum(self.profile_weights
+                                                   * r ** 2))
         record.update(segment=state.segment, day=state.day,
                       optimizer=cfg.optimizer, start=start.tolist(),
                       final=final.tolist(),
+                      efficacy_belief=self.efficacy.tolist(),
                       seconds=round(time.time() - t0, 2))
         self.log.append(record)
         return final
+
+    def _remember_forecast(self, day, final, a_eval, jac, mean_map):
+        """Keep the forecast for the settings actually applied.
+
+        The look-ahead mean SST at ``final`` is linearized from the last
+        evaluation at ``a_eval``. Because the bands enter as ``strength *
+        settings``, the forecast's derivative with respect to band k's
+        strength is ``(a_k / e_k)`` times its derivative with respect to
+        the setting.
+        """
+        a = np.asarray(final, np.float64)
+        predicted = mean_map + jac @ (a - np.asarray(a_eval, np.float64))
+        jac_profile = self.profile(np.moveaxis(jac, -1, 0)).T     # (il, K)
+        self.prediction = {
+            "day": day, "profile": self.profile(predicted),
+            "strength_jacobian": jac_profile * (a / self.efficacy)[None, :],
+            "efficacy": self.efficacy.astype(np.float64).copy()}
 
     def _zonal(self, field):
         """Project ``field`` (..., ix, il) onto its ocean latitude profile."""
@@ -378,6 +454,7 @@ class Planner:
                           - MAP_REFERENCE_K)
         values, nts = [], None
         for it in range(cfg.iterations):
+            a_eval = a.copy()
             jacs, maps = self.evaluate_copies(a, copies)
             normal = np.zeros((self.k, self.k))
             rhs = np.zeros(self.k)
@@ -402,5 +479,53 @@ class Planner:
             damping = cfg.gn_damping * np.trace(normal) / self.k
             delta = np.linalg.solve(normal + damping * np.eye(self.k), -rhs)
             a = np.clip(a + delta, 0.0, cfg.cap)
+        # The last evaluation, averaged over copies: the forecast that
+        # ``observe`` checks at the next re-plan.
+        last = (a_eval, jacs.mean(axis=0), maps.mean(axis=0))
         return a.astype(np.float32), {"objective": values,
-                                      "noise_to_signal": nts}
+                                      "noise_to_signal": nts}, last
+
+
+class LearningPlanner(Planner):
+    """A Gauss-Newton planner that learns how strongly each band works.
+
+    Experiment 3b (MCB_PROJECT_REPORT.md Part 24). It starts from nominal
+    strength 1 and, before every re-plan, compares its last forecast with
+    what happened (``Planner.observe``) and updates its belief with a
+    ``StrengthEstimator``. It never sees the true strength: only the
+    simulated world applies that. The look-ahead must equal the segment
+    length, so that each forecast covers exactly the segment that follows.
+
+    Args:
+        estimator: an ``EstimatorConfig``; every other argument is
+            ``Planner``'s (the initial belief is always nominal).
+
+    """
+
+    def __init__(self, step_fn: Callable, patterns, ocean_weights,
+                 target_sst_daily, q_base, warming: Warming,
+                 estimator: EstimatorConfig,
+                 config: PlannerConfig = PlannerConfig(),
+                 seed_offset: int = 0):
+        """Build the planner at nominal strength and the estimator."""
+        if config.optimizer != "gauss_newton":
+            raise ValueError("learning needs the Gauss-Newton planner, whose "
+                             "Jacobian gives the forecast's sensitivity")
+        super().__init__(step_fn, patterns, ocean_weights, target_sst_daily,
+                         q_base, warming, 1.0, config, seed_offset)
+        self.estimator = StrengthEstimator(self.k, estimator)
+        self.efficacy = self.estimator.strength().astype(np.float32)
+
+    def __call__(self, state: EpisodeState) -> np.ndarray:
+        if self.prediction is not None and state.last_fields is not None \
+                and state.day - self.prediction["day"] != \
+                self.cfg.lookahead_days:
+            raise ValueError("the learning planner's look-ahead must equal "
+                             "the segment length")
+        innovation = self.observe(state)
+        if innovation is not None:
+            self.efficacy = self.estimator.update(
+                innovation["observed"] - innovation["predicted"],
+                innovation["sensitivity"], innovation["belief"],
+                self.profile_weights).astype(np.float32)
+        return self.plan(state)

@@ -32,6 +32,13 @@ Example (GPU; the Q-flux base carry of Amendment 9 revision 0.2):
         --base-carry mcb_experiments_gpu/equilibrated_qflux/base_carry.pkl \
         --require-qflux --output-root mcb_experiments_gpu/ics_macro
 
+Experiment 3b's fresh states (Amendment 9 revision 2), continued from macro
+state 15 into a separate root:
+    python run_generate_macro_ics.py --plan exp3b --macro-offset 15 \
+        --num-macro 33 --spacing-days 365 --require-qflux \
+        --base-carry mcb_experiments_gpu/ics_macro/macro_bases/macro_15_carry.pkl \
+        --output-root mcb_experiments_gpu/ics_macro3b
+
 CPU smoke (plumbing only, cold start):
     python run_generate_macro_ics.py --base-carry cold --num-macro 2 \
         --spacing-days 2 --decorr-days 1 --plan-json smoke_plan.json \
@@ -97,6 +104,32 @@ DEFAULT_PLAN = {
     ],
 }
 
+# Experiment 3b (Amendment 9 revision 2; MCB_PROJECT_REPORT.md Part 24).
+# Fresh states, so 3b never reuses a state that 3a's results or its noise
+# analysis have seen: the same control run, continued from macro state 15
+# and saved every 365 days (32 more years rather than 64, to limit the slow
+# drift of -0.15 K per decade seen across states 0-15), and interleaved
+# again, even states training and odd ones evaluating.
+EXP3B_BASE_MACRO = 15
+EXP3B_SPACING_DAYS = 365
+EXP3B_TRAIN_MACROS = list(range(16, 48, 2))
+EXP3B_EVAL_MACROS = list(range(17, 48, 2))
+EXP3B_PLAN = {
+    "exp3b_train": [
+        {"macro": EXP3B_TRAIN_MACROS, "branches": [0, 1], "split": "train",
+         "horizon": 60},
+    ],
+    "exp3b_eval": [
+        {"macro": EXP3B_EVAL_MACROS, "branches": [0, 1, 2],
+         "split": "heldout", "horizon": 60},
+    ],
+}
+PLANS = {"amendment9": DEFAULT_PLAN, "exp3b": EXP3B_PLAN}
+PREREGISTRATION_NOTE = {
+    "amendment9": "PREREGISTRATION.md Amendment 9 (plan: revision 0.4)",
+    "exp3b": "PREREGISTRATION.md Amendment 9 revision 2 (Experiment 3b)",
+}
+
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
@@ -112,6 +145,12 @@ def parse_args(argv=None):
                    help="SST perturbation (K) seeding each weather branch.")
     p.add_argument("--seed0", type=int, default=12000,
                    help="Branch seed = seed0 + 100 * macro + branch.")
+    p.add_argument("--plan", choices=sorted(PLANS), default="amendment9",
+                   help="Registered plan: amendment9 (macro states 0-15) or "
+                        "exp3b (16-47, continued from state 15).")
+    p.add_argument("--macro-offset", type=int, default=0,
+                   help="Global index of the base carry; macro state m of "
+                        "this run is state offset + m (exp3b: 15).")
     p.add_argument("--plan-json", default=None,
                    help="Override the registered plan (smoke tests only).")
     p.add_argument("--output-root", required=True)
@@ -136,11 +175,12 @@ def split_macros(flat):
     return train, evaluation
 
 
-def validate_plan(plan, num_macro):
+def validate_plan(plan, num_macro, offset=0):
     """Reject plans that break the registered rules.
 
-    A plan may not reuse a (macro, branch) pair, exceed ``num_macro``, or let
-    an evaluation role share a macro state with any other role.
+    A plan may not reuse a (macro, branch) pair, use a macro state outside
+    ``[offset, offset + num_macro)`` (global indices), or let an evaluation
+    role share a macro state with any other role.
 
     Returns the flat list of (role, macro, branch, split, horizon).
     """
@@ -149,9 +189,9 @@ def validate_plan(plan, num_macro):
     for role, groups in plan.items():
         for group in groups:
             for m in group["macro"]:
-                if not 0 <= m < num_macro:
+                if not offset <= m < offset + num_macro:
                     raise SystemExit(f"{role}: macro {m} outside "
-                                     f"[0, {num_macro})")
+                                     f"[{offset}, {offset + num_macro})")
                 for b in group["branches"]:
                     if (m, b) in seen:
                         raise SystemExit(
@@ -232,13 +272,28 @@ def macro_diagnostics(ssts, weights, train_macros=None, eval_macros=None,
     return out
 
 
+def check_exp3b_settings(args):
+    """Refuse an exp3b run that departs from its registered settings."""
+    if args.plan != "exp3b":
+        return
+    wanted = {"macro_offset": EXP3B_BASE_MACRO,
+              "spacing_days": EXP3B_SPACING_DAYS,
+              "num_macro": max(EXP3B_EVAL_MACROS) - EXP3B_BASE_MACRO + 1}
+    for name, value in wanted.items():
+        if getattr(args, name) != value:
+            raise SystemExit(f"--plan exp3b registers --{name.replace('_', '-')}"
+                             f" {value}, got {getattr(args, name)}")
+
+
 def main(argv=None):
     args = parse_args(argv)
-    plan = DEFAULT_PLAN
+    check_exp3b_settings(args)
+    plan = PLANS[args.plan]
     if args.plan_json:
         with open(args.plan_json) as f:
             plan = json.load(f)
-    flat = validate_plan(plan, args.num_macro)
+    offset = args.macro_offset
+    flat = validate_plan(plan, args.num_macro, offset)
     t_start = time.time()
 
     coupler, coords, _, _ = setup_coupled_model(
@@ -267,41 +322,45 @@ def main(argv=None):
           f"{len(plan)} roles")
     print("=" * 72)
 
-    # 1) Control continuation: macro state m = base advanced m * spacing.
+    # 1) Control continuation: macro state offset + m = base advanced
+    # m * spacing (global indices; the base itself is state ``offset``).
     macro_states, macro_ssts, macro_entries = [], [], []
     carry = base
     for m in range(args.num_macro):
+        g = offset + m
         if m > 0:
             t0 = time.time()
             carry = run_interval_final_carry(carry, step_fn,
                                              args.spacing_days)
             jax.block_until_ready(carry["ocn"]["state"].sea_surface_temperature)
-            print(f"  macro {m:02d}: +{args.spacing_days} d "
+            print(f"  macro {g:02d}: +{args.spacing_days} d "
                   f"[{time.time() - t0:.0f}s]", flush=True)
         macro_states.append(carry)
         macro_ssts.append(np.asarray(
             carry["ocn"]["state"].sea_surface_temperature))
-        entry = {"macro_index": m,
+        entry = {"macro_index": g,
                  "day_offset": m * args.spacing_days,
                  "ocn_sim_time": float(carry["ocn"]["state"].sim_time)}
         if args.save_macro_bases:
             base_dir = root / "macro_bases"
             base_dir.mkdir(exist_ok=True)
-            fname = f"macro_{m:02d}_carry.pkl"
+            fname = f"macro_{g:02d}_carry.pkl"
             save_carry(carry, str(base_dir / fname))
             entry["carry_file"] = fname
         macro_entries.append(entry)
 
     train_side, eval_side = split_macros(flat)
-    diagnostics = macro_diagnostics(macro_ssts, ocean_w, train_side,
-                                    eval_side, args.spacing_days)
+    diagnostics = macro_diagnostics(
+        macro_ssts, ocean_w, [m - offset for m in train_side],
+        [m - offset for m in eval_side], args.spacing_days)
     for m, sst_mean in enumerate(diagnostics["ocean_mean_sst_K"]):
-        side = ("eval" if m in eval_side else
-                "train" if m in train_side else "unused")
-        print(f"  macro {m:02d} ({side}): ocean-mean SST {sst_mean:.3f} K")
+        g = offset + m
+        side = ("eval" if g in eval_side else
+                "train" if g in train_side else "unused")
+        print(f"  macro {g:02d} ({side}): ocean-mean SST {sst_mean:.3f} K")
     for m, pair in enumerate(diagnostics["neighbour_similarity"]):
-        print(f"  macro {m:02d}->{m + 1:02d}: anomaly pattern corr "
-              f"{pair['pattern_corr']:+.2f}, rms diff "
+        print(f"  macro {offset + m:02d}->{offset + m + 1:02d}: anomaly "
+              f"pattern corr {pair['pattern_corr']:+.2f}, rms diff "
               f"{pair['rms_diff_K']:.3f} K")
     if "trend_K_per_decade" in diagnostics:
         trend = diagnostics["trend_K_per_decade"]
@@ -315,6 +374,8 @@ def main(argv=None):
     with open(root / "macro_bases_manifest.json", "w") as f:
         json.dump({"base_carry": args.base_carry,
                    "base_qflux_max_abs_wm2": q_max,
+                   "plan": args.plan,
+                   "macro_offset": offset,
                    "spacing_days": args.spacing_days,
                    "num_macro": args.num_macro,
                    "macro_states": macro_entries,
@@ -327,7 +388,8 @@ def main(argv=None):
         role_dir.mkdir(exist_ok=True)
         seed = branch_seed(args.seed0, m, b)
         t0 = time.time()
-        ic_carry = perturb_sst(macro_states[m], seed, args.perturb_amp)
+        ic_carry = perturb_sst(macro_states[m - offset], seed,
+                               args.perturb_amp)
         ic_carry = run_interval_final_carry(ic_carry, step_fn,
                                             args.decorr_days)
         stem = f"ic_m{m:02d}_b{b}_{split}_seed{seed}"
@@ -368,10 +430,11 @@ def main(argv=None):
             "terrain_source": TERRAIN_NC,
             "macro_role": role,
             "macro_spacing_days": args.spacing_days,
+            "macro_offset": offset,
             "base_carry": args.base_carry,
             "seed0": args.seed0,
-            "preregistration": "PREREGISTRATION.md Amendment 9 "
-                               "(plan: revision 0.4)",
+            "preregistration": PREREGISTRATION_NOTE.get(
+                args.plan, args.plan),
             "ics": ics,
         }
         with open(root / role / "manifest.json", "w") as f:

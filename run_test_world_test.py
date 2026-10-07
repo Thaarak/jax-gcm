@@ -12,6 +12,8 @@ from run_test_world import (
     episode_amplitudes,
     parse_args,
     planner_config,
+    select_branches,
+    strength_vector,
     validate_args,
 )
 
@@ -35,6 +37,16 @@ class ReferencesArgsTest(unittest.TestCase):
             with self.assertRaises(SystemExit, msg=str(extra)):
                 validate_args(self._args(*extra))
         validate_args(self._args("--days", "12", "--member-block-days", "0"))
+
+    def test_branch_selection(self):
+        ics = [({"index": 1600 + b, "branch": b}, None) for b in (0, 1, 2)]
+        self.assertEqual(select_branches(ics, None), ics)
+        self.assertEqual([e["branch"] for e, _ in select_branches(ics, [0, 2])],
+                         [0, 2])
+        with self.assertRaises(SystemExit):
+            select_branches(ics, [5])
+        self.assertEqual(self._args("--branches", "1").branches, [1])
+        self.assertIsNone(self._args().branches)
 
     def test_evaluation_roles_need_explicit_permission(self):
         with self.assertRaises(SystemExit):
@@ -113,6 +125,46 @@ class PlanArgsTest(unittest.TestCase):
                                         "--representation", "zonal"))
         self.assertEqual(cfg.representation, "zonal")
         self.assertEqual(planner_config(self._args()).representation, "map")
+
+    def test_strength_per_band(self):
+        np.testing.assert_allclose(strength_vector(1.0), np.ones(5))
+        np.testing.assert_allclose(strength_vector([2.0]), np.full(5, 2.0))
+        five = [0.5, 1.0, 1.5, 2.0, 0.8]
+        np.testing.assert_allclose(strength_vector(five), five)
+        with self.assertRaises(SystemExit):
+            strength_vector([1.0, 2.0])
+        args = self._args("--efficacy", *map(str, five),
+                          "--planner-efficacy", "1")
+        validate_args(args)
+        with self.assertRaises(SystemExit):
+            validate_args(self._args("--efficacy", "1", "-1", "1", "1", "1"))
+        with self.assertRaises(SystemExit):
+            validate_args(self._args("--planner-efficacy", "1", "0", "1",
+                                     "1", "1"))
+
+    def test_learning_planner_settings(self):
+        good = ("--preset", "short14", "--optimizer", "gauss_newton",
+                "--iterations", "1", "--copies", "1",
+                "--representation", "zonal", "--learn-strength", "bands",
+                "--learn-noise-k", "0.01")
+        args = self._args(*good)
+        validate_args(args)
+        self.assertEqual(args.learn_strength, "bands")
+        self.assertEqual(self._args().learn_strength, "off")
+        base = ("--preset", "short14", "--iterations", "1", "--copies", "1",
+                "--learn-strength", "bands")
+        gn = ("--optimizer", "gauss_newton")
+        noise = ("--learn-noise-k", "0.01")
+        bad = {"no noise level": base + gn,
+               "Adam": base + noise,
+               "not starting at nominal": base + gn + noise
+               + ("--planner-efficacy", "2"),
+               "look-ahead longer than a segment": base + gn + noise
+               + ("--segment-days", "7"),
+               "zero noise": base + gn + ("--learn-noise-k", "0")}
+        for why, extra in bad.items():
+            with self.assertRaises(SystemExit, msg=why):
+                validate_args(self._args(*extra))
 
     def test_rejects_bad_planner_settings(self):
         for extra in (("--copies", "0"), ("--lookahead-days", "0"),

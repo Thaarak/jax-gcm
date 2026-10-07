@@ -18,6 +18,7 @@ from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
 from jcm.mcb.planner import (
     PRESETS,
     W_STAR_DAYS,
+    LearningPlanner,
     Planner,
     PlannerConfig,
     gauss_newton_residuals,
@@ -31,6 +32,7 @@ from jcm.mcb.scores import (
     segment_objective,
     zonal_projection,
 )
+from jcm.mcb.strength_estimator import EstimatorConfig
 from jcm.mcb.test_world import (
     EpisodeState,
     make_lookahead_sst_fn,
@@ -217,6 +219,86 @@ class PolicyTest(_Toy):
         self.assertEqual([r["day"] for r in planner.log], [0, 2, 4])
         np.testing.assert_allclose(planner.log[1]["start"],
                                    ep.amplitudes[0])
+
+
+class StrengthLearningTest(_Toy):
+    """Experiment 3b: forecasts are checked, and the strength is learned."""
+
+    TRUTH = np.array([0.6, 1.8], np.float32)
+
+    def make(self, efficacy=1.0, **overrides):
+        cfg = dict(lookahead_days=L, window_days=NO_TRUNCATION_DAYS,
+                   copies=1, copy_amp=0.0, cap=5.0, gn_damping=0.0,
+                   optimizer="gauss_newton", iterations=1)
+        cfg.update(overrides)
+        return Planner(_toy_step, self.patterns, self.w, self.target,
+                       self.q_base, self.warm, efficacy, PlannerConfig(**cfg))
+
+    def learner(self, **overrides):
+        cfg = dict(lookahead_days=L, window_days=NO_TRUNCATION_DAYS,
+                   copies=1, copy_amp=0.0, cap=5.0, gn_damping=0.0,
+                   optimizer="gauss_newton", iterations=1)
+        cfg.update(overrides)
+        return LearningPlanner(_toy_step, self.patterns, self.w, self.target,
+                               self.q_base, self.warm,
+                               EstimatorConfig(noise_k=1e-4, prior_sd=10.0),
+                               PlannerConfig(**cfg))
+
+    def episode(self, policy, truth, segment_days=L, n_segments=3):
+        seg = make_segment_fn(_toy_step, self.patterns, segment_days,
+                              fields_fn=_toy_fields)
+        return run_episode(self.carry, seg, policy, n_segments=n_segments,
+                           segment_days=segment_days, k_bands=2,
+                           warming=self.warm, efficacy=truth)
+
+    def test_belief_scales_the_plan(self):
+        # The toy responds to strength x setting, so believing a band is
+        # twice as strong halves its setting at the (interior) optimum.
+        base = self.make()(self.state())
+        belief = np.array([2.0, 0.5], np.float32)
+        np.testing.assert_allclose(self.make(belief)(self.state()),
+                                   base / belief, rtol=1e-3)
+        changed = self.make()
+        changed.efficacy = belief                 # no rebuild needed
+        np.testing.assert_allclose(changed(self.state()), base / belief,
+                                   rtol=1e-3)
+
+    def test_forecasts_are_checked_against_what_happened(self):
+        oracle = self.make(self.TRUTH)
+        self.episode(oracle, self.TRUTH)
+        misses = [r.get("innovation_ms") for r in oracle.log]
+        self.assertIsNone(misses[0])              # nothing to check yet
+        self.assertLess(max(misses[1:]), 1e-8)    # exact on the linear toy
+        naive = self.make(1.0)
+        self.episode(naive, self.TRUTH)
+        self.assertGreater(naive.log[1]["innovation_ms"], 1e-6)
+
+    def test_learning_planner_recovers_the_hidden_strength(self):
+        learner = self.learner()
+        self.episode(learner, self.TRUTH)
+        np.testing.assert_allclose(learner.log[0]["efficacy_belief"], [1, 1])
+        np.testing.assert_allclose(learner.log[1]["efficacy_belief"],
+                                   self.TRUTH, rtol=1e-2)
+        # Once learned, it plans as the oracle does from the same state.
+        oracle = self.make(self.TRUTH)
+        np.testing.assert_allclose(learner.plan(self.state()),
+                                   oracle(self.state()), rtol=2e-2)
+
+    def test_first_move_does_not_depend_on_the_hidden_strength(self):
+        a = self.learner()
+        b = self.learner()
+        self.episode(a, self.TRUTH)
+        self.episode(b, np.array([1.5, 0.4], np.float32))
+        np.testing.assert_allclose(a.log[0]["final"], b.log[0]["final"])
+        self.assertFalse(np.allclose(a.log[1]["efficacy_belief"],
+                                     b.log[1]["efficacy_belief"]))
+
+    def test_learning_needs_gauss_newton_and_matching_segments(self):
+        with self.assertRaises(ValueError):
+            self.learner(optimizer="adam")
+        with self.assertRaises(ValueError):
+            self.episode(self.learner(), self.TRUTH, segment_days=2,
+                         n_segments=3)
 
 
 class HelpersTest(unittest.TestCase):

@@ -2128,3 +2128,116 @@ had not arrived yet.
 > so luck across four tries does not look like a discovery. *Inconclusive* = the data were not strong
 > enough to call it either way at the bar set in advance. *Overshoot* = correcting too far, past the
 > target.
+
+---
+
+# Part 24 — Experiment 3b: when nobody knows how strong the spraying is (plan)
+
+*Added 2026-10-07, before any Experiment 3b run. This is the working plan. The registered version
+will be Amendment 9 revision 2, frozen and posted on OSF before any evaluation reference or run
+exists, as revision 1 was.*
+
+**In one sentence:** 3b hides how strongly brightening works — overall and band by band — from every
+controller. It then asks whether a planner that *learns* the strength from what it sees, using the
+model's own gradients, beats the field's standard feedback controller.
+
+*Analogy:* a house where the radiators' labels are wrong. Some days the heating is twice as strong as
+the label says, some days half, and the radiators in some rooms work better than in others. A standard
+thermostat (the classical controller) just keeps nudging until each room is warm enough. A "smart"
+thermostat (the learning planner) watches how each room actually responds, corrects its own notes about
+each radiator, and then plans. The question is whether being smart pays, and by how much compared with
+a thermostat that already knows the true strengths (the oracle).
+
+## 24.1 Why this experiment, now
+
+- **3a's answer:** with a perfect model, a short-sighted planner and the classical controller do
+  equally well. By the interpretation fixed in revision 1, the planner's case moves to uncertainty.
+- **The real world's biggest unknown is how strong the spraying is.**
+  - Hirasawa et al. (GeoMIP G6-1.5K-MCB) found the sea-salt emissions needed for the same cooling
+    differ about 20-fold across three climate models.
+  - Regional susceptibility differs too: some cloud regions brighten much more than others.
+- **Duncan's priorities fit exactly.** 3b covers:
+  - gradients for control without ensembles (the learner uses one gradient run);
+  - where and how much to brighten;
+  - detection with one Earth (how fast can the strength be learned from one noisy realization?);
+  - no machine learning for its own sake (no neural networks).
+- **The field-standard opponent** is the GLENS-style PI controller, the same family as Lee et al.
+  (2025, GRL), the first feedback-regulated MCB simulations in CESM2.
+
+## 24.2 What went wrong and right before, and what 3b does about it
+
+| Lesson (where it came from) | What 3b does |
+|---|---|
+| **Too little power.** 3a's planners differed by 35–47% and still failed Holm. Weather noise between branches (about ±0.0025 in the score) swamped the differences between controllers. Measured 2026-10-07: weather noise alone would give the best controllers' score, and 91% of it sits in the latitude pattern | More weather members per run (chosen by a registered power calculation from the pilot, 6–10 instead of 3); 10-member reference targets instead of 5; 16 independent ocean states instead of 8; one primary hypothesis instead of a Holm family of four |
+| **The evaluation states are no longer fresh.** 3a's results and its noise analysis used the 24 evaluation states | 32 brand-new ocean states from a continuation of the same control run, interleaved: 16 for training, 16 for evaluation |
+| **Pilots that judge the wrong thing.** The step-23 pilot picked 120 days from open-loop re-plans, and closed-loop results reversed it | Every pilot judgement uses whole closed-loop episodes, the real task |
+| **Picking settings from a noisy score** (Stage-1, holistic review) | Defaults come from rules (the learner's noise level is measured, not tuned). A pilot setting replaces a default only if it is better by more than 2 standard errors, with the same rule for our method and the opponent |
+| **Rigged designs** (Parts 7, 13, 16: a design that hands one side the answer) | Every arm gets the same hidden strengths and the same weather. The opponent may retune for robustness under the same rule. The strengths are drawn from a registered distribution justified by the literature, not chosen after seeing results. The learner can never read the true strength (a test checks this) |
+| **Opponents must be strong.** | PI with feedforward and integral action (the field standard), a classical learning controller (the Tier 2 adaptive law), and the best fixed pattern |
+| **The analysis broke at launch** (3a's `KeyError`) | The smoke test runs every arm and then the registered analysis on the smoke outputs, end to end |
+| **The GX10 crashed** (JAX grabbed 75% of memory) and **connections dropped** | Memory limits set in every script; everything runs in tmux and can resume; checks are short |
+| **What went right, kept:** pre-registration with OSF timestamps and checksums; interleaved training/evaluation states; matched weather members; macro states as the unit; hierarchical bootstrap; interpretations fixed in advance; training-side results written down before evaluation; the cheap Gauss–Newton planner (1 step, 1 copy, zonal) | Unchanged |
+
+## 24.3 The design
+
+- **Test world:** as in 3a. The warming ramps to 6 W m⁻² by day 182, there are 13 re-plans every 14
+  days, and scoring covers days 98–182 on the latitude profile (`J_zonal`).
+- **Hidden strength** (drawn per state from registered seeds; seen only by the simulated world).
+  Each band's strength is `e_k = g × r_k`:
+  - *Overall factor* `g` = 0.5, 1 or 2. Each evaluation ocean state has three weather branches, one at
+    each value, so every ocean state sees the whole range. A factor of 2 either way is deliberately
+    milder than the 20-fold spread across models, and keeps most runs inside the brightening cap.
+  - *Regional factors* `r_k`: log-normal with standard deviation 0.5, re-centred to a geometric
+    mean of 1. The strongest and weakest of five bands then typically differ about 3-fold.
+- **Arms** (every planner is 3a's 14-day planner: Gauss–Newton, 1 step, 1 copy, zonal objective, the
+  same penalties):
+
+| Arm | What it knows |
+|---|---|
+| `plan_learn` (**new**) | starts at nominal strength and learns each band's strength from its own forecasts versus what happened, using the Jacobian it already computes. No extra model runs |
+| `plan_naive` | assumes nominal strength throughout |
+| `plan_oracle` | knows the true strengths (the ceiling) |
+| `pi` | GLENS-style PI on T0–T2 with feedforward, sensitivities from training runs at nominal strength |
+| `adaptive` | the Tier 2 law: learns one overall strength and scales the best fixed pattern |
+| `fixed` | the best fixed pattern, designed on training states at nominal strength (no feedback) |
+| `uncontrolled` | no brightening (for the gains) |
+
+- **How the learner works.** Every planner already predicts the next two weeks and knows how its
+  prediction would change with each band's strength (the Jacobian it uses to plan). After each
+  fortnight it compares the prediction with what happened, and updates each band's strength by
+  regularized least squares over all fortnights so far. The prior is centred on nominal strength with
+  standard deviation 1. The noise level is measured from the oracle's forecast errors in the pilot,
+  by a fixed rule.
+- **Hypotheses:**
+  - **H1 (primary):** `plan_learn` vs `pi` on `J_zonal`. Paired t test on 16 macro-state means,
+    two-sided, α = 0.05.
+  - **Secondary family (Holm):** H2 `plan_learn` vs `plan_naive` (does learning help?), and H3 `pi` vs
+    `fixed` (is feedback essential under uncertainty?).
+  - **Descriptive:**
+    - each arm vs the oracle (the cost of not knowing);
+    - every result by overall factor;
+    - the learning curves (how many fortnights until the strength is known: detection with one Earth);
+    - the bias and pattern parts separately.
+
+## 24.4 Steps and cost
+
+| # | Step | GPU (wall) |
+|---|---|---|
+| 1 | Extend the state generator (continue the control run from macro state 15 every 365 days; roles `exp3b_train`/`exp3b_eval`) and generate 32 new macro states with their weather branches | ~30 min |
+| 2 | Code, while step 1 runs: hidden strength per band; the learning planner; the strength draws; saving each member's latitude profile (so the pilot can measure how noise falls with members); the 3b analysis; campaign scripts with a full smoke test | — |
+| 3 | Training side: references, one-band response runs and the fixed design on the 16 training states | ~2.5 h |
+| 4 | Pilot (training states only, whole episodes): (A) oracle runs, to measure the forecast noise for the learner; (B) every arm under the hidden strengths, plus two robustness variants (PI with a slower loop; the learner with 4× the noise), and a global-only learner as a diagnostic | ~4.5 h |
+| 5 | Power calculation from the pilot, then the number of members (6, 8 or 10); write and freeze revision 2; post it on OSF | — |
+| 6 | Evaluation: 10-member references for 48 states, then 7 arms × 48 states; the registered analysis runs automatically | ~17–27 h |
+| 7 | Report Part 24 results, memory, commit and push, and a plain-language explanation | — |
+
+**Possible outcomes, and what each would mean for the papers:**
+- *Learning beats PI:* the headline of Paper 2. A differentiable model lets a controller learn where
+  and how strongly brightening works, and that beats the field's standard.
+- *Learning ties PI:* with 3a, a clean and well-powered message. Classical feedback handles strength
+  uncertainty too, so the planner's value must come from elsewhere (many knobs, Experiment 2, or
+  targets beyond three indices).
+- *Either way:*
+  - fixed designs fail under realistic uncertainty, which replicates Tier 2 over a far wider range;
+  - the learning curves measure how fast one Earth reveals the spraying's strength (Duncan's
+    detection question).

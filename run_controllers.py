@@ -272,7 +272,7 @@ def stage_responses(args):
     blocks, indices, t0 = [], [], time.time()
     for j in range(k):
         setting = args.delta * np.eye(k, dtype=np.float32)[j]
-        fields, _, seeds, _ = run_members(
+        fields, _, seeds, _, _ = run_members(
             m, run_args, entry, carry, ref_meta["config"],
             lambda member, c, warming: constant_policy(setting))
         sst = fields["sst"]
@@ -383,19 +383,20 @@ def _episode_inputs(args):
 
 
 def _finish(args, stage, entry, ref_path, ref_meta, m, refs, mean_fields,
-            schedules, seeds, t0, **extra):
+            schedules, seeds, t0, profiles=None, **extra):
     from run_gradient_fidelity import git_provenance
-    from run_test_world import score_runs, write_summary
+    from run_test_world import score_runs, strength_vector, write_summary
 
     summary = {"stage": stage, "config": vars(args), "ic": entry,
                "members": len(seeds), "member_seeds": seeds,
                "reference_members": ref_meta["config"]["members"],
                "schedules": [s.tolist() for s in schedules],
+               "true_efficacy": strength_vector(args.efficacy).tolist(),
                **score_runs(m, args, refs, mean_fields, schedules), **extra,
                "references": str(ref_path), "git": git_provenance(),
                "command": " ".join(sys.argv),
                "seconds": round(time.time() - t0, 1)}
-    write_summary(args, summary, mean_fields, schedules)
+    write_summary(args, summary, mean_fields, schedules, profiles)
 
 
 def stage_feedback(args):
@@ -423,10 +424,10 @@ def stage_feedback(args):
                                       relaxation=args.relaxation))
 
     t0 = time.time()
-    mean_fields, schedules, seeds, controllers = run_members(
+    mean_fields, schedules, seeds, controllers, profiles = run_members(
         m, args, entry, carry, ref_meta["config"], make_policy)
     _finish(args, f"feedback-{args.controller}", entry, ref_path, ref_meta,
-            m, refs, mean_fields, schedules, seeds, t0,
+            m, refs, mean_fields, schedules, seeds, t0, profiles,
             sensitivity={"source": source, "rates": rates.tolist()},
             controller_logs=[c.log for c in controllers])
 
@@ -443,10 +444,10 @@ def stage_student(args):
                              args.segment_days)
 
     t0 = time.time()
-    mean_fields, schedules, seeds, _ = run_members(
+    mean_fields, schedules, seeds, _, profiles = run_members(
         m, args, entry, carry, ref_meta["config"], make_policy)
     _finish(args, "student", entry, ref_path, ref_meta, m, refs, mean_fields,
-            schedules, seeds, t0, student=str(args.student),
+            schedules, seeds, t0, profiles, student=str(args.student),
             student_meta=meta)
 
 

@@ -17,13 +17,16 @@ import pytest
 from run_generate_macro_ics import (
     DEFAULT_PLAN,
     EVAL_MACROS,
+    EXP3B_PLAN,
     TRAIN_MACROS,
     branch_seed,
+    check_exp3b_settings,
     ic_index,
     macro_diagnostics,
     split_macros,
     validate_plan,
 )
+from run_generate_macro_ics import parse_args as macro_parse_args
 from run_gradient_fidelity import (
     amplitude_for,
     forward_reverse_check,
@@ -146,6 +149,47 @@ class MacroPlanTest(unittest.TestCase):
         idx = {ic_index(m, b) for _, m, b, _, _ in flat}
         self.assertEqual(len(seeds), len(flat))
         self.assertEqual(len(idx), len(flat))
+
+    def test_exp3b_plan_is_fresh_interleaved_and_disjoint(self):
+        flat = validate_plan(EXP3B_PLAN, 33, offset=15)
+        counts = {}
+        for role, *_ in flat:
+            counts[role] = counts.get(role, 0) + 1
+        self.assertEqual(counts, {"exp3b_train": 32, "exp3b_eval": 48})
+        train, evaluation = split_macros(flat)
+        self.assertEqual(train, list(range(16, 48, 2)))
+        self.assertEqual(evaluation, list(range(17, 48, 2)))
+        # Nothing is shared with the states of revisions 0.4 and 1.
+        old = validate_plan(DEFAULT_PLAN, 16)
+        self.assertFalse({m for _, m, *_ in flat} & {m for _, m, *_ in old})
+        both = flat + old
+        self.assertEqual(len({ic_index(m, b) for _, m, b, *_ in both}),
+                         len(both))
+        self.assertEqual(len({branch_seed(12000, m, b)
+                              for _, m, b, *_ in both}), len(both))
+
+    def test_offset_bounds_the_global_macro_indices(self):
+        with self.assertRaises(SystemExit):
+            validate_plan(EXP3B_PLAN, 33)            # offset 0: 16-47 too big
+        with self.assertRaises(SystemExit):
+            validate_plan(EXP3B_PLAN, 32, offset=15)  # 47 just outside
+        smoke = {"exp9_eval": [{"macro": [5], "branches": [0],
+                                "split": "heldout", "horizon": 3}]}
+        self.assertEqual(len(validate_plan(smoke, 2, offset=4)), 1)
+
+    def test_exp3b_registered_settings_are_enforced(self):
+        base = ["--base-carry", "x", "--output-root", "y", "--plan", "exp3b"]
+        good = ["--macro-offset", "15", "--num-macro", "33",
+                "--spacing-days", "365"]
+        check_exp3b_settings(macro_parse_args(base + good))
+        for i in (1, 3, 5):
+            bad = list(good)
+            bad[i] = "7"
+            with self.assertRaises(SystemExit):
+                check_exp3b_settings(macro_parse_args(base + bad))
+        # The original plan is unaffected by the check.
+        check_exp3b_settings(macro_parse_args(["--base-carry", "x",
+                                               "--output-root", "y"]))
 
     def test_macro_diagnostics(self):
         w = np.full((4, 3), 1.0 / 12)
