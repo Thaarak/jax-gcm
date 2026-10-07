@@ -2265,3 +2265,83 @@ a thermostat that already knows the true strengths (the oracle).
 - **Code:** 389 fast tests pass; committed (81a920ed).
 - **Running on the GX10:** the training references, then the response runs and the fixed design,
   then the pilot (chained automatically). The freeze and the evaluation follow, as approved.
+
+---
+
+# Part 25 — Experiment 2 and the snip test: the rules, frozen before any data
+
+*Added 2026-10-07. Frozen as Amendment 9 revision 1.1 (PREREGISTRATION.md) and posted to OSF before
+any of its data existed. Code: `jcm/mcb/design.py`, `run_experiment2.py`, `analyze_experiment2.py`,
+`run_snip_test.py`, `analyze_snip_test.py`, `run_campaign_exp2.sh`. Nothing has run on the GPU yet:
+the GX10 is busy with Experiment 3b, and this campaign waits until it cannot get in 3b's way.*
+
+**In one sentence:** two cheap tests for the gradients paper. One asks whether a longer snip fixes
+the gradient's 30% undercount. The other asks whether the gradient can design one fixed brightening
+pattern as well as the brute-force method at the same cost, and better than a sunlight formula, with
+5 knobs and with 13.
+
+*Analogy:* Experiment 1 tested the compass, checking that the gradient points the right way. 3a
+tested a navigator who re-plans every two weeks. Experiment 2 asks whether the compass alone can draw
+a good map once, and whether it does so more cheaply than surveying every road by hand.
+
+## 25.1 The snip test (Part A)
+
+- **The question.** Experiment 1 found that the 14-day snip is useful out to 120 days, but at 120
+  days it shows only 69% of the true response (interval 65–73%). In 3a, the planner that trusted it
+  at 120 days overcooled the ocean. Does snipping less often (every 21 or 30 days) shrink that
+  undercount without making the gradient noisy?
+- **How.** We compute new gradients only, on Experiment 1's 8 states with everything else identical,
+  and score them against Experiment 1's stored truth with Experiment 1's own frozen analysis. Fed the
+  combined data, that analysis reproduces Experiment 1's published numbers exactly (tested).
+- **The rule.**
+  - Among the windows that stay "useful" at 120 days, pick the one whose ratio is closest to 1.
+  - If that is 21 or 30 days, a longer snip helps (S-A). If it is 14, fourteen days stays best
+    (S-B).
+  - Predictions: the ratio rises with the window, and so does the noise.
+- **Cost:** about 1 GPU-hour. Nothing already frozen changes: 3a and 3b keep the 14-day snip.
+
+## 25.2 Experiment 2 (Part B)
+
+- **The task.** Choose ONE brightening setting, held for six months, that best cancels the growing
+  warming's latitude pattern over days 98–182. That is the same test world and score as 3a.
+- **States.**
+  - *Design:* Experiment 2's own 8 training states.
+  - *Judging:* its 16 evaluation states, which nothing has touched, with 5 weather samples each.
+- **Knobs.** The usual 5 wide bands, and 13 narrow bands (60S to 60N every 10°).
+- **How each arm finds its setting.**
+
+| Arm | How it finds the setting | Model time |
+|---|---|---|
+| Gradient (`grad5`, `grad13`) | Four rounds of "look at the gradient, solve, re-run". Re-running corrects the undercount, which 3a's single step could not | 4 runs per state |
+| Plain backprop (`bptt5`) | The same without the snip | 4 runs per state |
+| Brute force (`brute5`, `brute13`) | Brighten each band alone, 5 weather samples each, then solve | (bands + 1) × 5 runs per state |
+| Brute force at equal cost (`brute5_eq`, `brute13_eq`) | The same, with only as many samples as the gradient's model time buys (probably 2) | equal to the gradient |
+| Sunlight formula (`sunlight5`, `sunlight13`) | Duncan's back-of-envelope: sunlight × the model's clouds ÷ the ocean's heat capacity | none |
+| Uniform, uncontrolled | One setting everywhere; nothing | — |
+
+- **The four main questions** (decided together, with the bar raised for testing four):
+  1. With 13 knobs and the same model time, does the gradient beat brute force?
+  2. Does the gradient know more than the sunlight formula?
+  3. Is the snip what makes gradient design work?
+  4. Do 13 knobs beat 5?
+- **Scoring.** The same latitude-profile score and the same statistics code as 3a, run on the same 8
+  macro states as the unit.
+- **Cost:** about 8 GPU-hours, run from a separate copy of the frozen code on the GX10, so it cannot
+  disturb 3b.
+
+## 25.3 What to expect, and what it would mean
+
+- **Expected.** The gradient and brute-force designs should land close together; 3a's best fixed
+  pattern scored about 0.004. Plain backpropagation should fail (Experiment 1). The sunlight formula
+  should under-brighten, since it overstates the cooling about twice (20.2).
+- **For the gradients paper.** "The gradient designs the pattern as well as brute force at a fraction
+  of the model time, and better than a formula" would be its practical result. If question 1 comes
+  out inconclusive, the paper reports the measured cost saving with its uncertainty and does not claim
+  a quality advantage.
+- **Why 13 knobs.** With 5 knobs, brute force is as cheap as the gradient and just as accurate. The
+  gradient's advantage, if any, has to show where knobs are many.
+
+> **New terms:** *Brute force* = learning each knob's effect by turning it on alone and averaging
+> several weather samples. *Equal cost* = giving two methods the same amount of model time.
+> *Gauss–Newton step* = treat the response as locally linear, solve for the best setting, then re-run
+> to check.
