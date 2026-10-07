@@ -1,0 +1,4419 @@
+{
+  "states": [
+    102,
+    103,
+    104,
+    302,
+    303,
+    304,
+    502,
+    503,
+    504,
+    702,
+    703,
+    704,
+    902,
+    903,
+    904,
+    1102,
+    1103,
+    1104,
+    1302,
+    1303,
+    1304,
+    1502,
+    1503,
+    1504
+  ],
+  "n_states": 24,
+  "hypotheses": {
+    "H1": {
+      "comparator": "plan14",
+      "question": "does looking 120 days ahead beat looking 14 days ahead?",
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0049237103036527214,
+      "mean_B": 0.0033469899766108333,
+      "diff": 0.001576720327041888,
+      "rel": 0.47108606182277163,
+      "se_macro": 0.0006126584971486998,
+      "t_p": 0.03681568850864312,
+      "wilcoxon_p": 0.0546875,
+      "ci90_rel": [
+        0.08397434164252994,
+        0.9944152168018253
+      ],
+      "ci95_rel": [
+        0.02014195542801667,
+        1.1012156735434433
+      ],
+      "t_p_holm": 0.11044706552592937,
+      "verdict": "inconclusive",
+      "wilcoxon_agrees": false
+    },
+    "H2": {
+      "comparator": "linear_response",
+      "question": "does the planner beat the best fixed pattern (classical design)?",
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0049237103036527214,
+      "mean_B": 0.004065980785526335,
+      "diff": 0.0008577295181263859,
+      "rel": 0.2109526737508559,
+      "se_macro": 0.0006140765199310936,
+      "t_p": 0.2051666553177496,
+      "wilcoxon_p": 0.3125,
+      "ci90_rel": [
+        -0.06622562701552664,
+        0.6407636095351482
+      ],
+      "ci95_rel": [
+        -0.10725534854630453,
+        0.7481255383761383
+      ],
+      "t_p_holm": 0.2051666553177496,
+      "verdict": "inconclusive",
+      "wilcoxon_agrees": true
+    },
+    "H3": {
+      "comparator": "pi",
+      "question": "does the planner beat the classical feedback controller?",
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0049237103036527214,
+      "mean_B": 0.003660656225595934,
+      "diff": 0.0012630540780567874,
+      "rel": 0.3450348790540061,
+      "se_macro": 0.0005349152338163924,
+      "t_p": 0.05025080564266615,
+      "wilcoxon_p": 0.0546875,
+      "ci90_rel": [
+        0.01219552967850582,
+        0.8556703823059038
+      ],
+      "ci95_rel": [
+        -0.0414214190983039,
+        0.9948190379428486
+      ],
+      "t_p_holm": 0.11044706552592937,
+      "verdict": "inconclusive",
+      "wilcoxon_agrees": true
+    },
+    "H4": {
+      "comparator": "planner_average",
+      "question": "does changing the pattern over time beat the planner's own average pattern held fixed?",
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0049237103036527214,
+      "mean_B": 0.0112505920114927,
+      "diff": -0.006326881707839978,
+      "rel": -0.562359891939637,
+      "se_macro": 0.001221856875779837,
+      "t_p": 0.0012835901605412156,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.6538434903702993,
+        -0.42669682361626743
+      ],
+      "ci95_rel": [
+        -0.6648929443393051,
+        -0.39053579160150004
+      ],
+      "t_p_holm": 0.005134360642164862,
+      "verdict": "better",
+      "wilcoxon_agrees": true
+    }
+  },
+  "secondary": {
+    "plan60_vs_plan120": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0032926966644784748,
+      "mean_B": 0.0049237103036527214,
+      "diff": -0.0016310136391742465,
+      "rel": -0.3312570274421419,
+      "se_macro": 0.00047148021280732415,
+      "t_p": 0.010556887008013764,
+      "wilcoxon_p": 0.015625,
+      "ci90_rel": [
+        -0.49337518343809544,
+        -0.137589426521978
+      ],
+      "ci95_rel": [
+        -0.5222588755238203,
+        -0.09773800622060833
+      ],
+      "verdict_unadjusted": "better"
+    },
+    "plan60_vs_plan14": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0032926966644784748,
+      "mean_B": 0.0033469899766108333,
+      "diff": -5.429331213235855e-05,
+      "rel": -0.016221534128206754,
+      "se_macro": 0.0004680993113880438,
+      "t_p": 0.9109203849228982,
+      "wilcoxon_p": 1.0,
+      "ci90_rel": [
+        -0.26219017046772064,
+        0.2979085093242421
+      ],
+      "ci95_rel": [
+        -0.30394328423339284,
+        0.363500845700322
+      ],
+      "verdict_unadjusted": "inconclusive"
+    },
+    "linear_response_vs_uniform_cancel": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.004065980785526335,
+      "mean_B": 0.004865830511941264,
+      "diff": -0.0007998497264149288,
+      "rel": -0.16438092622667655,
+      "se_macro": 0.00044093260526969233,
+      "t_p": 0.11255427763030687,
+      "wilcoxon_p": 0.109375,
+      "ci90_rel": [
+        -0.33498342103921597,
+        0.04514562402008733
+      ],
+      "ci95_rel": [
+        -0.3621862866480841,
+        0.08948983230344557
+      ],
+      "verdict_unadjusted": "inconclusive"
+    },
+    "linear_response_vs_pi": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.004065980785526335,
+      "mean_B": 0.003660656225595934,
+      "diff": 0.00040532455993040156,
+      "rel": 0.11072456274268613,
+      "se_macro": 0.0005416842353598691,
+      "t_p": 0.4786799685982945,
+      "wilcoxon_p": 0.4609375,
+      "ci90_rel": [
+        -0.15115972782394227,
+        0.45276008078589747
+      ],
+      "ci95_rel": [
+        -0.1911620152979526,
+        0.5197416047581309
+      ],
+      "verdict_unadjusted": "inconclusive"
+    },
+    "adaptive_vs_pi": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.004297316932934336,
+      "mean_B": 0.003660656225595934,
+      "diff": 0.0006366607073384026,
+      "rel": 0.17391982969795475,
+      "se_macro": 0.00039561771820964894,
+      "t_p": 0.15158991104437547,
+      "wilcoxon_p": 0.1484375,
+      "ci90_rel": [
+        -0.07766458598352308,
+        0.500096859538363
+      ],
+      "ci95_rel": [
+        -0.12163435426706286,
+        0.5668837821382002
+      ],
+      "verdict_unadjusted": "inconclusive"
+    },
+    "planner_average_vs_uniform_effort": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0112505920114927,
+      "mean_B": 0.029190908690604072,
+      "diff": -0.017940316679111373,
+      "rel": -0.6145857557660058,
+      "se_macro": 0.001804794832798539,
+      "t_p": 2.225437505785262e-05,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.6567062698355228,
+        -0.5679560839922054
+      ],
+      "ci95_rel": [
+        -0.6649236644866482,
+        -0.5591939458431929
+      ],
+      "verdict_unadjusted": "better"
+    }
+  },
+  "vs_uncontrolled": {
+    "plan120": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0049237103036527214,
+      "mean_B": 0.020959997045186658,
+      "diff": -0.01603628674153394,
+      "rel": -0.7650901241523114,
+      "se_macro": 0.0011228442723941595,
+      "t_p": 1.9619067448782873e-06,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.8083120730967385,
+        -0.7113079713867152
+      ],
+      "ci95_rel": [
+        -0.8145106937364136,
+        -0.6976010717980304
+      ]
+    },
+    "plan60": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0032926966644784748,
+      "mean_B": 0.020959997045186658,
+      "diff": -0.017667300380708184,
+      "rel": -0.8429056713424193,
+      "se_macro": 0.00113176628574038,
+      "t_p": 1.0705444491098796e-06,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.8759248225806722,
+        -0.8028086044082169
+      ],
+      "ci95_rel": [
+        -0.8814683683527158,
+        -0.7940950532092661
+      ]
+    },
+    "plan14": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0033469899766108333,
+      "mean_B": 0.020959997045186658,
+      "diff": -0.017613007068575826,
+      "rel": -0.8403153411999431,
+      "se_macro": 0.0010509669922263802,
+      "t_p": 6.588606579513376e-07,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.8743505403182529,
+        -0.7965384186979679
+      ],
+      "ci95_rel": [
+        -0.8796091973528823,
+        -0.784108389315833
+      ]
+    },
+    "uniform_cancel": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.004865830511941264,
+      "mean_B": 0.020959997045186658,
+      "diff": -0.016094166533245396,
+      "rel": -0.7678515649858514,
+      "se_macro": 0.0012815479536131783,
+      "t_p": 4.683140239145885e-06,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.8137844189054648,
+        -0.7136396468049946
+      ],
+      "ci95_rel": [
+        -0.8204756141440749,
+        -0.7010265992906812
+      ]
+    },
+    "uniform_effort": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.029190908690604072,
+      "mean_B": 0.020959997045186658,
+      "diff": 0.008230911645417413,
+      "rel": 0.39269622164892404,
+      "se_macro": 0.002998765181581691,
+      "t_p": 0.02871994700039634,
+      "wilcoxon_p": 0.0546875,
+      "ci90_rel": [
+        0.1321652890103489,
+        0.6901380708611822
+      ],
+      "ci95_rel": [
+        0.0854456459846607,
+        0.7525360406315155
+      ]
+    },
+    "planner_average": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.0112505920114927,
+      "mean_B": 0.020959997045186658,
+      "diff": -0.00970940503369396,
+      "rel": -0.46323503828564083,
+      "se_macro": 0.0014175156429148054,
+      "t_p": 0.00024207893351611172,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.5569409843104998,
+        -0.3481013908315494
+      ],
+      "ci95_rel": [
+        -0.5718664344326361,
+        -0.3244972822120217
+      ]
+    },
+    "linear_response": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.004065980785526335,
+      "mean_B": 0.020959997045186658,
+      "diff": -0.016894016259660322,
+      "rel": -0.8060123397555504,
+      "se_macro": 0.000983278225589412,
+      "t_p": 5.555291104924479e-07,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.8389885919561354,
+        -0.7690407526917636
+      ],
+      "ci95_rel": [
+        -0.8447935329133395,
+        -0.7617014345401417
+      ]
+    },
+    "pi": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.003660656225595934,
+      "mean_B": 0.020959997045186658,
+      "diff": -0.017299340819590725,
+      "rel": -0.8253503462951784,
+      "se_macro": 0.0009643743642028975,
+      "t_p": 4.132421835954621e-07,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.864493324394618,
+        -0.7846670019741642
+      ],
+      "ci95_rel": [
+        -0.8715151201283581,
+        -0.7769454391656825
+      ]
+    },
+    "adaptive": {
+      "n_states": 24,
+      "n_macro": 8,
+      "mean_A": 0.004297316932934336,
+      "mean_B": 0.020959997045186658,
+      "diff": -0.01666268011225232,
+      "rel": -0.794975308266029,
+      "se_macro": 0.0011463855848264555,
+      "t_p": 1.7410817185116302e-06,
+      "wilcoxon_p": 0.0078125,
+      "ci90_rel": [
+        -0.8340764772835036,
+        -0.7451792565218412
+      ],
+      "ci95_rel": [
+        -0.8395775024324486,
+        -0.7323801106788866
+      ]
+    }
+  },
+  "arm_means": {
+    "uncontrolled": {
+      "J_zonal": 0.020959997045186658,
+      "J_map": 0.06548158405348659,
+      "bias_K": 0.1314265609606925,
+      "effort": 0.0,
+      "cap_share": 0.0,
+      "max_band_share": 0.0,
+      "G_sst@ocean": 1.0,
+      "G_land_temperature@land": 1.0,
+      "G_precipitation@land": 1.0,
+      "G_precipitation@global": 1.0
+    },
+    "plan120": {
+      "J_zonal": 0.0049237103036527214,
+      "J_map": 0.04935635020956397,
+      "bias_K": -0.030613304502983205,
+      "effort": 0.037854081575927505,
+      "cap_share": 0.2829545407704164,
+      "max_band_share": 0.4762338899883707,
+      "G_sst@ocean": 1.2310799803292407,
+      "G_land_temperature@land": 1.1266440721710629,
+      "G_precipitation@land": 0.90273322509749,
+      "G_precipitation@global": 1.17463273165344
+    },
+    "plan60": {
+      "J_zonal": 0.0032926966644784748,
+      "J_map": 0.048111903170744576,
+      "bias_K": -0.012602884696898685,
+      "effort": 0.03760491813085166,
+      "cap_share": 0.2818423281333247,
+      "max_band_share": 0.4881923625305964,
+      "G_sst@ocean": 1.308594096059696,
+      "G_land_temperature@land": 0.9862388777714995,
+      "G_precipitation@land": 0.9818992734362658,
+      "G_precipitation@global": 1.1249648756992239
+    },
+    "plan14": {
+      "J_zonal": 0.0033469899766108333,
+      "J_map": 0.04934084555134177,
+      "bias_K": -0.008300084792593676,
+      "effort": 0.03610917735014182,
+      "cap_share": 0.27096716410421695,
+      "max_band_share": 0.5076780057698884,
+      "G_sst@ocean": 1.0899554618409857,
+      "G_land_temperature@land": 1.0526535051134576,
+      "G_precipitation@land": 1.008280706836597,
+      "G_precipitation@global": 1.1148656992172679
+    },
+    "uniform_cancel": {
+      "J_zonal": 0.004865830511941264,
+      "J_map": 0.051715840585529804,
+      "bias_K": 0.0038735255372614416,
+      "effort": 0.017109760977269958,
+      "cap_share": 0.12333095073699951,
+      "max_band_share": 0.12333095073699951,
+      "G_sst@ocean": 1.1122930100981483,
+      "G_land_temperature@land": 1.0338146112595594,
+      "G_precipitation@land": 0.8689091618842906,
+      "G_precipitation@global": 1.0129673385554183
+    },
+    "uniform_effort": {
+      "J_zonal": 0.029190908690604072,
+      "J_map": 0.07951358488450448,
+      "bias_K": -0.13926797070481686,
+      "effort": 0.03610073568806884,
+      "cap_share": 0.26022210717201233,
+      "max_band_share": 0.26022210717201233,
+      "G_sst@ocean": 0.8096541756799616,
+      "G_land_temperature@land": 0.9498592283793262,
+      "G_precipitation@land": 0.9217716543683775,
+      "G_precipitation@global": 1.0280580893276932
+    },
+    "planner_average": {
+      "J_zonal": 0.0112505920114927,
+      "J_map": 0.05789166813095411,
+      "bias_K": -0.06766394916596132,
+      "effort": 0.0262945473728288,
+      "cap_share": 0.19351001953085264,
+      "max_band_share": 0.29780425131320953,
+      "G_sst@ocean": 0.9227657787438664,
+      "G_land_temperature@land": 1.0001801411487323,
+      "G_precipitation@land": 0.8372581175785588,
+      "G_precipitation@global": 1.0244883048529432
+    },
+    "linear_response": {
+      "J_zonal": 0.004065980785526335,
+      "J_map": 0.052921270641187824,
+      "bias_K": 0.010783873624637822,
+      "effort": 0.01677907966325016,
+      "cap_share": 0.12446696559588115,
+      "max_band_share": 0.1660599559545517,
+      "G_sst@ocean": 1.0826057731225995,
+      "G_land_temperature@land": 1.0244367863198762,
+      "G_precipitation@land": 0.8762029737039279,
+      "G_precipitation@global": 1.030750612697125
+    },
+    "pi": {
+      "J_zonal": 0.003660656225595934,
+      "J_map": 0.04652988724410534,
+      "bias_K": -0.0007329475095551163,
+      "effort": 0.03716614076789311,
+      "cap_share": 0.28751818976484683,
+      "max_band_share": 0.5036458069608435,
+      "G_sst@ocean": 1.1995286864456007,
+      "G_land_temperature@land": 1.080384420427668,
+      "G_precipitation@land": 1.004518021577468,
+      "G_precipitation@global": 1.1280515088217267
+    },
+    "adaptive": {
+      "J_zonal": 0.004297316932934336,
+      "J_map": 0.04916007552916805,
+      "bias_K": 0.0011430041158445312,
+      "effort": 0.03563529013007611,
+      "cap_share": 0.264342056469935,
+      "max_band_share": 0.35267694840401004,
+      "G_sst@ocean": 1.1628251458158003,
+      "G_land_temperature@land": 0.9870476600837637,
+      "G_precipitation@land": 0.9123239905787586,
+      "G_precipitation@global": 0.992629261777839
+    }
+  },
+  "per_state": {
+    "uncontrolled": {
+      "102": {
+        "J_zonal": 0.02564212493598461,
+        "J_map": 0.06211892515420914,
+        "bias_K": 0.14868528516419813,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 95.3,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "103": {
+        "J_zonal": 0.024651385843753815,
+        "J_map": 0.07188940048217773,
+        "bias_K": 0.13353904456241328,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 125.1,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "104": {
+        "J_zonal": 0.018118957057595253,
+        "J_map": 0.059467922896146774,
+        "bias_K": 0.12102864950401031,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 117.6,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "302": {
+        "J_zonal": 0.021510954946279526,
+        "J_map": 0.06681828200817108,
+        "bias_K": 0.13743904980685503,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 95.1,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "303": {
+        "J_zonal": 0.021585892885923386,
+        "J_map": 0.05114365369081497,
+        "bias_K": 0.13908456007686212,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 116.9,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "304": {
+        "J_zonal": 0.016058295965194702,
+        "J_map": 0.0694185197353363,
+        "bias_K": 0.0979376123244494,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 123.7,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "502": {
+        "J_zonal": 0.019621973857283592,
+        "J_map": 0.0768490582704544,
+        "bias_K": 0.12405812586000643,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 122.6,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "503": {
+        "J_zonal": 0.021984990686178207,
+        "J_map": 0.08708898723125458,
+        "bias_K": 0.13415717718854125,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 104.1,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "504": {
+        "J_zonal": 0.0189712755382061,
+        "J_map": 0.05363547056913376,
+        "bias_K": 0.12536127631898303,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 108.7,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "702": {
+        "J_zonal": 0.024253632873296738,
+        "J_map": 0.07901270687580109,
+        "bias_K": 0.14662992448700352,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 119.9,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "703": {
+        "J_zonal": 0.0260178055614233,
+        "J_map": 0.06014208495616913,
+        "bias_K": 0.1516950737274852,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 122.3,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "704": {
+        "J_zonal": 0.027394112199544907,
+        "J_map": 0.0764310210943222,
+        "bias_K": 0.15413801610733738,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 114.8,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "902": {
+        "J_zonal": 0.02058691531419754,
+        "J_map": 0.06322748214006424,
+        "bias_K": 0.1324742956965605,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 96.8,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "903": {
+        "J_zonal": 0.016849223524332047,
+        "J_map": 0.05696585029363632,
+        "bias_K": 0.12277433242196846,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 120.3,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "904": {
+        "J_zonal": 0.032720357179641724,
+        "J_map": 0.08890508860349655,
+        "bias_K": 0.1636914559692622,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 126.3,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1102": {
+        "J_zonal": 0.012900402769446373,
+        "J_map": 0.04503924399614334,
+        "bias_K": 0.10226502136488036,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 121.9,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1103": {
+        "J_zonal": 0.01769101433455944,
+        "J_map": 0.046989601105451584,
+        "bias_K": 0.12744014615279683,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 93.5,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1104": {
+        "J_zonal": 0.0211253110319376,
+        "J_map": 0.06441731750965118,
+        "bias_K": 0.13805200804158582,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 110.9,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1302": {
+        "J_zonal": 0.023297080770134926,
+        "J_map": 0.08218948543071747,
+        "bias_K": 0.1296812564148378,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 124.5,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1303": {
+        "J_zonal": 0.013655922375619411,
+        "J_map": 0.04550356790423393,
+        "bias_K": 0.10176518014735993,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 124.4,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1304": {
+        "J_zonal": 0.018985185772180557,
+        "J_map": 0.06602156162261963,
+        "bias_K": 0.12664018708263752,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 106.9,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1502": {
+        "J_zonal": 0.017029261216521263,
+        "J_map": 0.05307029187679291,
+        "bias_K": 0.1243072047175062,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 89.8,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1503": {
+        "J_zonal": 0.023990388959646225,
+        "J_map": 0.07387671619653702,
+        "bias_K": 0.1433610580800848,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 123.6,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      },
+      "1504": {
+        "J_zonal": 0.018397463485598564,
+        "J_map": 0.07133577764034271,
+        "bias_K": 0.1280315218389939,
+        "effort": 0.0,
+        "cap_share": 0.0,
+        "max_band_share": 0.0,
+        "members": 3,
+        "seconds": 128.0,
+        "G": {
+          "sst@ocean": 1.0,
+          "land_temperature@land": 1.0,
+          "precipitation@land": 1.0,
+          "precipitation@global": 1.0
+        }
+      }
+    },
+    "plan120": {
+      "102": {
+        "J_zonal": 0.004345315508544445,
+        "J_map": 0.041821859776973724,
+        "bias_K": -0.02776801268762845,
+        "effort": 0.03534054525246979,
+        "cap_share": 0.2687667006178311,
+        "max_band_share": 0.4790219678371041,
+        "members": 3,
+        "seconds": 4932.5,
+        "G": {
+          "sst@ocean": 1.232379298665929,
+          "land_temperature@land": 0.894637872739013,
+          "precipitation@land": 0.6906379742474049,
+          "precipitation@global": 0.9204564953612838
+        }
+      },
+      "103": {
+        "J_zonal": 0.004431570880115032,
+        "J_map": 0.04669971391558647,
+        "bias_K": -0.02659896377510217,
+        "effort": 0.0358945552512827,
+        "cap_share": 0.26063291944080486,
+        "max_band_share": 0.43301916646736643,
+        "members": 3,
+        "seconds": 4919.8,
+        "G": {
+          "sst@ocean": 1.3587605686700823,
+          "land_temperature@land": 1.216829137733964,
+          "precipitation@land": 1.1312124926454286,
+          "precipitation@global": 0.916582224615477
+        }
+      },
+      "104": {
+        "J_zonal": 0.005323893390595913,
+        "J_map": 0.04033567011356354,
+        "bias_K": -0.029472013685979112,
+        "effort": 0.0407981332281964,
+        "cap_share": 0.30767310649143503,
+        "max_band_share": 0.5535269156098366,
+        "members": 3,
+        "seconds": 4797.0,
+        "G": {
+          "sst@ocean": 1.306821227398142,
+          "land_temperature@land": 2.1908231940977765,
+          "precipitation@land": 1.180511748686759,
+          "precipitation@global": 1.046098714646178
+        }
+      },
+      "302": {
+        "J_zonal": 0.007846376858651638,
+        "J_map": 0.04821460694074631,
+        "bias_K": -0.035583794696304356,
+        "effort": 0.03911259578865447,
+        "cap_share": 0.29782041422677813,
+        "max_band_share": 0.5084858407024984,
+        "members": 3,
+        "seconds": 4932.3,
+        "G": {
+          "sst@ocean": 1.2057948279627295,
+          "land_temperature@land": 0.6325196462109514,
+          "precipitation@land": 1.095276115070857,
+          "precipitation@global": 1.425256064522164
+        }
+      },
+      "303": {
+        "J_zonal": 0.0017201738664880395,
+        "J_map": 0.024249225854873657,
+        "bias_K": -0.02224099433772766,
+        "effort": 0.03749333555360675,
+        "cap_share": 0.28179309361924726,
+        "max_band_share": 0.5256506924827894,
+        "members": 3,
+        "seconds": 4743.3,
+        "G": {
+          "sst@ocean": 1.72783880632716,
+          "land_temperature@land": 1.264798807578421,
+          "precipitation@land": 1.219709331361287,
+          "precipitation@global": 1.7985125401046032
+        }
+      },
+      "304": {
+        "J_zonal": 0.005267236847430468,
+        "J_map": 0.05135929211974144,
+        "bias_K": -0.031747828513611194,
+        "effort": 0.033502697477488165,
+        "cap_share": 0.24707266690071533,
+        "max_band_share": 0.4653455713694847,
+        "members": 3,
+        "seconds": 4895.4,
+        "G": {
+          "sst@ocean": 1.2707150645209355,
+          "land_temperature@land": 1.492665088912392,
+          "precipitation@land": 0.8147273806313758,
+          "precipitation@global": 1.3199781373318247
+        }
+      },
+      "502": {
+        "J_zonal": 0.0023413384333252907,
+        "J_map": 0.04507564380764961,
+        "bias_K": -0.029271468129485875,
+        "effort": 0.040439398354793175,
+        "cap_share": 0.29379738090318386,
+        "max_band_share": 0.47908048524900715,
+        "members": 3,
+        "seconds": 4930.5,
+        "G": {
+          "sst@ocean": 1.5488944562918077,
+          "land_temperature@land": 1.195169790407602,
+          "precipitation@land": 1.042609680608801,
+          "precipitation@global": 1.1623813200813866
+        }
+      },
+      "503": {
+        "J_zonal": 0.005358556751161814,
+        "J_map": 0.05699406936764717,
+        "bias_K": -0.03138765978877722,
+        "effort": 0.037219359299312645,
+        "cap_share": 0.27521207904512135,
+        "max_band_share": 0.42566483840346336,
+        "members": 3,
+        "seconds": 4933.1,
+        "G": {
+          "sst@ocean": 1.3820862589446672,
+          "land_temperature@land": 1.1923254764846472,
+          "precipitation@land": 0.6571214823999457,
+          "precipitation@global": 0.7854399830822176
+        }
+      },
+      "504": {
+        "J_zonal": 0.012856571935117245,
+        "J_map": 0.06798820942640305,
+        "bias_K": -0.05075280232924084,
+        "effort": 0.043478971353881866,
+        "cap_share": 0.311467488537784,
+        "max_band_share": 0.5749711725446913,
+        "members": 3,
+        "seconds": 4858.2,
+        "G": {
+          "sst@ocean": 0.6863200003235109,
+          "land_temperature@land": 1.7299495291152078,
+          "precipitation@land": 0.861772292732099,
+          "precipitation@global": 1.1887667757590756
+        }
+      },
+      "702": {
+        "J_zonal": 0.0035992178600281477,
+        "J_map": 0.052882831543684006,
+        "bias_K": -0.026181693667478974,
+        "effort": 0.04110079873265962,
+        "cap_share": 0.30171069692113195,
+        "max_band_share": 0.4112632738219367,
+        "members": 3,
+        "seconds": 4986.1,
+        "G": {
+          "sst@ocean": 1.2992466012003347,
+          "land_temperature@land": 0.5420705340232262,
+          "precipitation@land": 0.9272552812476141,
+          "precipitation@global": 1.231592368809203
+        }
+      },
+      "703": {
+        "J_zonal": 0.0046328394673764706,
+        "J_map": 0.05239519849419594,
+        "bias_K": -0.01920925159467819,
+        "effort": 0.04206014386145076,
+        "cap_share": 0.2960838585859165,
+        "max_band_share": 0.4206927983021295,
+        "members": 3,
+        "seconds": 5018.3,
+        "G": {
+          "sst@ocean": 0.9315404461702227,
+          "land_temperature@land": 1.32283531282045,
+          "precipitation@land": 0.822595098303355,
+          "precipitation@global": 1.0463811470754119
+        }
+      },
+      "704": {
+        "J_zonal": 0.003933049738407135,
+        "J_map": 0.05311853811144829,
+        "bias_K": -0.03559063496690844,
+        "effort": 0.04193509599254471,
+        "cap_share": 0.327375067587666,
+        "max_band_share": 0.6289250320858426,
+        "members": 3,
+        "seconds": 5019.8,
+        "G": {
+          "sst@ocean": 1.229904200877454,
+          "land_temperature@land": 1.0609626678574786,
+          "precipitation@land": 1.413786515031689,
+          "precipitation@global": 1.2373292372813447
+        }
+      },
+      "902": {
+        "J_zonal": 0.005068427883088589,
+        "J_map": 0.05939893051981926,
+        "bias_K": -0.038702007952072376,
+        "effort": 0.03604095905644594,
+        "cap_share": 0.2761468114471494,
+        "max_band_share": 0.593892998855423,
+        "members": 3,
+        "seconds": 4833.8,
+        "G": {
+          "sst@ocean": 0.9284357466327426,
+          "land_temperature@land": 0.9539861164461789,
+          "precipitation@land": 0.7866417959790375,
+          "precipitation@global": 1.37428847174737
+        }
+      },
+      "903": {
+        "J_zonal": 0.006302425637841225,
+        "J_map": 0.05424922704696655,
+        "bias_K": -0.038753022556453603,
+        "effort": 0.04055849883560169,
+        "cap_share": 0.3003355025106834,
+        "max_band_share": 0.3955918938542406,
+        "members": 3,
+        "seconds": 4910.5,
+        "G": {
+          "sst@ocean": 0.9239369626940841,
+          "land_temperature@land": 0.7467259323884567,
+          "precipitation@land": 0.8744032335449199,
+          "precipitation@global": 0.822022751275723
+        }
+      },
+      "904": {
+        "J_zonal": 0.0039202868938446045,
+        "J_map": 0.034242767840623856,
+        "bias_K": -0.021919233747894593,
+        "effort": 0.03841947829125863,
+        "cap_share": 0.2836747468983824,
+        "max_band_share": 0.4405304748151037,
+        "members": 3,
+        "seconds": 4945.7,
+        "G": {
+          "sst@ocean": 2.2206470723037404,
+          "land_temperature@land": 1.7691228909081806,
+          "precipitation@land": 1.4339860751626323,
+          "precipitation@global": 1.4535484131887266
+        }
+      },
+      "1102": {
+        "J_zonal": 0.0025866772048175335,
+        "J_map": 0.04303722456097603,
+        "bias_K": -0.022700420907620568,
+        "effort": 0.04219524468086185,
+        "cap_share": 0.325768329254869,
+        "max_band_share": 0.5750786333724305,
+        "members": 3,
+        "seconds": 4949.7,
+        "G": {
+          "sst@ocean": 0.9305885524494849,
+          "land_temperature@land": 0.8468331171094071,
+          "precipitation@land": 0.8532769448188988,
+          "precipitation@global": 1.08194779148203
+        }
+      },
+      "1103": {
+        "J_zonal": 0.007774351164698601,
+        "J_map": 0.050367116928100586,
+        "bias_K": -0.04321598453192369,
+        "effort": 0.037356629120161126,
+        "cap_share": 0.2784247029986647,
+        "max_band_share": 0.45430011840330237,
+        "members": 3,
+        "seconds": 4842.0,
+        "G": {
+          "sst@ocean": 0.7862938501062126,
+          "land_temperature@land": 0.8896476047696741,
+          "precipitation@land": 0.7519696730802291,
+          "precipitation@global": 0.8714662127831586
+        }
+      },
+      "1104": {
+        "J_zonal": 0.004915159195661545,
+        "J_map": 0.05346538871526718,
+        "bias_K": -0.02411835988584421,
+        "effort": 0.037294727101221156,
+        "cap_share": 0.28134553243863697,
+        "max_band_share": 0.42778259281207015,
+        "members": 3,
+        "seconds": 4901.2,
+        "G": {
+          "sst@ocean": 1.032225983141733,
+          "land_temperature@land": 1.3073693894887943,
+          "precipitation@land": 1.1565619643625145,
+          "precipitation@global": 1.3845478941911147
+        }
+      },
+      "1302": {
+        "J_zonal": 0.004439896438270807,
+        "J_map": 0.05807306617498398,
+        "bias_K": -0.03033015171471539,
+        "effort": 0.035444342448917886,
+        "cap_share": 0.2763409480556018,
+        "max_band_share": 0.5846219720249928,
+        "members": 3,
+        "seconds": 4927.9,
+        "G": {
+          "sst@ocean": 1.2806264942478953,
+          "land_temperature@land": 0.7871613029097524,
+          "precipitation@land": 0.8782111689473657,
+          "precipitation@global": 1.1868841432254933
+        }
+      },
+      "1303": {
+        "J_zonal": 0.003839049953967333,
+        "J_map": 0.06779291480779648,
+        "bias_K": -0.03968344182523882,
+        "effort": 0.0305465050701282,
+        "cap_share": 0.2317715158949593,
+        "max_band_share": 0.40147488057199454,
+        "members": 3,
+        "seconds": 4938.2,
+        "G": {
+          "sst@ocean": 0.6018233668830298,
+          "land_temperature@land": 0.4270314536075229,
+          "precipitation@land": 0.6165743135587679,
+          "precipitation@global": 0.660493224456458
+        }
+      },
+      "1304": {
+        "J_zonal": 0.005164586007595062,
+        "J_map": 0.035649754106998444,
+        "bias_K": -0.02736815747598866,
+        "effort": 0.029564587365720384,
+        "cap_share": 0.2254395064794355,
+        "max_band_share": 0.4142910792250876,
+        "members": 3,
+        "seconds": 4855.8,
+        "G": {
+          "sst@ocean": 1.644288884052992,
+          "land_temperature@land": 0.8229205947158964,
+          "precipitation@land": 1.2083709523950152,
+          "precipitation@global": 1.7648432489792194
+        }
+      },
+      "1502": {
+        "J_zonal": 0.005932648666203022,
+        "J_map": 0.041080933064222336,
+        "bias_K": -0.035728288060634925,
+        "effort": 0.03158097594981361,
+        "cap_share": 0.2399393239368995,
+        "max_band_share": 0.4526009507201336,
+        "members": 3,
+        "seconds": 4883.6,
+        "G": {
+          "sst@ocean": 1.1211956455783723,
+          "land_temperature@land": 0.8145615025543462,
+          "precipitation@land": 0.6990787810148275,
+          "precipitation@global": 0.8725434209555313
+        }
+      },
+      "1503": {
+        "J_zonal": 0.00312987482175231,
+        "J_map": 0.05199123173952103,
+        "bias_K": -0.027500867385083477,
+        "effort": 0.034574283891069556,
+        "cap_share": 0.259028535336256,
+        "max_band_share": 0.33841817053379836,
+        "members": 3,
+        "seconds": 4918.5,
+        "G": {
+          "sst@ocean": 1.2322557597810273,
+          "land_temperature@land": 1.5265564889736083,
+          "precipitation@land": 0.9441454278116742,
+          "precipitation@global": 1.014419305318655
+        }
+      },
+      "1504": {
+        "J_zonal": 0.0034395218826830387,
+        "J_map": 0.05406899005174637,
+        "bias_K": -0.01889425385520413,
+        "effort": 0.04654609586471902,
+        "cap_share": 0.3432880503608397,
+        "max_band_share": 0.44538183965616757,
+        "members": 3,
+        "seconds": 4925.7,
+        "G": {
+          "sst@ocean": 1.1716302874893707,
+          "land_temperature@land": 1.275942501690913,
+          "precipitation@land": 1.195546086190189,
+          "precipitation@global": 1.264248334185382
+        }
+      }
+    },
+    "plan60": {
+      "102": {
+        "J_zonal": 0.002582443878054619,
+        "J_map": 0.058884844183921814,
+        "bias_K": -0.007337307064672768,
+        "effort": 0.03395633829700506,
+        "cap_share": 0.26780946303969594,
+        "max_band_share": 0.6760734257598718,
+        "members": 3,
+        "seconds": 2474.2,
+        "G": {
+          "sst@ocean": 0.867602299520479,
+          "land_temperature@land": 0.7737822047485698,
+          "precipitation@land": 0.8379300843763502,
+          "precipitation@global": 0.6525683771732893
+        }
+      },
+      "103": {
+        "J_zonal": 0.00228097359649837,
+        "J_map": 0.03532109782099724,
+        "bias_K": -0.020321674856086165,
+        "effort": 0.03690612118127954,
+        "cap_share": 0.2828079467915275,
+        "max_band_share": 0.45561597337601367,
+        "members": 3,
+        "seconds": 2492.4,
+        "G": {
+          "sst@ocean": 1.7933578269384534,
+          "land_temperature@land": 1.5195216141000698,
+          "precipitation@land": 1.483978741877937,
+          "precipitation@global": 1.1948724908350195
+        }
+      },
+      "104": {
+        "J_zonal": 0.001902774558402598,
+        "J_map": 0.05266711115837097,
+        "bias_K": -0.006398398851841385,
+        "effort": 0.037954932340960174,
+        "cap_share": 0.2744919377103172,
+        "max_band_share": 0.39237152388388363,
+        "members": 3,
+        "seconds": 2540.8,
+        "G": {
+          "sst@ocean": 0.9904517275537092,
+          "land_temperature@land": 1.655203329682597,
+          "precipitation@land": 1.2253845699657426,
+          "precipitation@global": 1.1103370065749696
+        }
+      },
+      "302": {
+        "J_zonal": 0.0018852334469556808,
+        "J_map": 0.03951811417937279,
+        "bias_K": -0.01185987762778008,
+        "effort": 0.04317438152502634,
+        "cap_share": 0.318187911179848,
+        "max_band_share": 0.43078297145526717,
+        "members": 3,
+        "seconds": 2537.6,
+        "G": {
+          "sst@ocean": 1.4544170837058006,
+          "land_temperature@land": 1.0804045760673238,
+          "precipitation@land": 1.0430183093627792,
+          "precipitation@global": 1.6501416117027903
+        }
+      },
+      "303": {
+        "J_zonal": 0.0008621347951702774,
+        "J_map": 0.040060773491859436,
+        "bias_K": -0.005056583236988453,
+        "effort": 0.034562647115945644,
+        "cap_share": 0.2639888115227223,
+        "max_band_share": 0.5147732583874906,
+        "members": 3,
+        "seconds": 2495.3,
+        "G": {
+          "sst@ocean": 1.035542736246417,
+          "land_temperature@land": 1.2277193800535193,
+          "precipitation@land": 1.1573682133750234,
+          "precipitation@global": 1.5981714889649936
+        }
+      },
+      "304": {
+        "J_zonal": 0.003139350563287735,
+        "J_map": 0.048618827015161514,
+        "bias_K": -0.03241760942329781,
+        "effort": 0.03151456937233185,
+        "cap_share": 0.24607038366849776,
+        "max_band_share": 0.5821054001097326,
+        "members": 3,
+        "seconds": 2447.8,
+        "G": {
+          "sst@ocean": 1.3436909430367252,
+          "land_temperature@land": 0.9390614302909449,
+          "precipitation@land": 1.0813901136852833,
+          "precipitation@global": 1.640886518739793
+        }
+      },
+      "502": {
+        "J_zonal": 0.004497964400798082,
+        "J_map": 0.059729840606451035,
+        "bias_K": -0.026941034056631202,
+        "effort": 0.034346592974411,
+        "cap_share": 0.261101852278915,
+        "max_band_share": 0.5650674802665082,
+        "members": 3,
+        "seconds": 2480.6,
+        "G": {
+          "sst@ocean": 1.1648547542362517,
+          "land_temperature@land": 1.2602906224312151,
+          "precipitation@land": 1.239156609036168,
+          "precipitation@global": 1.136455419695142
+        }
+      },
+      "503": {
+        "J_zonal": 0.0030237894970923662,
+        "J_map": 0.04301515221595764,
+        "bias_K": -0.012833684600519714,
+        "effort": 0.0420093519537614,
+        "cap_share": 0.3254434229691267,
+        "max_band_share": 0.6977759177486103,
+        "members": 3,
+        "seconds": 2521.3,
+        "G": {
+          "sst@ocean": 1.8188868932649214,
+          "land_temperature@land": 1.5461454181897776,
+          "precipitation@land": 0.7856983917513541,
+          "precipitation@global": 1.0200594949653785
+        }
+      },
+      "504": {
+        "J_zonal": 0.001953346421942115,
+        "J_map": 0.059265706688165665,
+        "bias_K": -0.009111836352943173,
+        "effort": 0.03111277907461384,
+        "cap_share": 0.21972153981483575,
+        "max_band_share": 0.3957618835071723,
+        "members": 3,
+        "seconds": 2505.3,
+        "G": {
+          "sst@ocean": 0.7729568389443079,
+          "land_temperature@land": 1.1710768233941586,
+          "precipitation@land": 0.6943434496677021,
+          "precipitation@global": 0.7253874845749453
+        }
+      },
+      "702": {
+        "J_zonal": 0.0019514303421601653,
+        "J_map": 0.05166437476873398,
+        "bias_K": 0.0014950604521136793,
+        "effort": 0.0433887753207394,
+        "cap_share": 0.3221187236356653,
+        "max_band_share": 0.5441547461130002,
+        "members": 3,
+        "seconds": 2441.8,
+        "G": {
+          "sst@ocean": 1.3212975632865542,
+          "land_temperature@land": 0.9537362918332035,
+          "precipitation@land": 1.054543993709863,
+          "precipitation@global": 1.1134743317033058
+        }
+      },
+      "703": {
+        "J_zonal": 0.004946813452988863,
+        "J_map": 0.06127072125673294,
+        "bias_K": -0.005397277089864781,
+        "effort": 0.040287910187275795,
+        "cap_share": 0.2975841247718091,
+        "max_band_share": 0.4562509097848777,
+        "members": 3,
+        "seconds": 2497.5,
+        "G": {
+          "sst@ocean": 0.7939836229388552,
+          "land_temperature@land": 0.7883170926208152,
+          "precipitation@land": 0.8897303527001729,
+          "precipitation@global": 0.8701307142242518
+        }
+      },
+      "704": {
+        "J_zonal": 0.0039959438145160675,
+        "J_map": 0.047720152884721756,
+        "bias_K": -0.02180700053364553,
+        "effort": 0.040699271310783484,
+        "cap_share": 0.31157460225815026,
+        "max_band_share": 0.7329022387663524,
+        "members": 3,
+        "seconds": 2519.6,
+        "G": {
+          "sst@ocean": 1.3594886635630934,
+          "land_temperature@land": 0.9768502875981973,
+          "precipitation@land": 1.6085766473953482,
+          "precipitation@global": 1.7744265631532243
+        }
+      },
+      "902": {
+        "J_zonal": 0.0016017456073313951,
+        "J_map": 0.03785261884331703,
+        "bias_K": -0.008526984501302421,
+        "effort": 0.04227962862200563,
+        "cap_share": 0.32266474936019496,
+        "max_band_share": 0.543154961326056,
+        "members": 3,
+        "seconds": 2515.6,
+        "G": {
+          "sst@ocean": 1.4399297840878722,
+          "land_temperature@land": 0.5918662338707724,
+          "precipitation@land": 0.7640243752989319,
+          "precipitation@global": 1.259693339688954
+        }
+      },
+      "903": {
+        "J_zonal": 0.004369715228676796,
+        "J_map": 0.03480362519621849,
+        "bias_K": -0.008586939444106875,
+        "effort": 0.040158765142233106,
+        "cap_share": 0.30455898514655594,
+        "max_band_share": 0.452519242686254,
+        "members": 3,
+        "seconds": 2447.1,
+        "G": {
+          "sst@ocean": 1.4217340517761565,
+          "land_temperature@land": 0.946196073531623,
+          "precipitation@land": 0.8299326742606022,
+          "precipitation@global": 1.0342807229794306
+        }
+      },
+      "904": {
+        "J_zonal": 0.003993500955402851,
+        "J_map": 0.0419573076069355,
+        "bias_K": -0.000446378137953141,
+        "effort": 0.04758061973763824,
+        "cap_share": 0.34925022079712814,
+        "max_band_share": 0.5050361611776881,
+        "members": 3,
+        "seconds": 2515.4,
+        "G": {
+          "sst@ocean": 1.7996345235084918,
+          "land_temperature@land": 2.557786045659057,
+          "precipitation@land": 1.2058951217246194,
+          "precipitation@global": 1.3060255605203774
+        }
+      },
+      "1102": {
+        "J_zonal": 0.006163512822240591,
+        "J_map": 0.07535003125667572,
+        "bias_K": -0.018240778547207064,
+        "effort": 0.03572464541721674,
+        "cap_share": 0.27272722408761857,
+        "max_band_share": 0.49319931547398926,
+        "members": 3,
+        "seconds": 2536.5,
+        "G": {
+          "sst@ocean": 0.5295057005227002,
+          "land_temperature@land": 1.1071295673390034,
+          "precipitation@land": 0.6098527947344677,
+          "precipitation@global": 0.5037996069701726
+        }
+      },
+      "1103": {
+        "J_zonal": 0.004049401264637709,
+        "J_map": 0.036421261727809906,
+        "bias_K": -0.01146838209068381,
+        "effort": 0.03838797635625379,
+        "cap_share": 0.2844482562289125,
+        "max_band_share": 0.4171312072624763,
+        "members": 3,
+        "seconds": 2506.3,
+        "G": {
+          "sst@ocean": 1.0691396074982074,
+          "land_temperature@land": 0.9222253656350268,
+          "precipitation@land": 0.8593554720189724,
+          "precipitation@global": 1.0540543588233535
+        }
+      },
+      "1104": {
+        "J_zonal": 0.002455717185512185,
+        "J_map": 0.05041400343179703,
+        "bias_K": -0.0064496878786308165,
+        "effort": 0.039871631526283854,
+        "cap_share": 0.30027039874241584,
+        "max_band_share": 0.5282235236114098,
+        "members": 3,
+        "seconds": 2437.0,
+        "G": {
+          "sst@ocean": 1.0891972731001338,
+          "land_temperature@land": 0.7690038200699899,
+          "precipitation@land": 1.5193390592576805,
+          "precipitation@global": 1.6644753194035269
+        }
+      },
+      "1302": {
+        "J_zonal": 0.003688586177304387,
+        "J_map": 0.043657369911670685,
+        "bias_K": -0.011262680112151879,
+        "effort": 0.04246013240873083,
+        "cap_share": 0.2976771849142905,
+        "max_band_share": 0.4169435605958657,
+        "members": 3,
+        "seconds": 2466.4,
+        "G": {
+          "sst@ocean": 1.6924567915478654,
+          "land_temperature@land": 0.9956274679448018,
+          "precipitation@land": 0.9874791315979025,
+          "precipitation@global": 1.0721217237989265
+        }
+      },
+      "1303": {
+        "J_zonal": 0.005576791241765022,
+        "J_map": 0.04905591905117035,
+        "bias_K": -0.03633153430118613,
+        "effort": 0.03161471508773884,
+        "cap_share": 0.23836661635949793,
+        "max_band_share": 0.38343708824228356,
+        "members": 3,
+        "seconds": 2491.7,
+        "G": {
+          "sst@ocean": 0.8332414698286338,
+          "land_temperature@land": 0.9393493651013293,
+          "precipitation@land": 0.7609906296271668,
+          "precipitation@global": 0.8686553862660784
+        }
+      },
+      "1304": {
+        "J_zonal": 0.004737197421491146,
+        "J_map": 0.0448019877076149,
+        "bias_K": -0.009278140344887989,
+        "effort": 0.031654956715769976,
+        "cap_share": 0.22894404590732412,
+        "max_band_share": 0.32806143500945634,
+        "members": 3,
+        "seconds": 2496.6,
+        "G": {
+          "sst@ocean": 1.2958906288328376,
+          "land_temperature@land": 0.8004461329606599,
+          "precipitation@land": 0.9763194152746292,
+          "precipitation@global": 1.2863749392394286
+        }
+      },
+      "1502": {
+        "J_zonal": 0.0038327069487422705,
+        "J_map": 0.057557977735996246,
+        "bias_K": -0.008416270313624184,
+        "effort": 0.03308434823009251,
+        "cap_share": 0.24192816111543736,
+        "max_band_share": 0.3294176446204936,
+        "members": 3,
+        "seconds": 2469.4,
+        "G": {
+          "sst@ocean": 0.7882846342617906,
+          "land_temperature@land": 0.4544564060672777,
+          "precipitation@land": 0.4219132895555056,
+          "precipitation@global": 0.6915126274740612
+        }
+      },
+      "1503": {
+        "J_zonal": 0.001678065862506628,
+        "J_map": 0.03795929625630379,
+        "bias_K": -0.010022290586569178,
+        "effort": 0.03199437095281509,
+        "cap_share": 0.24697602184972278,
+        "max_band_share": 0.3987083711695892,
+        "members": 3,
+        "seconds": 2450.7,
+        "G": {
+          "sst@ocean": 1.6777123252385782,
+          "land_temperature@land": 1.1578550502259402,
+          "precipitation@land": 0.9344404176265801,
+          "precipitation@global": 1.2889072797882422
+        }
+      },
+      "1504": {
+        "J_zonal": 0.0038555804640054703,
+        "J_map": 0.04711756110191345,
+        "bias_K": -0.015451943225107566,
+        "effort": 0.03779257428952767,
+        "cap_share": 0.2855032910495841,
+        "max_band_share": 0.4771484603999717,
+        "members": 3,
+        "seconds": 2465.7,
+        "G": {
+          "sst@ocean": 1.3434505686552394,
+          "land_temperature@land": 1.0511218724743692,
+          "precipitation@land": 1.246165547779321,
+          "precipitation@global": 1.569121397189865
+        }
+      }
+    },
+    "plan14": {
+      "102": {
+        "J_zonal": 0.0033564202021807432,
+        "J_map": 0.049555156379938126,
+        "bias_K": -0.003506520407065346,
+        "effort": 0.03582573056974171,
+        "cap_share": 0.2760368056112418,
+        "max_band_share": 0.5515989252469606,
+        "members": 3,
+        "seconds": 750.5,
+        "G": {
+          "sst@ocean": 1.0306012822195616,
+          "land_temperature@land": 1.1928221633224874,
+          "precipitation@land": 1.0387609122374546,
+          "precipitation@global": 0.8256012771410577
+        }
+      },
+      "103": {
+        "J_zonal": 0.002810267498716712,
+        "J_map": 0.04885869473218918,
+        "bias_K": -0.004900931800467237,
+        "effort": 0.04214118014298416,
+        "cap_share": 0.3368922304362059,
+        "max_band_share": 0.6528197808398141,
+        "members": 3,
+        "seconds": 726.1,
+        "G": {
+          "sst@ocean": 1.2891983446110935,
+          "land_temperature@land": 1.2697389053465906,
+          "precipitation@land": 1.2266674446569377,
+          "precipitation@global": 1.1479917153049266
+        }
+      },
+      "104": {
+        "J_zonal": 0.004015055485069752,
+        "J_map": 0.049223143607378006,
+        "bias_K": -0.0030767286890342133,
+        "effort": 0.037124930982307125,
+        "cap_share": 0.28476173516914804,
+        "max_band_share": 0.5677246695591344,
+        "members": 3,
+        "seconds": 654.2,
+        "G": {
+          "sst@ocean": 1.0594400768146321,
+          "land_temperature@land": 1.5584466277118278,
+          "precipitation@land": 1.0703311556899568,
+          "precipitation@global": 0.9231570263897562
+        }
+      },
+      "302": {
+        "J_zonal": 0.001286545884795487,
+        "J_map": 0.045793317258358,
+        "bias_K": -0.010004421611902558,
+        "effort": 0.036832265207858164,
+        "cap_share": 0.2777742615521506,
+        "max_band_share": 0.5790635098323779,
+        "members": 3,
+        "seconds": 640.6,
+        "G": {
+          "sst@ocean": 1.2542506789318038,
+          "land_temperature@land": 0.5365477253335262,
+          "precipitation@land": 0.7938673101045227,
+          "precipitation@global": 1.272618333342699
+        }
+      },
+      "303": {
+        "J_zonal": 0.0036869682371616364,
+        "J_map": 0.043787553906440735,
+        "bias_K": -0.01641609320048539,
+        "effort": 0.037622844631307356,
+        "cap_share": 0.27657881671028145,
+        "max_band_share": 0.48012559196515076,
+        "members": 3,
+        "seconds": 699.9,
+        "G": {
+          "sst@ocean": 0.9500282516382826,
+          "land_temperature@land": 1.1301303658763877,
+          "precipitation@land": 1.110750430599693,
+          "precipitation@global": 1.0830180909600744
+        }
+      },
+      "304": {
+        "J_zonal": 0.00294898240827024,
+        "J_map": 0.058235619217157364,
+        "bias_K": -0.010996248266382003,
+        "effort": 0.034833149033021794,
+        "cap_share": 0.25156902369215256,
+        "max_band_share": 0.4514530537374042,
+        "members": 3,
+        "seconds": 685.5,
+        "G": {
+          "sst@ocean": 1.1108286796910645,
+          "land_temperature@land": 1.2720380440969103,
+          "precipitation@land": 1.2099254654780085,
+          "precipitation@global": 1.629399705169723
+        }
+      },
+      "502": {
+        "J_zonal": 0.0008823687094263732,
+        "J_map": 0.06471956521272659,
+        "bias_K": -0.008284830621545284,
+        "effort": 0.04338586252628873,
+        "cap_share": 0.32821609048793715,
+        "max_band_share": 0.6030861785014471,
+        "members": 3,
+        "seconds": 677.4,
+        "G": {
+          "sst@ocean": 1.069082243990907,
+          "land_temperature@land": 0.9927919598760715,
+          "precipitation@land": 0.9180815183813783,
+          "precipitation@global": 0.7578982768709608
+        }
+      },
+      "503": {
+        "J_zonal": 0.0037814283277839422,
+        "J_map": 0.0630812793970108,
+        "bias_K": -0.008651379366522337,
+        "effort": 0.030892062229186917,
+        "cap_share": 0.2346892496139777,
+        "max_band_share": 0.33736602687794304,
+        "members": 3,
+        "seconds": 634.2,
+        "G": {
+          "sst@ocean": 1.2386601204683023,
+          "land_temperature@land": 0.9540766034321425,
+          "precipitation@land": 0.6610229270951659,
+          "precipitation@global": 0.6668350107256558
+        }
+      },
+      "504": {
+        "J_zonal": 0.003186249639838934,
+        "J_map": 0.044875577092170715,
+        "bias_K": -0.005651432075684266,
+        "effort": 0.04466516358914221,
+        "cap_share": 0.30984061647689454,
+        "max_band_share": 0.556981495960995,
+        "members": 3,
+        "seconds": 684.0,
+        "G": {
+          "sst@ocean": 1.0204668230381184,
+          "land_temperature@land": 1.5086322752126444,
+          "precipitation@land": 0.7727985921935357,
+          "precipitation@global": 1.1074627442792013
+        }
+      },
+      "702": {
+        "J_zonal": 0.004927691072225571,
+        "J_map": 0.05605354160070419,
+        "bias_K": -0.004250900874785043,
+        "effort": 0.042292674294157895,
+        "cap_share": 0.3107498953899334,
+        "max_band_share": 0.45866466214647517,
+        "members": 3,
+        "seconds": 677.7,
+        "G": {
+          "sst@ocean": 1.2180058950241013,
+          "land_temperature@land": 1.0187839032160917,
+          "precipitation@land": 1.1232628412861831,
+          "precipitation@global": 1.1222686541553344
+        }
+      },
+      "703": {
+        "J_zonal": 0.0036299426574259996,
+        "J_map": 0.05246485397219658,
+        "bias_K": 0.0021427170743568112,
+        "effort": 0.036892179099264295,
+        "cap_share": 0.27143725166442223,
+        "max_band_share": 0.3905712530292847,
+        "members": 3,
+        "seconds": 683.0,
+        "G": {
+          "sst@ocean": 0.9270684365090882,
+          "land_temperature@land": 0.8744612443873409,
+          "precipitation@land": 0.9829024467933777,
+          "precipitation@global": 0.8645198824191767
+        }
+      },
+      "704": {
+        "J_zonal": 0.002710769884288311,
+        "J_map": 0.035536572337150574,
+        "bias_K": 0.00016837847067135113,
+        "effort": 0.03801497912284694,
+        "cap_share": 0.28734290038442445,
+        "max_band_share": 0.6520560407942093,
+        "members": 3,
+        "seconds": 648.6,
+        "G": {
+          "sst@ocean": 1.816488801405145,
+          "land_temperature@land": 1.2432895782553512,
+          "precipitation@land": 1.9392262598586627,
+          "precipitation@global": 2.036902356149231
+        }
+      },
+      "902": {
+        "J_zonal": 0.003310572821646929,
+        "J_map": 0.059702590107917786,
+        "bias_K": -0.010208845537862785,
+        "effort": 0.034282683299480275,
+        "cap_share": 0.27170067700488426,
+        "max_band_share": 0.619047089583344,
+        "members": 3,
+        "seconds": 632.7,
+        "G": {
+          "sst@ocean": 0.9128637409792726,
+          "land_temperature@land": 1.0539047570980844,
+          "precipitation@land": 0.8791662628921381,
+          "precipitation@global": 1.306954241277753
+        }
+      },
+      "903": {
+        "J_zonal": 0.00270806229673326,
+        "J_map": 0.0488436259329319,
+        "bias_K": -0.0037248187714002644,
+        "effort": 0.043828047100047236,
+        "cap_share": 0.33091802785336905,
+        "max_band_share": 0.6007312031255828,
+        "members": 3,
+        "seconds": 697.4,
+        "G": {
+          "sst@ocean": 1.012130098352898,
+          "land_temperature@land": 0.6493885467251854,
+          "precipitation@land": 0.8400198048921727,
+          "precipitation@global": 0.8892015220256306
+        }
+      },
+      "904": {
+        "J_zonal": 0.0014985204907134175,
+        "J_map": 0.039713505655527115,
+        "bias_K": -0.00651665211914138,
+        "effort": 0.032883725363701044,
+        "cap_share": 0.2423511281074887,
+        "max_band_share": 0.4585043768639918,
+        "members": 3,
+        "seconds": 688.8,
+        "G": {
+          "sst@ocean": 1.9023260106667501,
+          "land_temperature@land": 1.1984906347576199,
+          "precipitation@land": 1.1770504271379216,
+          "precipitation@global": 1.2322957095827969
+        }
+      },
+      "1102": {
+        "J_zonal": 0.002342820167541504,
+        "J_map": 0.035102155059576035,
+        "bias_K": -0.020430547570745146,
+        "effort": 0.03186294513756166,
+        "cap_share": 0.25777328434223484,
+        "max_band_share": 0.5657914032538732,
+        "members": 3,
+        "seconds": 692.0,
+        "G": {
+          "sst@ocean": 1.1409069303754849,
+          "land_temperature@land": 1.0161259939829097,
+          "precipitation@land": 1.072717438819907,
+          "precipitation@global": 1.2891048921239765
+        }
+      },
+      "1103": {
+        "J_zonal": 0.002372554037719965,
+        "J_map": 0.04766412079334259,
+        "bias_K": -0.005363103015484838,
+        "effort": 0.038709001781507456,
+        "cap_share": 0.27677090902364365,
+        "max_band_share": 0.44490964272645894,
+        "members": 3,
+        "seconds": 631.2,
+        "G": {
+          "sst@ocean": 0.8157253891166777,
+          "land_temperature@land": 1.0803814226158526,
+          "precipitation@land": 0.759859913898268,
+          "precipitation@global": 0.6307314841983234
+        }
+      },
+      "1104": {
+        "J_zonal": 0.0026855673640966415,
+        "J_map": 0.056457117199897766,
+        "bias_K": -0.0030985587482473074,
+        "effort": 0.03272041912815712,
+        "cap_share": 0.24191046595849375,
+        "max_band_share": 0.5182085627758944,
+        "members": 3,
+        "seconds": 658.4,
+        "G": {
+          "sst@ocean": 0.9722921062052179,
+          "land_temperature@land": 1.2046586634986933,
+          "precipitation@land": 1.7011321346247623,
+          "precipitation@global": 1.1597509415917757
+        }
+      },
+      "1302": {
+        "J_zonal": 0.0024523138999938965,
+        "J_map": 0.047766488045454025,
+        "bias_K": -0.0015550579936023275,
+        "effort": 0.038805181171934724,
+        "cap_share": 0.28846366643146787,
+        "max_band_share": 0.5357149277848227,
+        "members": 3,
+        "seconds": 706.7,
+        "G": {
+          "sst@ocean": 1.5446548548769046,
+          "land_temperature@land": 1.411376619574282,
+          "precipitation@land": 1.3800300245651298,
+          "precipitation@global": 1.0796042194836255
+        }
+      },
+      "1303": {
+        "J_zonal": 0.004358853679150343,
+        "J_map": 0.05705951526761055,
+        "bias_K": -0.022210496989383297,
+        "effort": 0.02605614098572888,
+        "cap_share": 0.19780577373199373,
+        "max_band_share": 0.41931950935611023,
+        "members": 3,
+        "seconds": 703.4,
+        "G": {
+          "sst@ocean": 0.7097950743116737,
+          "land_temperature@land": 0.6203797858628048,
+          "precipitation@land": 0.6595531787939449,
+          "precipitation@global": 0.6095177122787659
+        }
+      },
+      "1304": {
+        "J_zonal": 0.004767785780131817,
+        "J_map": 0.04760847985744476,
+        "bias_K": -0.00856418738831704,
+        "effort": 0.028196923828499327,
+        "cap_share": 0.20485317484579155,
+        "max_band_share": 0.3609782767792543,
+        "members": 3,
+        "seconds": 662.4,
+        "G": {
+          "sst@ocean": 1.2192661705776004,
+          "land_temperature@land": 0.7962440461493314,
+          "precipitation@land": 1.0336589668798166,
+          "precipitation@global": 1.3374795740292935
+        }
+      },
+      "1502": {
+        "J_zonal": 0.0035367202945053577,
+        "J_map": 0.04257703199982643,
+        "bias_K": -0.013445014580917304,
+        "effort": 0.029229757441787,
+        "cap_share": 0.22465262587906584,
+        "max_band_share": 0.46886646982144425,
+        "members": 3,
+        "seconds": 608.2,
+        "G": {
+          "sst@ocean": 1.06725657742562,
+          "land_temperature@land": 1.0514022531288307,
+          "precipitation@land": 0.7778832693946466,
+          "precipitation@global": 0.741549498549476
+        }
+      },
+      "1503": {
+        "J_zonal": 0.003047103062272072,
+        "J_map": 0.03999238833785057,
+        "bias_K": -0.01933041057289755,
+        "effort": 0.02932050695050048,
+        "cap_share": 0.22088273971651992,
+        "max_band_share": 0.4286186031445309,
+        "members": 3,
+        "seconds": 598.7,
+        "G": {
+          "sst@ocean": 1.5977800117015262,
+          "land_temperature@land": 0.9680112566686763,
+          "precipitation@land": 0.8969378820436128,
+          "precipitation@global": 1.2463449353452636
+        }
+      },
+      "1504": {
+        "J_zonal": 0.010024195536971092,
+        "J_map": 0.04950840026140213,
+        "bias_K": -0.011325950365403441,
+        "effort": 0.04020190278639113,
+        "cap_share": 0.2992405884174837,
+        "max_band_share": 0.4820708847708173,
+        "members": 3,
+        "seconds": 594.9,
+        "G": {
+          "sst@ocean": 1.2769881603756839,
+          "land_temperature@land": 0.5412096535608231,
+          "precipitation@land": 0.7920109576172124,
+          "precipitation@global": 1.2287212120525735
+        }
+      }
+    },
+    "uniform_cancel": {
+      "102": {
+        "J_zonal": 0.004529764875769615,
+        "J_map": 0.04491080716252327,
+        "bias_K": 0.012387527478801542,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 122.4,
+        "G": {
+          "sst@ocean": 1.1389832859250908,
+          "land_temperature@land": 1.1272434695051359,
+          "precipitation@land": 1.1417101987217702,
+          "precipitation@global": 0.8716993643735664
+        }
+      },
+      "103": {
+        "J_zonal": 0.0029099753592163324,
+        "J_map": 0.04693190008401871,
+        "bias_K": 0.000616794242260639,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 92.6,
+        "G": {
+          "sst@ocean": 1.3418021008233139,
+          "land_temperature@land": 1.835638043132201,
+          "precipitation@land": 1.5642235648687732,
+          "precipitation@global": 1.0176393990584112
+        }
+      },
+      "104": {
+        "J_zonal": 0.0036461898125708103,
+        "J_map": 0.050608884543180466,
+        "bias_K": 0.020445837654033454,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 119.6,
+        "G": {
+          "sst@ocean": 1.0346051257007,
+          "land_temperature@land": 1.5140262431134845,
+          "precipitation@land": 1.1279397716895039,
+          "precipitation@global": 0.8726385734866847
+        }
+      },
+      "302": {
+        "J_zonal": 0.004334704019129276,
+        "J_map": 0.04923945292830467,
+        "bias_K": 0.01643887149957364,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 126.1,
+        "G": {
+          "sst@ocean": 1.1684004853353218,
+          "land_temperature@land": 0.701155343486068,
+          "precipitation@land": 0.787340420499462,
+          "precipitation@global": 1.5239416718509682
+        }
+      },
+      "303": {
+        "J_zonal": 0.0037889613304287195,
+        "J_map": 0.04653171822428703,
+        "bias_K": 0.005310102275424134,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 128.0,
+        "G": {
+          "sst@ocean": 0.8915203462674001,
+          "land_temperature@land": 1.0364521663325008,
+          "precipitation@land": 0.9013039700195038,
+          "precipitation@global": 1.1457725197571886
+        }
+      },
+      "304": {
+        "J_zonal": 0.003428646130487323,
+        "J_map": 0.052792686969041824,
+        "bias_K": -0.011287142542380573,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 111.4,
+        "G": {
+          "sst@ocean": 1.225561900485593,
+          "land_temperature@land": 1.0296942728229699,
+          "precipitation@land": 0.9362673797502089,
+          "precipitation@global": 1.3509006923857823
+        }
+      },
+      "502": {
+        "J_zonal": 0.004859535954892635,
+        "J_map": 0.04643620178103447,
+        "bias_K": 0.003928590910337204,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 108.9,
+        "G": {
+          "sst@ocean": 1.4894702712408794,
+          "land_temperature@land": 1.0931534335409028,
+          "precipitation@land": 1.17799756155485,
+          "precipitation@global": 1.4816568676579378
+        }
+      },
+      "503": {
+        "J_zonal": 0.002310680691152811,
+        "J_map": 0.04715108871459961,
+        "bias_K": 0.010099433123540332,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 125.5,
+        "G": {
+          "sst@ocean": 1.6579568503660476,
+          "land_temperature@land": 1.3394925408011626,
+          "precipitation@land": 0.7208647630182928,
+          "precipitation@global": 0.8772181885421017
+        }
+      },
+      "504": {
+        "J_zonal": 0.005168421193957329,
+        "J_map": 0.06343974173069,
+        "bias_K": 0.030444521653694424,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 125.3,
+        "G": {
+          "sst@ocean": 0.7269041853386632,
+          "land_temperature@land": 0.7013254024956634,
+          "precipitation@land": 0.8593731482040178,
+          "precipitation@global": 1.0305154585218113
+        }
+      },
+      "702": {
+        "J_zonal": 0.00217514974065125,
+        "J_map": 0.05779224634170532,
+        "bias_K": 0.012585038098294346,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 118.8,
+        "G": {
+          "sst@ocean": 1.1827919738277053,
+          "land_temperature@land": 1.3370185633759941,
+          "precipitation@land": 0.9809113484761289,
+          "precipitation@global": 1.1236377749944897
+        }
+      },
+      "703": {
+        "J_zonal": 0.004276150371879339,
+        "J_map": 0.04822152107954025,
+        "bias_K": -0.011582174368190187,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 92.4,
+        "G": {
+          "sst@ocean": 1.0100082422155043,
+          "land_temperature@land": 0.9910718148954291,
+          "precipitation@land": 0.8348407708774204,
+          "precipitation@global": 0.9496191723447766
+        }
+      },
+      "704": {
+        "J_zonal": 0.0043846722692251205,
+        "J_map": 0.0669560506939888,
+        "bias_K": 0.009035854485577536,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 120.9,
+        "G": {
+          "sst@ocean": 0.9646796310073191,
+          "land_temperature@land": 0.9779257255145343,
+          "precipitation@land": 1.3224795866107084,
+          "precipitation@global": 0.9900882693100704
+        }
+      },
+      "902": {
+        "J_zonal": 0.006286088842898607,
+        "J_map": 0.05056539922952652,
+        "bias_K": -0.007226867577947507,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 127.3,
+        "G": {
+          "sst@ocean": 1.0774343413610543,
+          "land_temperature@land": 0.5452443352687776,
+          "precipitation@land": 0.668330667012212,
+          "precipitation@global": 0.846906336536154
+        }
+      },
+      "903": {
+        "J_zonal": 0.005752256140112877,
+        "J_map": 0.041389480233192444,
+        "bias_K": -0.02724272135706017,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 125.3,
+        "G": {
+          "sst@ocean": 1.2050467204506032,
+          "land_temperature@land": 1.2770681703374724,
+          "precipitation@land": 0.7862940916448353,
+          "precipitation@global": 0.8726104720130535
+        }
+      },
+      "904": {
+        "J_zonal": 0.0048836516216397285,
+        "J_map": 0.05677127093076706,
+        "bias_K": 0.029753445216636927,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 88.3,
+        "G": {
+          "sst@ocean": 1.3404840209457793,
+          "land_temperature@land": 1.3837736356188688,
+          "precipitation@land": 0.7691914100823322,
+          "precipitation@global": 1.1151609014902815
+        }
+      },
+      "1102": {
+        "J_zonal": 0.0067748925648629665,
+        "J_map": 0.05861734598875046,
+        "bias_K": 0.015345953411105586,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 108.2,
+        "G": {
+          "sst@ocean": 0.6805205335011175,
+          "land_temperature@land": 1.216684798028719,
+          "precipitation@land": 0.835016136809154,
+          "precipitation@global": 0.8791828906181133
+        }
+      },
+      "1103": {
+        "J_zonal": 0.009342886507511139,
+        "J_map": 0.048148222267627716,
+        "bias_K": 0.014870861739479829,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 126.5,
+        "G": {
+          "sst@ocean": 0.8091382430602501,
+          "land_temperature@land": 0.7081042246733527,
+          "precipitation@land": 0.8629927970287645,
+          "precipitation@global": 1.095183920637728
+        }
+      },
+      "1104": {
+        "J_zonal": 0.0026370880659669638,
+        "J_map": 0.03732820972800255,
+        "bias_K": 0.018507913810328583,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 127.5,
+        "G": {
+          "sst@ocean": 1.477197776573553,
+          "land_temperature@land": 1.181897753622157,
+          "precipitation@land": 2.1302957856142073,
+          "precipitation@global": 1.81316680327365
+        }
+      },
+      "1302": {
+        "J_zonal": 0.0062034958973526955,
+        "J_map": 0.06819089502096176,
+        "bias_K": -0.02134710260609699,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 110.9,
+        "G": {
+          "sst@ocean": 1.0856027342712058,
+          "land_temperature@land": 0.9815372417538082,
+          "precipitation@land": 0.8748255267398165,
+          "precipitation@global": 1.0082952780524255
+        }
+      },
+      "1303": {
+        "J_zonal": 0.005347731988877058,
+        "J_map": 0.04488474130630493,
+        "bias_K": -0.015675287232784017,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 84.7,
+        "G": {
+          "sst@ocean": 0.9008890898729165,
+          "land_temperature@land": 0.8977176712712776,
+          "precipitation@land": 0.6728003288663744,
+          "precipitation@global": 0.6809035641090574
+        }
+      },
+      "1304": {
+        "J_zonal": 0.006105368956923485,
+        "J_map": 0.057817451655864716,
+        "bias_K": 0.029152093424547575,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 123.5,
+        "G": {
+          "sst@ocean": 1.0106314954618256,
+          "land_temperature@land": 0.5591669119884004,
+          "precipitation@land": 1.0151574151175191,
+          "precipitation@global": 1.2628761945340041
+        }
+      },
+      "1502": {
+        "J_zonal": 0.0037930055987089872,
+        "J_map": 0.06204491853713989,
+        "bias_K": -0.0015218268472089926,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 127.5,
+        "G": {
+          "sst@ocean": 0.7308414559940122,
+          "land_temperature@land": 0.649533406405636,
+          "precipitation@land": 0.6534816359447606,
+          "precipitation@global": 0.7512055556212287
+        }
+      },
+      "1503": {
+        "J_zonal": 0.007200810592621565,
+        "J_map": 0.04216080158948898,
+        "bias_K": -0.03535051573046272,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 122.6,
+        "G": {
+          "sst@ocean": 1.5312155006391361,
+          "land_temperature@land": 1.638778038539082,
+          "precipitation@land": 0.7079983826880366,
+          "precipitation@global": 0.8966447529544768
+        }
+      },
+      "1504": {
+        "J_zonal": 0.006639803759753704,
+        "J_map": 0.05224913731217384,
+        "bias_K": -0.00472458786722999,
+        "effort": 0.017109760977269958,
+        "cap_share": 0.12333095073699951,
+        "max_band_share": 0.12333095073699951,
+        "members": 3,
+        "seconds": 95.2,
+        "G": {
+          "sst@ocean": 1.2086940646882223,
+          "land_temperature@land": 1.0311770561866178,
+          "precipitation@land": 0.981819063884241,
+          "precipitation@global": 1.119140106607735
+        }
+      }
+    },
+    "uniform_effort": {
+      "102": {
+        "J_zonal": 0.03359552472829819,
+        "J_map": 0.07440192997455597,
+        "bias_K": -0.14928796875557732,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 115.9,
+        "G": {
+          "sst@ocean": 0.8072477708421723,
+          "land_temperature@land": 0.9554819941226338,
+          "precipitation@land": 0.9367979037260731,
+          "precipitation@global": 0.7898008093675122
+        }
+      },
+      "103": {
+        "J_zonal": 0.027766628190875053,
+        "J_map": 0.08310980349779129,
+        "bias_K": -0.14475687280905525,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 128.0,
+        "G": {
+          "sst@ocean": 0.8670092115773208,
+          "land_temperature@land": 0.9442364626360187,
+          "precipitation@land": 0.7849530988251663,
+          "precipitation@global": 0.8678617178756365
+        }
+      },
+      "104": {
+        "J_zonal": 0.029812851920723915,
+        "J_map": 0.0718747153878212,
+        "bias_K": -0.15265233013931456,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 127.8,
+        "G": {
+          "sst@ocean": 0.8658429558631469,
+          "land_temperature@land": 1.6932182036891752,
+          "precipitation@land": 1.4372775801045723,
+          "precipitation@global": 1.259429959255978
+        }
+      },
+      "302": {
+        "J_zonal": 0.017062729224562645,
+        "J_map": 0.05376541242003441,
+        "bias_K": -0.10196783279713248,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 115.9,
+        "G": {
+          "sst@ocean": 1.1813349046725015,
+          "land_temperature@land": 0.8486383423503744,
+          "precipitation@land": 1.0513069602468603,
+          "precipitation@global": 1.549836068165647
+        }
+      },
+      "303": {
+        "J_zonal": 0.014712819829583168,
+        "J_map": 0.05155542120337486,
+        "bias_K": -0.10569771621553534,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 101.4,
+        "G": {
+          "sst@ocean": 0.9021520353235234,
+          "land_temperature@land": 1.031541439821109,
+          "precipitation@land": 0.7695805326718461,
+          "precipitation@global": 1.0639928300320698
+        }
+      },
+      "304": {
+        "J_zonal": 0.024940596893429756,
+        "J_map": 0.060536324977874756,
+        "bias_K": -0.13454146953777957,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 124.8,
+        "G": {
+          "sst@ocean": 1.2551589772975393,
+          "land_temperature@land": 1.5272261833088836,
+          "precipitation@land": 1.2227486354782955,
+          "precipitation@global": 1.8278400083064328
+        }
+      },
+      "502": {
+        "J_zonal": 0.0288408063352108,
+        "J_map": 0.08276594430208206,
+        "bias_K": -0.14393975252768462,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 127.4,
+        "G": {
+          "sst@ocean": 0.9550764133928128,
+          "land_temperature@land": 1.5874207980183042,
+          "precipitation@land": 1.1974127398187426,
+          "precipitation@global": 0.9477515327343096
+        }
+      },
+      "503": {
+        "J_zonal": 0.02155693992972374,
+        "J_map": 0.06133474409580231,
+        "bias_K": -0.12718361750205157,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 123.7,
+        "G": {
+          "sst@ocean": 1.466562363039358,
+          "land_temperature@land": 1.4735761813736867,
+          "precipitation@land": 0.915903630897064,
+          "precipitation@global": 1.639637055568234
+        }
+      },
+      "504": {
+        "J_zonal": 0.015451365150511265,
+        "J_map": 0.07035770267248154,
+        "bias_K": -0.10277758715100718,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 83.1,
+        "G": {
+          "sst@ocean": 0.7034495144977165,
+          "land_temperature@land": 1.1285103284487268,
+          "precipitation@land": 0.7857079395010859,
+          "precipitation@global": 0.9921233486233164
+        }
+      },
+      "702": {
+        "J_zonal": 0.021363796666264534,
+        "J_map": 0.07749584317207336,
+        "bias_K": -0.11279857995708051,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 117.4,
+        "G": {
+          "sst@ocean": 0.959631891874918,
+          "land_temperature@land": 1.239290428828743,
+          "precipitation@land": 1.0613893752991534,
+          "precipitation@global": 1.075025980373962
+        }
+      },
+      "703": {
+        "J_zonal": 0.021560063585639,
+        "J_map": 0.07315411418676376,
+        "bias_K": -0.12006584310344516,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 131.2,
+        "G": {
+          "sst@ocean": 0.7375159901286817,
+          "land_temperature@land": 0.9965530115333312,
+          "precipitation@land": 0.927639677839691,
+          "precipitation@global": 0.899003704869791
+        }
+      },
+      "704": {
+        "J_zonal": 0.02604725770652294,
+        "J_map": 0.09945330023765564,
+        "bias_K": -0.12294052210441764,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 130.0,
+        "G": {
+          "sst@ocean": 0.7024427066491984,
+          "land_temperature@land": 0.8267905137606603,
+          "precipitation@land": 1.0269302125107624,
+          "precipitation@global": 0.9456872095191321
+        }
+      },
+      "902": {
+        "J_zonal": 0.044193245470523834,
+        "J_map": 0.10746385157108307,
+        "bias_K": -0.16684284393975968,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 98.4,
+        "G": {
+          "sst@ocean": 0.5820986924358144,
+          "land_temperature@land": 0.8665828974328151,
+          "precipitation@land": 0.6440063504168013,
+          "precipitation@global": 0.7005000609034783
+        }
+      },
+      "903": {
+        "J_zonal": 0.03157281130552292,
+        "J_map": 0.07536964118480682,
+        "bias_K": -0.15505041870948041,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 90.2,
+        "G": {
+          "sst@ocean": 0.7802623100998184,
+          "land_temperature@land": 1.3009682965548879,
+          "precipitation@land": 0.948331822382021,
+          "precipitation@global": 0.6638780668587964
+        }
+      },
+      "904": {
+        "J_zonal": 0.02318503148853779,
+        "J_map": 0.06345336139202118,
+        "bias_K": -0.12679098965249874,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 129.0,
+        "G": {
+          "sst@ocean": 1.3625756481134736,
+          "land_temperature@land": 1.5380544761830557,
+          "precipitation@land": 1.039750136279639,
+          "precipitation@global": 1.19862165466662
+        }
+      },
+      "1102": {
+        "J_zonal": 0.040814630687236786,
+        "J_map": 0.09279761463403702,
+        "bias_K": -0.15421231959873033,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 132.4,
+        "G": {
+          "sst@ocean": 0.49204930656747337,
+          "land_temperature@land": 0.8074758038780256,
+          "precipitation@land": 0.5662669930986167,
+          "precipitation@global": 0.6789617180710272
+        }
+      },
+      "1103": {
+        "J_zonal": 0.02453715167939663,
+        "J_map": 0.06016729027032852,
+        "bias_K": -0.1242802805185223,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 120.4,
+        "G": {
+          "sst@ocean": 0.7411474286275989,
+          "land_temperature@land": 0.7246824841551198,
+          "precipitation@land": 0.8893856942606088,
+          "precipitation@global": 1.0957516213418912
+        }
+      },
+      "1104": {
+        "J_zonal": 0.031173331663012505,
+        "J_map": 0.07903478294610977,
+        "bias_K": -0.14308286571089568,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 81.9,
+        "G": {
+          "sst@ocean": 0.7978109467982883,
+          "land_temperature@land": 0.9768751845926782,
+          "precipitation@land": 1.7559103225704833,
+          "precipitation@global": 1.15421112949076
+        }
+      },
+      "1302": {
+        "J_zonal": 0.049299560487270355,
+        "J_map": 0.11595272272825241,
+        "bias_K": -0.17863661878359977,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 122.2,
+        "G": {
+          "sst@ocean": 0.7378293825230041,
+          "land_temperature@land": 0.553459529672859,
+          "precipitation@land": 0.663155328406209,
+          "precipitation@global": 1.2106358052526314
+        }
+      },
+      "1303": {
+        "J_zonal": 0.040252335369586945,
+        "J_map": 0.11778941750526428,
+        "bias_K": -0.17456421711795364,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 126.6,
+        "G": {
+          "sst@ocean": 0.39321575560620586,
+          "land_temperature@land": 0.4053221522778222,
+          "precipitation@land": 0.3714452911399133,
+          "precipitation@global": 0.4275292938180164
+        }
+      },
+      "1304": {
+        "J_zonal": 0.030323848128318787,
+        "J_map": 0.08153023570775986,
+        "bias_K": -0.14698560222485155,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 128.3,
+        "G": {
+          "sst@ocean": 0.8200828699105133,
+          "land_temperature@land": 0.7423017381549439,
+          "precipitation@land": 0.8827588667870581,
+          "precipitation@global": 1.4590678887591253
+        }
+      },
+      "1502": {
+        "J_zonal": 0.03814348205924034,
+        "J_map": 0.09149996936321259,
+        "bias_K": -0.16583416856293814,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 108.3,
+        "G": {
+          "sst@ocean": 0.583208439081604,
+          "land_temperature@land": 0.9182503429067582,
+          "precipitation@land": 0.6215041462614287,
+          "precipitation@global": 0.7475380268752349
+        }
+      },
+      "1503": {
+        "J_zonal": 0.0356818363070488,
+        "J_map": 0.09196870774030685,
+        "bias_K": -0.1652197913087881,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 121.7,
+        "G": {
+          "sst@ocean": 0.812060580517751,
+          "land_temperature@land": 0.7648504234729722,
+          "precipitation@land": 0.9008190675809088,
+          "precipitation@global": 0.9131762072072123
+        }
+      },
+      "1504": {
+        "J_zonal": 0.02869316376745701,
+        "J_map": 0.07149318605661392,
+        "bias_K": -0.12232108818750514,
+        "effort": 0.03610073568806884,
+        "cap_share": 0.26022210717201233,
+        "max_band_share": 0.26022210717201233,
+        "members": 3,
+        "seconds": 131.6,
+        "G": {
+          "sst@ocean": 0.9863740488070926,
+          "land_temperature@land": 0.8977164560101972,
+          "precipitation@land": 1.1310584990059895,
+          "precipitation@global": 1.6317366147557868
+        }
+      }
+    },
+    "planner_average": {
+      "102": {
+        "J_zonal": 0.010881786234676838,
+        "J_map": 0.06299985945224762,
+        "bias_K": -0.06374595502455847,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 129.0,
+        "G": {
+          "sst@ocean": 0.8375738020173269,
+          "land_temperature@land": 1.0273780689640364,
+          "precipitation@land": 0.6709653074360337,
+          "precipitation@global": 0.6263334694760974
+        }
+      },
+      "103": {
+        "J_zonal": 0.009705588221549988,
+        "J_map": 0.04150060936808586,
+        "bias_K": -0.07252945717361198,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 121.6,
+        "G": {
+          "sst@ocean": 1.6200798557016836,
+          "land_temperature@land": 1.208191188257676,
+          "precipitation@land": 1.4726334470148845,
+          "precipitation@global": 1.2229468919576825
+        }
+      },
+      "104": {
+        "J_zonal": 0.010700831189751625,
+        "J_map": 0.061381224542856216,
+        "bias_K": -0.0712420624273865,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 115.7,
+        "G": {
+          "sst@ocean": 0.886146321814405,
+          "land_temperature@land": 2.6863441196201943,
+          "precipitation@land": 1.142315744044366,
+          "precipitation@global": 1.0673343554752677
+        }
+      },
+      "302": {
+        "J_zonal": 0.0065712216310203075,
+        "J_map": 0.03820009157061577,
+        "bias_K": -0.04212834543683257,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 130.3,
+        "G": {
+          "sst@ocean": 1.537641159258589,
+          "land_temperature@land": 0.7675056052160248,
+          "precipitation@land": 1.2216843311874563,
+          "precipitation@global": 1.4981237057811252
+        }
+      },
+      "303": {
+        "J_zonal": 0.006511569023132324,
+        "J_map": 0.043000947684049606,
+        "bias_K": -0.05340345684154494,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 130.0,
+        "G": {
+          "sst@ocean": 0.997508622340224,
+          "land_temperature@land": 0.8443458124190174,
+          "precipitation@land": 0.7487699784270891,
+          "precipitation@global": 0.9816422542306187
+        }
+      },
+      "304": {
+        "J_zonal": 0.011052683927118778,
+        "J_map": 0.046635232865810394,
+        "bias_K": -0.08220889162988414,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 125.1,
+        "G": {
+          "sst@ocean": 1.493954761674836,
+          "land_temperature@land": 1.1627590288992187,
+          "precipitation@land": 0.9384623540611151,
+          "precipitation@global": 1.6161159668959426
+        }
+      },
+      "502": {
+        "J_zonal": 0.005421552807092667,
+        "J_map": 0.058288656175136566,
+        "bias_K": -0.05413260007929795,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 105.0,
+        "G": {
+          "sst@ocean": 1.2169941384226346,
+          "land_temperature@land": 1.039429940041728,
+          "precipitation@land": 1.1265555837325947,
+          "precipitation@global": 0.9337372061984933
+        }
+      },
+      "503": {
+        "J_zonal": 0.012168710120022297,
+        "J_map": 0.054869405925273895,
+        "bias_K": -0.07790836272632089,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 126.2,
+        "G": {
+          "sst@ocean": 1.5065225376670306,
+          "land_temperature@land": 1.104345598179648,
+          "precipitation@land": 0.8105772767347387,
+          "precipitation@global": 1.3060580008584428
+        }
+      },
+      "504": {
+        "J_zonal": 0.007052595727145672,
+        "J_map": 0.05677959322929382,
+        "bias_K": -0.04896040404700346,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 128.4,
+        "G": {
+          "sst@ocean": 0.8236217096286778,
+          "land_temperature@land": 1.0322501318134585,
+          "precipitation@land": 0.8073314732691315,
+          "precipitation@global": 1.0756016575682374
+        }
+      },
+      "702": {
+        "J_zonal": 0.008320847526192665,
+        "J_map": 0.05440722778439522,
+        "bias_K": -0.04874677462364829,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 126.4,
+        "G": {
+          "sst@ocean": 1.2826697506441296,
+          "land_temperature@land": 1.0351071045035805,
+          "precipitation@land": 0.9836853162547277,
+          "precipitation@global": 1.1116376058717001
+        }
+      },
+      "703": {
+        "J_zonal": 0.01165566872805357,
+        "J_map": 0.07134396582841873,
+        "bias_K": -0.0800568652613651,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 82.1,
+        "G": {
+          "sst@ocean": 0.7137774964767507,
+          "land_temperature@land": 0.679158139436867,
+          "precipitation@land": 0.6811942998124555,
+          "precipitation@global": 0.9101276615215762
+        }
+      },
+      "704": {
+        "J_zonal": 0.014531096443533897,
+        "J_map": 0.0843452513217926,
+        "bias_K": -0.08681290940433457,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 116.5,
+        "G": {
+          "sst@ocean": 0.8011189280898953,
+          "land_temperature@land": 1.2878493888503049,
+          "precipitation@land": 1.1492582744431212,
+          "precipitation@global": 0.9792993294196204
+        }
+      },
+      "902": {
+        "J_zonal": 0.011259743943810463,
+        "J_map": 0.06406639516353607,
+        "bias_K": -0.07073927268758815,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 130.5,
+        "G": {
+          "sst@ocean": 0.8844850467947449,
+          "land_temperature@land": 0.8413533898412174,
+          "precipitation@land": 0.6411166166848552,
+          "precipitation@global": 0.8919682325452503
+        }
+      },
+      "903": {
+        "J_zonal": 0.016881462186574936,
+        "J_map": 0.06643612682819366,
+        "bias_K": -0.07274805450903883,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 128.7,
+        "G": {
+          "sst@ocean": 0.7748721272558433,
+          "land_temperature@land": 0.68635206153003,
+          "precipitation@land": 0.7013293870779626,
+          "precipitation@global": 0.6611102916976163
+        }
+      },
+      "904": {
+        "J_zonal": 0.008712820708751678,
+        "J_map": 0.060484834015369415,
+        "bias_K": -0.05746728032788512,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 96.3,
+        "G": {
+          "sst@ocean": 1.2834103497351859,
+          "land_temperature@land": 1.0772576062954538,
+          "precipitation@land": 0.610805065168255,
+          "precipitation@global": 0.8897416307520223
+        }
+      },
+      "1102": {
+        "J_zonal": 0.010661033913493156,
+        "J_map": 0.05496209114789963,
+        "bias_K": -0.06054946179175065,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 88.2,
+        "G": {
+          "sst@ocean": 0.7493119902929098,
+          "land_temperature@land": 1.4718232426914701,
+          "precipitation@land": 0.9791394009038891,
+          "precipitation@global": 0.8071019644122504
+        }
+      },
+      "1103": {
+        "J_zonal": 0.00835062563419342,
+        "J_map": 0.04426528885960579,
+        "bias_K": -0.04858749519982413,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 129.7,
+        "G": {
+          "sst@ocean": 0.9021510594729582,
+          "land_temperature@land": 0.9112657159896178,
+          "precipitation@land": 0.8097014444073546,
+          "precipitation@global": 0.8668492502311564
+        }
+      },
+      "1104": {
+        "J_zonal": 0.009097345173358917,
+        "J_map": 0.044020287692546844,
+        "bias_K": -0.05802944197865141,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 133.3,
+        "G": {
+          "sst@ocean": 1.2964707907798465,
+          "land_temperature@land": 1.030847457652325,
+          "precipitation@land": 1.670914247906219,
+          "precipitation@global": 1.6158846993129996
+        }
+      },
+      "1302": {
+        "J_zonal": 0.014762459322810173,
+        "J_map": 0.08236130326986313,
+        "bias_K": -0.06385508999814155,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 121.5,
+        "G": {
+          "sst@ocean": 0.9185571834658526,
+          "land_temperature@land": 0.9318400113440738,
+          "precipitation@land": 0.8838039558321739,
+          "precipitation@global": 1.0745689600293065
+        }
+      },
+      "1303": {
+        "J_zonal": 0.01811884343624115,
+        "J_map": 0.06080096215009689,
+        "bias_K": -0.1084614689354393,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 83.1,
+        "G": {
+          "sst@ocean": 0.7342718836178983,
+          "land_temperature@land": 0.5024109526212637,
+          "precipitation@land": 0.620294938378242,
+          "precipitation@global": 0.7508995654817944
+        }
+      },
+      "1304": {
+        "J_zonal": 0.016359928995370865,
+        "J_map": 0.05581159517168999,
+        "bias_K": -0.09469293439505366,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 121.0,
+        "G": {
+          "sst@ocean": 1.1300352279496277,
+          "land_temperature@land": 0.6932881064196202,
+          "precipitation@land": 1.2761556461776364,
+          "precipitation@global": 1.5085533203893036
+        }
+      },
+      "1502": {
+        "J_zonal": 0.017780916765332222,
+        "J_map": 0.06073218211531639,
+        "bias_K": -0.08361740567198173,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 130.2,
+        "G": {
+          "sst@ocean": 0.7922278790714903,
+          "land_temperature@land": 0.6524686144512085,
+          "precipitation@land": 0.7755642873732453,
+          "precipitation@global": 0.7529049883591734
+        }
+      },
+      "1503": {
+        "J_zonal": 0.011760130524635315,
+        "J_map": 0.05249699950218201,
+        "bias_K": -0.07648945040755059,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 130.0,
+        "G": {
+          "sst@ocean": 1.2830009610765674,
+          "land_temperature@land": 0.9729822133334283,
+          "precipitation@land": 0.7572270543718199,
+          "precipitation@global": 1.2390345356592696
+        }
+      },
+      "1504": {
+        "J_zonal": 0.01169474609196186,
+        "J_map": 0.06920990347862244,
+        "bias_K": -0.046821339404377466,
+        "effort": 0.0262945473728288,
+        "cap_share": 0.19351001953085264,
+        "max_band_share": 0.29780425131320953,
+        "members": 3,
+        "seconds": 108.9,
+        "G": {
+          "sst@ocean": 0.9269743740218803,
+          "land_temperature@land": 0.793086122980438,
+          "precipitation@land": 0.863938958422379,
+          "precipitation@global": 1.161138691518309
+        }
+      }
+    },
+    "linear_response": {
+      "102": {
+        "J_zonal": 0.005554287228733301,
+        "J_map": 0.06617815047502518,
+        "bias_K": -0.006853118637039997,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 107.9,
+        "G": {
+          "sst@ocean": 0.7719073140570041,
+          "land_temperature@land": 1.0818521785244837,
+          "precipitation@land": 0.9660241978451435,
+          "precipitation@global": 0.7648267970298571
+        }
+      },
+      "103": {
+        "J_zonal": 0.005799849983304739,
+        "J_map": 0.06524921208620071,
+        "bias_K": 0.020246113878229076,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 129.4,
+        "G": {
+          "sst@ocean": 0.9681572653262522,
+          "land_temperature@land": 1.4128714919343803,
+          "precipitation@land": 1.170254217988712,
+          "precipitation@global": 0.9214551055568485
+        }
+      },
+      "104": {
+        "J_zonal": 0.0017135447124019265,
+        "J_map": 0.03621254861354828,
+        "bias_K": 0.005568091901204598,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 128.1,
+        "G": {
+          "sst@ocean": 1.4405582444789407,
+          "land_temperature@land": 1.4163501882220324,
+          "precipitation@land": 1.0554167930011966,
+          "precipitation@global": 1.1505318177981487
+        }
+      },
+      "302": {
+        "J_zonal": 0.0024592408444732428,
+        "J_map": 0.033860668540000916,
+        "bias_K": 0.0031663640028202072,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 125.4,
+        "G": {
+          "sst@ocean": 1.6946511947623175,
+          "land_temperature@land": 1.1159014199854953,
+          "precipitation@land": 1.0254219580595831,
+          "precipitation@global": 1.539056907110556
+        }
+      },
+      "303": {
+        "J_zonal": 0.002787360455840826,
+        "J_map": 0.04288015514612198,
+        "bias_K": 0.008016505490434218,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 80.4,
+        "G": {
+          "sst@ocean": 0.9678720937989678,
+          "land_temperature@land": 1.1032635814316125,
+          "precipitation@land": 0.8876268616533015,
+          "precipitation@global": 1.0702145231837459
+        }
+      },
+      "304": {
+        "J_zonal": 0.004083552397787571,
+        "J_map": 0.039015088230371475,
+        "bias_K": -0.011815419694064964,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 119.7,
+        "G": {
+          "sst@ocean": 1.6593184487197805,
+          "land_temperature@land": 0.9289421960720841,
+          "precipitation@land": 1.270361647010145,
+          "precipitation@global": 1.5188872906082964
+        }
+      },
+      "502": {
+        "J_zonal": 0.0026545575819909573,
+        "J_map": 0.05470395088195801,
+        "bias_K": -0.010127980155007328,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 132.5,
+        "G": {
+          "sst@ocean": 1.265333572076914,
+          "land_temperature@land": 1.1690826812833166,
+          "precipitation@land": 0.9161349760658244,
+          "precipitation@global": 0.7214004128358141
+        }
+      },
+      "503": {
+        "J_zonal": 0.002836230443790555,
+        "J_map": 0.04315877705812454,
+        "bias_K": 0.01934439286996127,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 130.1,
+        "G": {
+          "sst@ocean": 1.817241559073187,
+          "land_temperature@land": 1.3224897106879983,
+          "precipitation@land": 0.7999282017082898,
+          "precipitation@global": 1.109998280207565
+        }
+      },
+      "504": {
+        "J_zonal": 0.0018919642316177487,
+        "J_map": 0.03347757086157799,
+        "bias_K": 0.007037601426808215,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 94.2,
+        "G": {
+          "sst@ocean": 1.3684275990470929,
+          "land_temperature@land": 1.7808587637056008,
+          "precipitation@land": 0.9522196354251818,
+          "precipitation@global": 1.3282763641975774
+        }
+      },
+      "702": {
+        "J_zonal": 0.002735431306064129,
+        "J_map": 0.06743156909942627,
+        "bias_K": 0.026479058554905913,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 90.4,
+        "G": {
+          "sst@ocean": 1.01761351916791,
+          "land_temperature@land": 1.0853601848239407,
+          "precipitation@land": 0.8526230033659284,
+          "precipitation@global": 0.8894539901449728
+        }
+      },
+      "703": {
+        "J_zonal": 0.0071913739666342735,
+        "J_map": 0.05900619551539421,
+        "bias_K": 0.036474642095982245,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 133.4,
+        "G": {
+          "sst@ocean": 0.8336570864971681,
+          "land_temperature@land": 0.7851062343329596,
+          "precipitation@land": 0.6174194004179786,
+          "precipitation@global": 0.876434791250261
+        }
+      },
+      "704": {
+        "J_zonal": 0.005305060185492039,
+        "J_map": 0.09353116154670715,
+        "bias_K": 0.03822384246079133,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 135.3,
+        "G": {
+          "sst@ocean": 0.6955961452547094,
+          "land_temperature@land": 0.7433224077483742,
+          "precipitation@land": 0.857803153198407,
+          "precipitation@global": 0.6602040652082816
+        }
+      },
+      "902": {
+        "J_zonal": 0.0016914657317101955,
+        "J_map": 0.04003571346402168,
+        "bias_K": -0.001473776119386594,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 122.4,
+        "G": {
+          "sst@ocean": 1.360141604349983,
+          "land_temperature@land": 0.8940063587993244,
+          "precipitation@land": 0.8448132231880758,
+          "precipitation@global": 0.9649676696252228
+        }
+      },
+      "903": {
+        "J_zonal": 0.004614196252077818,
+        "J_map": 0.04536405950784683,
+        "bias_K": -0.007172623102482851,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 81.9,
+        "G": {
+          "sst@ocean": 1.0902271509779602,
+          "land_temperature@land": 0.6670223507101996,
+          "precipitation@land": 0.8647790857545542,
+          "precipitation@global": 1.0052936580974512
+        }
+      },
+      "904": {
+        "J_zonal": 0.004789625760167837,
+        "J_map": 0.06069577485322952,
+        "bias_K": 0.01459463384693311,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 123.4,
+        "G": {
+          "sst@ocean": 1.2462213007003984,
+          "land_temperature@land": 0.7767811360998224,
+          "precipitation@land": 0.6933148503112484,
+          "precipitation@global": 1.056207567296799
+        }
+      },
+      "1102": {
+        "J_zonal": 0.004650639370083809,
+        "J_map": 0.05379444360733032,
+        "bias_K": 0.012439825257604654,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 128.7,
+        "G": {
+          "sst@ocean": 0.7411084681507221,
+          "land_temperature@land": 1.0099264492345068,
+          "precipitation@land": 0.8631402336633894,
+          "precipitation@global": 0.6201215905956116
+        }
+      },
+      "1103": {
+        "J_zonal": 0.002868650946766138,
+        "J_map": 0.04073578119277954,
+        "bias_K": 0.020869562058443186,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 130.2,
+        "G": {
+          "sst@ocean": 0.9593042108289005,
+          "land_temperature@land": 1.0669772640764799,
+          "precipitation@land": 0.7606297208738388,
+          "precipitation@global": 0.7423976610056511
+        }
+      },
+      "1104": {
+        "J_zonal": 0.005458776373416185,
+        "J_map": 0.04369906708598137,
+        "bias_K": 0.042954996159460634,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 108.0,
+        "G": {
+          "sst@ocean": 1.283137702814464,
+          "land_temperature@land": 1.0389471234052456,
+          "precipitation@land": 1.8735166484450057,
+          "precipitation@global": 1.43110928125541
+        }
+      },
+      "1302": {
+        "J_zonal": 0.003747847629711032,
+        "J_map": 0.05097304657101631,
+        "bias_K": 0.0037212268588392924,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 114.0,
+        "G": {
+          "sst@ocean": 1.4476453307530677,
+          "land_temperature@land": 0.8339452523022679,
+          "precipitation@land": 0.9442740397373733,
+          "precipitation@global": 1.1306593998579864
+        }
+      },
+      "1303": {
+        "J_zonal": 0.004615812096744776,
+        "J_map": 0.07147394865751266,
+        "bias_K": 0.010553959839172898,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 130.7,
+        "G": {
+          "sst@ocean": 0.5646384319603093,
+          "land_temperature@land": 0.7283913875798662,
+          "precipitation@land": 0.6266267188570466,
+          "precipitation@global": 0.5034873344621819
+        }
+      },
+      "1304": {
+        "J_zonal": 0.005222059786319733,
+        "J_map": 0.04901249334216118,
+        "bias_K": -0.0211240734207974,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 129.9,
+        "G": {
+          "sst@ocean": 1.1888386096668553,
+          "land_temperature@land": 0.791164264408953,
+          "precipitation@land": 0.7974591887515147,
+          "precipitation@global": 1.263724746561581
+        }
+      },
+      "1502": {
+        "J_zonal": 0.005225783679634333,
+        "J_map": 0.055381111800670624,
+        "bias_K": 0.008231123044886213,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 121.9,
+        "G": {
+          "sst@ocean": 0.819266788521108,
+          "land_temperature@land": 0.8669916170525361,
+          "precipitation@land": 0.9655113490986397,
+          "precipitation@global": 0.8579889185231203
+        }
+      },
+      "1503": {
+        "J_zonal": 0.001983232796192169,
+        "J_map": 0.05936668440699577,
+        "bias_K": -0.02012706479433116,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 76.9,
+        "G": {
+          "sst@ocean": 1.0749843952672389,
+          "land_temperature@land": 2.1122469463687756,
+          "precipitation@land": 1.1816733002725366,
+          "precipitation@global": 1.096496946190507
+        }
+      },
+      "1504": {
+        "J_zonal": 0.007702995091676712,
+        "J_map": 0.06487332284450531,
+        "bias_K": 0.05958508316794096,
+        "effort": 0.01677907966325016,
+        "cap_share": 0.12446696559588115,
+        "max_band_share": 0.1660599559545517,
+        "members": 3,
+        "seconds": 74.7,
+        "G": {
+          "sst@ocean": 1.0006593806363981,
+          "land_temperature@land": 0.7025016027621255,
+          "precipitation@land": 0.8086119476732444,
+          "precipitation@global": 1.3058741313545228
+        }
+      }
+    },
+    "pi": {
+      "102": {
+        "J_zonal": 0.002099615056067705,
+        "J_map": 0.037648070603609085,
+        "bias_K": 0.00758292253769218,
+        "effort": 0.0286712564740871,
+        "cap_share": 0.2370143234039898,
+        "max_band_share": 0.6739711140592893,
+        "members": 3,
+        "seconds": 180.9,
+        "G": {
+          "sst@ocean": 1.3574213569803195,
+          "land_temperature@land": 1.3976824361465388,
+          "precipitation@land": 0.8899905792938111,
+          "precipitation@global": 1.0475227350731873
+        }
+      },
+      "103": {
+        "J_zonal": 0.00426120450720191,
+        "J_map": 0.061304908245801926,
+        "bias_K": 4.5437365158718535e-05,
+        "effort": 0.040069022123801805,
+        "cap_share": 0.3123445909953228,
+        "max_band_share": 0.6384422795640098,
+        "members": 3,
+        "seconds": 150.9,
+        "G": {
+          "sst@ocean": 1.0272108721331992,
+          "land_temperature@land": 1.0395553555268007,
+          "precipitation@land": 1.0560201208883278,
+          "precipitation@global": 1.2044133033806537
+        }
+      },
+      "104": {
+        "J_zonal": 0.0025084195658564568,
+        "J_map": 0.048034198582172394,
+        "bias_K": -0.0012200998762395138,
+        "effort": 0.043911697189445154,
+        "cap_share": 0.3300807825957977,
+        "max_band_share": 0.5602222742163576,
+        "members": 3,
+        "seconds": 164.6,
+        "G": {
+          "sst@ocean": 1.0855758553068469,
+          "land_temperature@land": 2.1101289543454325,
+          "precipitation@land": 1.3048705480632443,
+          "precipitation@global": 1.0614606169875167
+        }
+      },
+      "302": {
+        "J_zonal": 0.0015260647051036358,
+        "J_map": 0.04940520599484444,
+        "bias_K": 0.0035818015502561695,
+        "effort": 0.03743802746430571,
+        "cap_share": 0.27874218613875135,
+        "max_band_share": 0.3637653601321358,
+        "members": 3,
+        "seconds": 85.7,
+        "G": {
+          "sst@ocean": 1.1614359156724523,
+          "land_temperature@land": 0.7245624228621956,
+          "precipitation@land": 0.7935916248349922,
+          "precipitation@global": 1.3282095348786624
+        }
+      },
+      "303": {
+        "J_zonal": 0.0016309847123920918,
+        "J_map": 0.033487413078546524,
+        "bias_K": -0.0011598511982997065,
+        "effort": 0.034287271443828336,
+        "cap_share": 0.267300944076851,
+        "max_band_share": 0.5019630529676322,
+        "members": 3,
+        "seconds": 100.1,
+        "G": {
+          "sst@ocean": 1.2384424683128126,
+          "land_temperature@land": 1.1212134853285354,
+          "precipitation@land": 1.2300953505883274,
+          "precipitation@global": 1.4353171855283375
+        }
+      },
+      "304": {
+        "J_zonal": 0.001771252485923469,
+        "J_map": 0.038533370941877365,
+        "bias_K": 0.006843207815258625,
+        "effort": 0.04222983219120527,
+        "cap_share": 0.33001654633510585,
+        "max_band_share": 0.5473358487641371,
+        "members": 3,
+        "seconds": 100.6,
+        "G": {
+          "sst@ocean": 1.6780760733412476,
+          "land_temperature@land": 1.212942073034425,
+          "precipitation@land": 1.3577774706744294,
+          "precipitation@global": 1.998954936110933
+        }
+      },
+      "502": {
+        "J_zonal": 0.007048869039863348,
+        "J_map": 0.0648336187005043,
+        "bias_K": -0.0016350762307323526,
+        "effort": 0.038449358149596415,
+        "cap_share": 0.28394088708079873,
+        "max_band_share": 0.4130460663388173,
+        "members": 3,
+        "seconds": 86.1,
+        "G": {
+          "sst@ocean": 1.066657583186332,
+          "land_temperature@land": 1.3080047269654034,
+          "precipitation@land": 1.320831738808628,
+          "precipitation@global": 1.2912932612452133
+        }
+      },
+      "503": {
+        "J_zonal": 0.0021720873191952705,
+        "J_map": 0.04993618279695511,
+        "bias_K": 0.00652287893009432,
+        "effort": 0.04330015345853691,
+        "cap_share": 0.3302717448074233,
+        "max_band_share": 0.537588134476984,
+        "members": 3,
+        "seconds": 84.9,
+        "G": {
+          "sst@ocean": 1.564460668815625,
+          "land_temperature@land": 1.8099078779133608,
+          "precipitation@land": 0.8714918097687921,
+          "precipitation@global": 0.9566894068683433
+        }
+      },
+      "504": {
+        "J_zonal": 0.002091921167448163,
+        "J_map": 0.06500445306301117,
+        "bias_K": -0.007753985731419943,
+        "effort": 0.03263477252976387,
+        "cap_share": 0.2588631939142943,
+        "max_band_share": 0.4899982435421812,
+        "members": 3,
+        "seconds": 88.7,
+        "G": {
+          "sst@ocean": 0.7045505214882762,
+          "land_temperature@land": 0.6875545013806831,
+          "precipitation@land": 0.6866427813327638,
+          "precipitation@global": 0.9970953685068412
+        }
+      },
+      "702": {
+        "J_zonal": 0.0016440215986222029,
+        "J_map": 0.06494400650262833,
+        "bias_K": 0.0015541227556676697,
+        "effort": 0.052731103493901775,
+        "cap_share": 0.4070527459736224,
+        "max_band_share": 0.6334430814065316,
+        "members": 3,
+        "seconds": 85.9,
+        "G": {
+          "sst@ocean": 1.0511178418166587,
+          "land_temperature@land": 0.7010935433617399,
+          "precipitation@land": 0.8593418425632227,
+          "precipitation@global": 0.9589091969698476
+        }
+      },
+      "703": {
+        "J_zonal": 0.007392129395157099,
+        "J_map": 0.04819463565945625,
+        "bias_K": 0.002076002782801026,
+        "effort": 0.04129110393984465,
+        "cap_share": 0.32117451708418904,
+        "max_band_share": 0.5733670342575621,
+        "members": 3,
+        "seconds": 84.9,
+        "G": {
+          "sst@ocean": 1.0092111115103954,
+          "land_temperature@land": 1.0070116952469745,
+          "precipitation@land": 0.9049591523269571,
+          "precipitation@global": 0.8381585981266653
+        }
+      },
+      "704": {
+        "J_zonal": 0.00261284364387393,
+        "J_map": 0.04724918305873871,
+        "bias_K": 0.00865269932063641,
+        "effort": 0.034933622239608074,
+        "cap_share": 0.28173402389856406,
+        "max_band_share": 0.7145114863912265,
+        "members": 3,
+        "seconds": 87.6,
+        "G": {
+          "sst@ocean": 1.367281672784913,
+          "land_temperature@land": 1.1680494034842548,
+          "precipitation@land": 1.0570974664638888,
+          "precipitation@global": 0.9055478900657877
+        }
+      },
+      "902": {
+        "J_zonal": 0.005341736134141684,
+        "J_map": 0.04711240157485008,
+        "bias_K": -0.005933973511926824,
+        "effort": 0.03531188526544084,
+        "cap_share": 0.28274346628071123,
+        "max_band_share": 0.5396968691989228,
+        "members": 3,
+        "seconds": 88.6,
+        "G": {
+          "sst@ocean": 1.1562373178407659,
+          "land_temperature@land": 0.8643918979320236,
+          "precipitation@land": 1.138384158193933,
+          "precipitation@global": 1.4452944368056375
+        }
+      },
+      "903": {
+        "J_zonal": 0.004032362252473831,
+        "J_map": 0.04969758167862892,
+        "bias_K": 0.00877478766410619,
+        "effort": 0.05133768015167356,
+        "cap_share": 0.3856830307868896,
+        "max_band_share": 0.5726917308789713,
+        "members": 3,
+        "seconds": 84.2,
+        "G": {
+          "sst@ocean": 0.9953684661779907,
+          "land_temperature@land": 0.6860969528722586,
+          "precipitation@land": 0.7153266025885546,
+          "precipitation@global": 0.8973858085603048
+        }
+      },
+      "904": {
+        "J_zonal": 0.008957648649811745,
+        "J_map": 0.05276079848408699,
+        "bias_K": 0.0027800180440620964,
+        "effort": 0.04196338583771514,
+        "cap_share": 0.32223198356762256,
+        "max_band_share": 0.599143747240305,
+        "members": 3,
+        "seconds": 86.4,
+        "G": {
+          "sst@ocean": 1.4312363150222636,
+          "land_temperature@land": 1.775191275372381,
+          "precipitation@land": 1.2360661229557333,
+          "precipitation@global": 1.221223797698039
+        }
+      },
+      "1102": {
+        "J_zonal": 0.003101164475083351,
+        "J_map": 0.03960101678967476,
+        "bias_K": -0.005387663921296719,
+        "effort": 0.031931593858611024,
+        "cap_share": 0.25100888956890066,
+        "max_band_share": 0.42875736348193,
+        "members": 3,
+        "seconds": 90.9,
+        "G": {
+          "sst@ocean": 1.0056503104483419,
+          "land_temperature@land": 1.238000344179818,
+          "precipitation@land": 0.8287397693841643,
+          "precipitation@global": 0.9544850563265008
+        }
+      },
+      "1103": {
+        "J_zonal": 0.004700691904872656,
+        "J_map": 0.04535476118326187,
+        "bias_K": -0.008432606695358339,
+        "effort": 0.036490736284154064,
+        "cap_share": 0.2905475889436073,
+        "max_band_share": 0.5479662023760655,
+        "members": 3,
+        "seconds": 92.1,
+        "G": {
+          "sst@ocean": 0.8576738924034786,
+          "land_temperature@land": 0.932177659511925,
+          "precipitation@land": 0.8523164411726198,
+          "precipitation@global": 0.83968961644326
+        }
+      },
+      "1104": {
+        "J_zonal": 0.0022630789317190647,
+        "J_map": 0.03809640184044838,
+        "bias_K": 0.002648892342280296,
+        "effort": 0.03596157666169026,
+        "cap_share": 0.27625595297905864,
+        "max_band_share": 0.45832158721707483,
+        "members": 3,
+        "seconds": 82.6,
+        "G": {
+          "sst@ocean": 1.4409024083716855,
+          "land_temperature@land": 1.2705428462409245,
+          "precipitation@land": 1.6244604233429945,
+          "precipitation@global": 1.5909836020992232
+        }
+      },
+      "1302": {
+        "J_zonal": 0.005506644956767559,
+        "J_map": 0.047239430248737335,
+        "bias_K": 0.006121469179196565,
+        "effort": 0.03875094004114557,
+        "cap_share": 0.2845072608648075,
+        "max_band_share": 0.3548692153007896,
+        "members": 3,
+        "seconds": 85.0,
+        "G": {
+          "sst@ocean": 1.562468948984028,
+          "land_temperature@land": 0.9793994387668861,
+          "precipitation@land": 1.2003411423511106,
+          "precipitation@global": 1.1946424006559366
+        }
+      },
+      "1303": {
+        "J_zonal": 0.002948618261143565,
+        "J_map": 0.03537537157535553,
+        "bias_K": -0.010889335474998721,
+        "effort": 0.030021889810529796,
+        "cap_share": 0.24225787980119803,
+        "max_band_share": 0.472381415742415,
+        "members": 3,
+        "seconds": 95.2,
+        "G": {
+          "sst@ocean": 1.1418449105308324,
+          "land_temperature@land": 0.8053892320394468,
+          "precipitation@land": 0.9742092844245241,
+          "precipitation@global": 0.8267102125549204
+        }
+      },
+      "1304": {
+        "J_zonal": 0.005126735661178827,
+        "J_map": 0.046998877078294754,
+        "bias_K": -0.016285624140625406,
+        "effort": 0.024500060689209614,
+        "cap_share": 0.18584321339019677,
+        "max_band_share": 0.2667689112476418,
+        "members": 3,
+        "seconds": 97.5,
+        "G": {
+          "sst@ocean": 1.2376214572187492,
+          "land_temperature@land": 0.9529029643095441,
+          "precipitation@land": 0.963825271821676,
+          "precipitation@global": 1.2076211977035078
+        }
+      },
+      "1502": {
+        "J_zonal": 0.003522522747516632,
+        "J_map": 0.03427386283874512,
+        "bias_K": -0.005866657837240982,
+        "effort": 0.029606304746433516,
+        "cap_share": 0.23553613180087674,
+        "max_band_share": 0.43674102673927945,
+        "members": 3,
+        "seconds": 85.1,
+        "G": {
+          "sst@ocean": 1.3236596346790237,
+          "land_temperature@land": 1.1322290127145078,
+          "precipitation@land": 0.6498619526683582,
+          "precipitation@global": 0.8875148164761255
+        }
+      },
+      "1503": {
+        "J_zonal": 0.002385392552241683,
+        "J_map": 0.03749959543347359,
+        "bias_K": -0.006736193057425361,
+        "effort": 0.03685428709203967,
+        "cap_share": 0.27685179212992944,
+        "max_band_share": 0.37646566655624797,
+        "members": 3,
+        "seconds": 82.0,
+        "G": {
+          "sst@ocean": 1.6970589134221163,
+          "land_temperature@land": 1.8263279577831963,
+          "precipitation@land": 1.0348267587304119,
+          "precipitation@global": 1.261557541200194
+        }
+      },
+      "1504": {
+        "J_zonal": 0.003209739690646529,
+        "J_map": 0.03413194790482521,
+        "bias_K": -0.0034739128409691884,
+        "effort": 0.02930981729286658,
+        "cap_share": 0.22843287793781472,
+        "max_band_share": 0.3860416549637362,
+        "members": 3,
+        "seconds": 97.3,
+        "G": {
+          "sst@ocean": 1.8501989924752689,
+          "land_temperature@land": 0.9456925115711206,
+          "precipitation@land": 1.1315113830362473,
+          "precipitation@global": 1.6416001087612988
+        }
+      }
+    },
+    "adaptive": {
+      "102": {
+        "J_zonal": 0.002442224882543087,
+        "J_map": 0.050600964576005936,
+        "bias_K": 0.007026324690798134,
+        "effort": 0.03549717154228448,
+        "cap_share": 0.26331749489461936,
+        "max_band_share": 0.35131001258613886,
+        "members": 3,
+        "seconds": 99.2,
+        "G": {
+          "sst@ocean": 1.0096683250971308,
+          "land_temperature@land": 1.3520635266230232,
+          "precipitation@land": 0.7736398976157133,
+          "precipitation@global": 0.8245657988319457
+        }
+      },
+      "103": {
+        "J_zonal": 0.00450733071193099,
+        "J_map": 0.05877496674656868,
+        "bias_K": -0.001874387257136647,
+        "effort": 0.029048934535626958,
+        "cap_share": 0.21548456772493577,
+        "max_band_share": 0.2874928057469704,
+        "members": 3,
+        "seconds": 89.6,
+        "G": {
+          "sst@ocean": 1.0714586680138574,
+          "land_temperature@land": 1.8125589305134977,
+          "precipitation@land": 1.3146801278521605,
+          "precipitation@global": 0.8866107379809277
+        }
+      },
+      "104": {
+        "J_zonal": 0.00478549487888813,
+        "J_map": 0.052463337779045105,
+        "bias_K": -0.008344294860962755,
+        "effort": 0.035666767068171956,
+        "cap_share": 0.26457555185037634,
+        "max_band_share": 0.35298846662044525,
+        "members": 3,
+        "seconds": 82.5,
+        "G": {
+          "sst@ocean": 0.9945722147402717,
+          "land_temperature@land": 2.163833110324776,
+          "precipitation@land": 1.1739624699652167,
+          "precipitation@global": 1.0323397679814716
+        }
+      },
+      "302": {
+        "J_zonal": 0.0040008132345974445,
+        "J_map": 0.04844280332326889,
+        "bias_K": 0.0008876031562303349,
+        "effort": 0.03615703298553514,
+        "cap_share": 0.2682123373055624,
+        "max_band_share": 0.35784055582351154,
+        "members": 3,
+        "seconds": 95.6,
+        "G": {
+          "sst@ocean": 1.1843657404395596,
+          "land_temperature@land": 1.229396625717289,
+          "precipitation@land": 0.8853446500184899,
+          "precipitation@global": 1.3075472848102054
+        }
+      },
+      "303": {
+        "J_zonal": 0.0013735007960349321,
+        "J_map": 0.03009398654103279,
+        "bias_K": 0.001694216522894091,
+        "effort": 0.03944401851088797,
+        "cap_share": 0.2925951473449392,
+        "max_band_share": 0.39037134455240985,
+        "members": 3,
+        "seconds": 99.3,
+        "G": {
+          "sst@ocean": 1.378128504710165,
+          "land_temperature@land": 0.802445337560577,
+          "precipitation@land": 0.9532790109031098,
+          "precipitation@global": 1.7393722623855274
+        }
+      },
+      "304": {
+        "J_zonal": 0.004920961335301399,
+        "J_map": 0.05527295544743538,
+        "bias_K": 0.0024801209099608416,
+        "effort": 0.04089420706194672,
+        "cap_share": 0.3033526248333079,
+        "max_band_share": 0.4047236381167615,
+        "members": 3,
+        "seconds": 87.2,
+        "G": {
+          "sst@ocean": 1.1692197048503887,
+          "land_temperature@land": 0.8454084294691789,
+          "precipitation@land": 1.0541687772694257,
+          "precipitation@global": 1.3666581935865572
+        }
+      },
+      "502": {
+        "J_zonal": 0.0038270344957709312,
+        "J_map": 0.05532561242580414,
+        "bias_K": -0.00457250404107398,
+        "effort": 0.034948491956288796,
+        "cap_share": 0.25924739776032596,
+        "max_band_share": 0.3458798126127847,
+        "members": 3,
+        "seconds": 83.1,
+        "G": {
+          "sst@ocean": 1.2501789824529272,
+          "land_temperature@land": 0.9112786653450438,
+          "precipitation@land": 0.9420459691044561,
+          "precipitation@global": 0.7965887412984578
+        }
+      },
+      "503": {
+        "J_zonal": 0.003559577278792858,
+        "J_map": 0.060005590319633484,
+        "bias_K": -0.0004928386234992416,
+        "effort": 0.033946389320994946,
+        "cap_share": 0.2518138150788016,
+        "max_band_share": 0.3359621583863541,
+        "members": 3,
+        "seconds": 96.2,
+        "G": {
+          "sst@ocean": 1.3013799141727465,
+          "land_temperature@land": 1.31994018819324,
+          "precipitation@land": 0.7962239073476778,
+          "precipitation@global": 0.7600840637784678
+        }
+      },
+      "504": {
+        "J_zonal": 0.004738748073577881,
+        "J_map": 0.03898071497678757,
+        "bias_K": 0.01250225941991336,
+        "effort": 0.039166816887292864,
+        "cap_share": 0.29053886972057325,
+        "max_band_share": 0.3876279171176807,
+        "members": 3,
+        "seconds": 99.6,
+        "G": {
+          "sst@ocean": 1.1767282518117381,
+          "land_temperature@land": 0.943412151535872,
+          "precipitation@land": 0.8221735936440068,
+          "precipitation@global": 1.0004398471606992
+        }
+      },
+      "702": {
+        "J_zonal": 0.0037695164792239666,
+        "J_map": 0.05295945703983307,
+        "bias_K": 0.0023641627772726893,
+        "effort": 0.04764138079838071,
+        "cap_share": 0.3534030598346834,
+        "max_band_share": 0.47149936910028817,
+        "members": 3,
+        "seconds": 88.3,
+        "G": {
+          "sst@ocean": 1.2890262708310645,
+          "land_temperature@land": 0.740958018929652,
+          "precipitation@land": 0.9769290970583875,
+          "precipitation@global": 0.9848186763949788
+        }
+      },
+      "703": {
+        "J_zonal": 0.005401406437158585,
+        "J_map": 0.03886360302567482,
+        "bias_K": 0.005666534954208616,
+        "effort": 0.04360298985767049,
+        "cap_share": 0.3234463355124549,
+        "max_band_share": 0.43153204032461406,
+        "members": 3,
+        "seconds": 82.3,
+        "G": {
+          "sst@ocean": 1.2519808325098858,
+          "land_temperature@land": 0.888114921538189,
+          "precipitation@land": 0.8186598639601823,
+          "precipitation@global": 1.1400221935114374
+        }
+      },
+      "704": {
+        "J_zonal": 0.0018193816067650914,
+        "J_map": 0.03750789910554886,
+        "bias_K": 0.005261666488634227,
+        "effort": 0.04392118350020698,
+        "cap_share": 0.3258066913457932,
+        "max_band_share": 0.43468115437361926,
+        "members": 3,
+        "seconds": 97.6,
+        "G": {
+          "sst@ocean": 1.7216531140112188,
+          "land_temperature@land": 1.1304422980466082,
+          "precipitation@land": 1.0645309133721528,
+          "precipitation@global": 1.3987228582769584
+        }
+      },
+      "902": {
+        "J_zonal": 0.003755525453016162,
+        "J_map": 0.053187046200037,
+        "bias_K": -0.0031313067220686414,
+        "effort": 0.024312903315109602,
+        "cap_share": 0.18035275816779447,
+        "max_band_share": 0.240621039023002,
+        "members": 3,
+        "seconds": 99.5,
+        "G": {
+          "sst@ocean": 1.0238917714253195,
+          "land_temperature@land": 0.7643989217206781,
+          "precipitation@land": 0.551180495385088,
+          "precipitation@global": 0.958219932091386
+        }
+      },
+      "903": {
+        "J_zonal": 0.006391097791492939,
+        "J_map": 0.055598534643650055,
+        "bias_K": 0.003101582399316776,
+        "effort": 0.04475442712458714,
+        "cap_share": 0.33198768038440635,
+        "max_band_share": 0.44292763703399235,
+        "members": 3,
+        "seconds": 88.5,
+        "G": {
+          "sst@ocean": 0.8891126015710512,
+          "land_temperature@land": 0.524122063197687,
+          "precipitation@land": 0.9531374602978729,
+          "precipitation@global": 0.9791068813273759
+        }
+      },
+      "904": {
+        "J_zonal": 0.0035339866299182177,
+        "J_map": 0.03175324574112892,
+        "bias_K": -0.00013733481851821352,
+        "effort": 0.042298497938288125,
+        "cap_share": 0.3137696336402937,
+        "max_band_share": 0.4186216865976652,
+        "members": 3,
+        "seconds": 83.1,
+        "G": {
+          "sst@ocean": 2.37795089758735,
+          "land_temperature@land": 1.5862899630283358,
+          "precipitation@land": 1.1099041803614065,
+          "precipitation@global": 1.403526496747591
+        }
+      },
+      "1102": {
+        "J_zonal": 0.004656008444726467,
+        "J_map": 0.04189436510205269,
+        "bias_K": -0.004307611082027367,
+        "effort": 0.019822807709711822,
+        "cap_share": 0.1470452952231022,
+        "max_band_share": 0.196183259422132,
+        "members": 3,
+        "seconds": 96.5,
+        "G": {
+          "sst@ocean": 0.9504618794884474,
+          "land_temperature@land": 1.6149020863463728,
+          "precipitation@land": 0.8098976560851959,
+          "precipitation@global": 0.8732039175139875
+        }
+      },
+      "1103": {
+        "J_zonal": 0.003908837214112282,
+        "J_map": 0.037580445408821106,
+        "bias_K": 0.0016541356262853631,
+        "effort": 0.03960215261317012,
+        "cap_share": 0.29376818389735293,
+        "max_band_share": 0.39193637151685023,
+        "members": 3,
+        "seconds": 99.0,
+        "G": {
+          "sst@ocean": 1.0343282208232731,
+          "land_temperature@land": 1.0306831686316553,
+          "precipitation@land": 0.7949909007127542,
+          "precipitation@global": 0.9187944440956822
+        }
+      },
+      "1104": {
+        "J_zonal": 0.003915530163794756,
+        "J_map": 0.052918899804353714,
+        "bias_K": 0.0037169315290010926,
+        "effort": 0.045715136863742144,
+        "cap_share": 0.3391142107580823,
+        "max_band_share": 0.4524356288904393,
+        "members": 3,
+        "seconds": 87.5,
+        "G": {
+          "sst@ocean": 1.0373479306141504,
+          "land_temperature@land": 1.4241107798395995,
+          "precipitation@land": 1.2529710990051213,
+          "precipitation@global": 1.383443159623394
+        }
+      },
+      "1302": {
+        "J_zonal": 0.003710646415129304,
+        "J_map": 0.08108503371477127,
+        "bias_K": 0.002479930382592574,
+        "effort": 0.04039437439464327,
+        "cap_share": 0.29964487344302515,
+        "max_band_share": 0.3997768703158255,
+        "members": 3,
+        "seconds": 82.9,
+        "G": {
+          "sst@ocean": 0.9099541617117816,
+          "land_temperature@land": 0.8840302973842177,
+          "precipitation@land": 0.5649347506157925,
+          "precipitation@global": 0.887545925267695
+        }
+      },
+      "1303": {
+        "J_zonal": 0.0038543425034731627,
+        "J_map": 0.04350678622722626,
+        "bias_K": 0.007827260899029735,
+        "effort": 0.03636017093588114,
+        "cap_share": 0.26971921144501754,
+        "max_band_share": 0.35985097991889003,
+        "members": 3,
+        "seconds": 99.5,
+        "G": {
+          "sst@ocean": 0.9275312966811807,
+          "land_temperature@land": 0.7580508335975605,
+          "precipitation@land": 0.6787103177785431,
+          "precipitation@global": 0.803049221578308
+        }
+      },
+      "1304": {
+        "J_zonal": 0.011221490800380707,
+        "J_map": 0.06803354620933533,
+        "bias_K": -0.0015640338055783638,
+        "effort": 0.03262430071138524,
+        "cap_share": 0.24200658148361578,
+        "max_band_share": 0.32287765432287147,
+        "members": 3,
+        "seconds": 97.7,
+        "G": {
+          "sst@ocean": 0.8525755593639128,
+          "land_temperature@land": 0.7977866777188092,
+          "precipitation@land": 1.0991796303783563,
+          "precipitation@global": 1.1006080624730112
+        }
+      },
+      "1502": {
+        "J_zonal": 0.0037488637026399374,
+        "J_map": 0.03921634331345558,
+        "bias_K": -0.0034370532267327773,
+        "effort": 0.021548956917297687,
+        "cap_share": 0.15984984442453692,
+        "max_band_share": 0.2132666859499834,
+        "members": 3,
+        "seconds": 88.8,
+        "G": {
+          "sst@ocean": 1.156430586781212,
+          "land_temperature@land": 1.2043728776947127,
+          "precipitation@land": 0.7972062623085887,
+          "precipitation@global": 0.8036844569692811
+        }
+      },
+      "1503": {
+        "J_zonal": 0.005093545187264681,
+        "J_map": 0.051957570016384125,
+        "bias_K": -0.0014194041834068843,
+        "effort": 0.020611680752035056,
+        "cap_share": 0.15289714368474153,
+        "max_band_share": 0.20399061135119864,
+        "members": 3,
+        "seconds": 98.3,
+        "G": {
+          "sst@ocean": 1.2241095040462604,
+          "land_temperature@land": 1.4247883354793587,
+          "precipitation@land": 0.9190049984072656,
+          "precipitation@global": 1.1789405516327198
+        }
+      },
+      "1504": {
+        "J_zonal": 0.0041997418738901615,
+        "J_map": 0.04381810501217842,
+        "bias_K": 5.013764513578725e-05,
+        "effort": 0.027266169820687258,
+        "cap_share": 0.20226004552009896,
+        "max_band_share": 0.26984906199181247,
+        "members": 3,
+        "seconds": 120.2,
+        "G": {
+          "sst@ocean": 1.4409508543710599,
+          "land_temperature@land": 0.8396691174503003,
+          "precipitation@land": 0.9056429827502515,
+          "precipitation@global": 1.3775418947935376
+        }
+      }
+    }
+  },
+  "registered": {
+    "window": [
+      98,
+      182
+    ],
+    "primary": "plan120",
+    "alpha": 0.05,
+    "rel_min": 0.05,
+    "equivalence_bound": 0.1,
+    "n_boot": 10000,
+    "seed": 2026
+  },
+  "created_utc": "2026-10-07T20:04:48.000132+00:00"
+}

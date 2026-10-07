@@ -2,13 +2,19 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run; updated 2026-10-05 with the step-23 pilot, which fixes the planner's settings (Part 22).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run; updated 2026-10-05 with the step-23 pilot, which fixes the planner's settings (Part 22); updated 2026-10-07 with Experiment 3a, the pre-registered test of the planner against its opponents (Part 23).*
 
 ---
 
 ## The one-paragraph version
 
-> **Latest status (2026-10-05):** Experiment 1 passed (outcome A′; Part 20). After the advisor meeting, the
+> **Latest status (2026-10-07):** Experiment 3a (**Part 23**, registered at https://osf.io/7bwe4/)
+> finished. Every sensible controller removes about 80% of the warming's latitude pattern, but the
+> 120-day planner does **not** beat a 14-day planner, the classical feedback controller or the best fixed
+> pattern. It overshoots, and the data lean against it, though not past the pre-registered bar. Next is
+> Experiment 3b (uncertain brightening strength).
+>
+> *Earlier (2026-10-05):* Experiment 1 passed (outcome A′; Part 20). After the advisor meeting, the
 > current plan is in **Part 21**: write up the controller/methods paper first (draft skeleton done), then
 > the gradient paper, with real MCB on the right clouds as a later third paper. The planner pilot
 > (**Part 22**) fixed the planner's settings: choosing *where* to brighten beats brightening everywhere
@@ -1988,3 +1994,137 @@ Also measured (zonal score over the next 60 days):
 > *Closed loop* = the planner steers the whole run, re-planning as it goes, instead of planning once.
 > *Headroom* = how much of the allowed brightening is left unused, in case spraying works less well than
 > expected.
+
+---
+
+# Part 23 — Experiment 3a: the planner meets its opponents
+
+*Added 2026-10-07 (Part 18 step 28). Frozen as Amendment 9 revision 1 at commit `5e11b082` and
+registered on OSF before any evaluation data existed (https://osf.io/7bwe4/, 2026-10-06 11:52 PDT).
+Code: `run_campaign_exp3a_train.sh`, `run_campaign_exp3a_eval.sh`, `analyze_experiment3a.py`. Results:
+`mcb_experiments_gpu/exp3a/` (`train/`, `eval/` run summaries and logs, `exp3a_analysis.json`). The
+evaluation used the 24 held-out states (macro states 1, 3, …, 15 × branches 2, 3, 4), each with 3
+matched weather members.*
+
+**In one sentence:** every sensible controller removes about four-fifths of the warming's latitude
+pattern. The long-range planner, our main candidate, does **not** beat the simple opponents. It points
+the wrong way against the 14-day planner and the classical feedback controller, though no comparison
+against them clears the pre-registered bar. It clearly beats holding its own average pattern fixed.
+
+*Analogy:* we built a chess engine that looks 120 moves ahead and entered it in a tournament. It beat
+almost everyone in the hall. But a player who looks only a few moves ahead, and an old rule-of-thumb
+player, each did at least as well, because the far-sighted engine kept over-correcting for threats that
+had not arrived yet.
+
+## 23.1 What was run
+
+- **Training side (2026-10-05 20:55 to 2026-10-06 00:15, training states only).**
+  - References for the 16 training states.
+  - One-band response runs (+0.1 in each band) for the fixed designs and the feedback controllers.
+  - 8 runs of the 120-day planner.
+  - The ladder of four fixed designs, frozen into `train/ladder.json` (Part 18 step 19).
+  - *Already visible before the freeze:* the planner overshot slightly on every training state (−0.034 K),
+    and the linear model rated the best fixed pattern highly. Both were written into the registration.
+- **Evaluation (2026-10-06 12:22 to 2026-10-07 05:27, GX10).**
+  - References for the 24 states took 80 minutes.
+  - Then 240 episodes (10 arms × 24 states), each 182 days of 13 fourteen-day segments with 3 members.
+  - None failed. A 120-day planner episode took about 80 minutes; the whole campaign took about 17 hours.
+- **Analysis (2026-10-07).** The registered script stopped on a file-format mismatch: fixed-pattern arms
+  store `amplitudes`, not `schedules`. It was fixed and logged as **Deviation D1** before any output
+  existed. The fix touches only two descriptive cap-use numbers, never the score or the tests.
+  - A first attempt was run by hand without the campaign's memory settings. JAX grabbed 75% of the
+    GX10's shared memory, and the machine ran out and rebooted. Rerun on the CPU, the analysis takes
+    under a minute.
+
+## 23.2 Every arm (24 states; scored on days 98–182)
+
+| Arm | Zonal score `J_zonal` | vs no brightening | Ocean bias | Mean cap use |
+|---|---|---|---|---|
+| `plan60` (60-day look-ahead) | 0.00329 | −84% | −0.013 K | 28% |
+| `plan14` (14-day look-ahead) | 0.00335 | −84% | −0.008 K | 27% |
+| `pi` (GLENS-style feedback) | 0.00366 | −82% | −0.001 K | 29% |
+| `linear_response` (best fixed pattern) | 0.00407 | −81% | +0.011 K | 12% |
+| `adaptive` (fixed pattern, scaled by feedback) | 0.00430 | −79% | +0.001 K | 26% |
+| `uniform_cancel` (one setting everywhere) | 0.00487 | −77% | +0.004 K | 12% |
+| **`plan120` (PRIMARY)** | **0.00492** | **−77%** | **−0.031 K** | 28% |
+| `planner_average` (plan120's mean pattern, fixed) | 0.01125 | −46% | −0.068 K | 19% |
+| `uncontrolled` | 0.02096 | — | +0.131 K | 0% |
+| `uniform_effort` (one setting at the planners' effort) | 0.02919 | +39% | −0.139 K | 26% |
+
+- Every arm except the last two removes 77–84% of the zonal error (all p < 0.01 against no brightening).
+- On single grid points the gains are small (G = 0.8–1.3). Three weather members leave grid-point
+  noise dominant, which is why the registration scores latitude averages (Part 22, rule R4).
+- **The longer the look-ahead, the more the planner overcools:** −0.008 K at 14 days, −0.013 K at 60 days,
+  −0.031 K at 120 days.
+
+## 23.3 The registered hypotheses (Holm family of four; macro states as the unit)
+
+| | `plan120` against | Change in score | 90% interval | p (raw / Holm) | Verdict |
+|---|---|---|---|---|---|
+| H1 | `plan14` | **+47%** (worse) | +8% to +99% | 0.037 / 0.11 | inconclusive |
+| H2 | `linear_response` | +21% (worse) | −7% to +64% | 0.21 / 0.21 | inconclusive |
+| H3 | `pi` | **+35%** (worse) | +1% to +86% | 0.050 / 0.11 | inconclusive |
+| H4 | `planner_average` | **−56%** (better) | −65% to −43% | 0.0013 / 0.0051 | **better** |
+
+- The Wilcoxon test agrees with the t test everywhere except H1, where it gives p = 0.055 against the
+  t test's 0.037. Neither survives Holm, so the disagreement does not change the verdict.
+- *Read honestly:* H1–H3 are "inconclusive" under the registered grid, but all three point estimates go
+  against the primary planner. For H1 and H3 the 90% intervals lie entirely on the "worse" side. With
+  only 8 independent macro states, the data cannot call these "worse" at the registered bar, and we
+  do not.
+
+**Secondary comparisons** (unadjusted, as registered):
+
+| Comparison | Change | p | Reading |
+|---|---|---|---|
+| `plan60` vs `plan120` | −33% | 0.011 | the 60-day planner is better |
+| `plan60` vs `plan14` | −2% | 0.91 | indistinguishable |
+| `linear_response` vs `uniform_cancel` | −16% | 0.11 | choosing *where* helps a fixed design somewhat, not significantly |
+| `linear_response` vs `pi` | +11% | 0.48 | indistinguishable |
+| `adaptive` vs `pi` | +17% | 0.15 | indistinguishable |
+| `planner_average` vs `uniform_effort` | −61% | < 0.001 | the planner's pattern beats spreading the same effort evenly |
+
+## 23.4 What it means (following the interpretation fixed in advance)
+
+- **H1 (look 120 days ahead vs 14):** not better. The registered "long planning beats two-week planning"
+  claim is **not supported**. The data lean the other way, and the cheaper planners (14 or 60 days) are
+  the ones to recommend.
+- **H2 and H4:** H4 is better, but H2 is not, so the registered claim "changing where and how much
+  over time beats the best fixed pattern" is **not established**. Changing the pattern over time clearly
+  beats holding the planner's own average. Part of that comes from timing: a fixed average applied
+  from day 0 overcools early (−0.068 K), because the warming starts small and grows. The best fixed
+  pattern, sized for the scored window, avoids this.
+- **H3 (planner vs classical feedback):** not better. By the registered reading, *in a perfect model,
+  feedback on three indices is enough*. The planner's case therefore moves to **Experiment 3b**
+  (uncertainty about how well brightening works) and to targets richer than three indices.
+- **Why the 120-day planner overshoots (post hoc; not a registered finding).** Two causes fit the data.
+  1. Experiment 1 showed that the snipped gradient undercounts the true response more the further it
+     looks: about 0.86 at 60 days and 0.7 at 120 days. A single Gauss–Newton step on an undercounted
+     sensitivity overshoots by roughly the inverse, about 1.4× at 120 days.
+  2. A long look-ahead also brightens early for warming that is still to come (Part 22.3 saw the same
+     mid-run overcooling).
+
+  Bias grows with look-ahead (−0.008, −0.013, −0.031 K), consistent with both. A damped step (scaling
+  by the measured undercount) is an obvious fix. It would be a new hypothesis for a new registration,
+  not a reanalysis of this one.
+
+## 23.5 What this changes
+
+- **The controller/methods paper (Part 21)** now has a clean, pre-registered result:
+  - gradient-based receding-horizon planning works, and removes about 80% of the warming pattern;
+  - in a perfect model, a short look-ahead and the field's standard feedback controller do as well or
+    better;
+  - the 120-day look-ahead adds overshoot, not skill.
+
+  That is a useful, honest finding for Dubey et al.'s line of work. It also directly answers Duncan's
+  question of whether gradients are needed for control.
+- **The gradient paper** is unaffected: Experiment 1 measured gradient accuracy, not control value.
+  Part 23 adds a cautionary example of what a 30% gradient undercount does inside a controller.
+- **Next experiment:** Experiment 3b (hidden efficacy, imperfect model), where planning with a model
+  might earn its keep. Freeze it in revision 2 before any of its data, as before. Optionally, register
+  a damped-step planner as a new arm there.
+
+> **New terms:** *Holm correction* = a way of raising the bar when testing several hypotheses at once,
+> so luck across four tries does not look like a discovery. *Inconclusive* = the data were not strong
+> enough to call it either way at the bar set in advance. *Overshoot* = correcting too far, past the
+> target.

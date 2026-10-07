@@ -1483,3 +1483,21 @@ The fix reads that constant pattern as the same setting in every segment, which 
 applied, and adds a unit test. It touches only two secondary descriptives (`cap_share` and
 `max_band_share`). The primary endpoint, every test, the verdicts and the gains are computed from the
 saved fields and are unchanged. No other line of the registered analysis changed.
+
+**Amendment 9, revision 1 — Experiment 3a RESULT (logged 2026-10-07; evaluation 2026-10-06 12:22 to
+2026-10-07 05:27 PDT; the registered `analyze_experiment3a.py` was applied with Deviation D1 only).**
+All 24 states and 10 arms are complete; no run failed and no state was dropped. Primary endpoint
+`J_zonal`, `plan120` vs comparator (Holm family of four):
+* H1 vs `plan14`: rel +47% (90% CI +8% to +99%), t p 0.037, Holm p 0.11 → **inconclusive**.
+* H2 vs `linear_response`: rel +21% (−7% to +64%), Holm p 0.21 → **inconclusive**.
+* H3 vs `pi`: rel +35% (+1% to +86%), t p 0.050, Holm p 0.11 → **inconclusive**.
+* H4 vs `planner_average`: rel −56% (−65% to −43%), Holm p 0.0051 → **better**.
+
+The Wilcoxon test disagrees with the t test only on H1 (0.055 vs 0.037), and neither survives Holm.
+Every planner and classical arm reduces `J_zonal` by 77-84% against `uncontrolled`. `plan120`
+overcools (ocean bias −0.031 K, against −0.008 K for `plan14`). Secondary: `plan60` vs `plan120` −33%
+(p 0.011), `plan60` vs `plan14` −2% (p 0.91). The full output is
+`mcb_experiments_gpu/exp3a/exp3a_analysis.json`, and the plain-language account is
+`MCB_PROJECT_REPORT.md` Part 23. By section 7: the H1 claim is not supported, H2+H4 does not establish
+"changing over time beats the best fixed pattern", and the H3 reading is "in a perfect model, feedback
+on three indices is enough", which moves the planner's case to Experiment 3b.
