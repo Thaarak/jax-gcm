@@ -2270,8 +2270,8 @@ a thermostat that already knows the true strengths (the oracle).
 
 # Part 25 — Experiment 2 and the snip test: the rules, frozen before any data
 
-*Added 2026-10-07. Frozen as Amendment 9 revision 1.1 (PREREGISTRATION.md) and posted to OSF before
-any of its data existed. Code: `jcm/mcb/design.py`, `run_experiment2.py`, `analyze_experiment2.py`,
+*Added 2026-10-07. Frozen as Amendment 9 revision 1.1 (PREREGISTRATION.md) at commit `66e2c04e` and
+registered on OSF before any of its data existed (https://osf.io/pvwx9/, 2026-10-07 15:38 PDT). Code: `jcm/mcb/design.py`, `run_experiment2.py`, `analyze_experiment2.py`,
 `run_snip_test.py`, `analyze_snip_test.py`, `run_campaign_exp2.sh`. Nothing has run on the GPU yet:
 the GX10 is busy with Experiment 3b, and this campaign waits until it cannot get in 3b's way.*
 
