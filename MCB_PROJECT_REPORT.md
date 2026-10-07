@@ -2241,3 +2241,27 @@ a thermostat that already knows the true strengths (the oracle).
   - fixed designs fail under realistic uncertainty, which replicates Tier 2 over a far wider range;
   - the learning curves measure how fast one Earth reveals the spraying's strength (Duncan's
     detection question).
+
+## 24.5 Progress (2026-10-07)
+
+- **Fresh states built (13:49–14:40).** The 32 new macro states (16–47) and 80 weather branches were
+  generated. The slow cooling trend seen across states 0–15 (−0.15 K per decade) did *not*
+  continue:
+  - the new states span 289.08–289.93 K, the same range as before;
+  - their trend is +0.08 ± 0.04 K per decade;
+  - training and evaluation states differ by only −0.009 K on average.
+
+  The earlier "drift" was part of a slow wander, not a leak in the base climate.
+- **The learner works on the real model** (smoke test on an old training state, four fortnights,
+  strengths 0.5 / 2.0 / 1.0 / 1.5 / 0.8):
+  - when told the true strength, the planner's two-week forecast of the ocean latitude profile misses
+    by only about 0.0007 K;
+  - with the wrong strength it misses by about 0.004 K, the signal the learner uses.
+  - So learning the strength is close to noise-free here, because the planners know the exact
+    current state. This idealization is written into revision 2 (§11). The learning curves are
+    therefore a best case, and realistic sensing is a separate, later experiment.
+- **Hidden strengths drawn:** for the 80 states (`exp3b/hidden_strength.json`). Evaluation strengths
+  range from 0.19 to 4.73 per band (median 1.0).
+- **Code:** 389 fast tests pass; committed (81a920ed).
+- **Running on the GX10:** the training references, then the response runs and the fixed design,
+  then the pilot (chained automatically). The freeze and the evaluation follow, as approved.
