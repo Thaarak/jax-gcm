@@ -1,0 +1,79 @@
+{
+  "stage": "ladder",
+  "config": {
+    "stage": "ladder",
+    "responses": [
+      "mcb_experiments_gpu/exp3b/train/responses/ic1600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic1800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4600_responses.npz"
+    ],
+    "references_dir": "mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_train_b0",
+    "window": [
+      98,
+      182
+    ],
+    "planner_summaries": [],
+    "alpha": 1.0,
+    "beta": 0.5,
+    "mu": 0.0006325,
+    "cap": 0.15,
+    "representation": "zonal",
+    "output": "mcb_experiments_gpu/exp3b/train/ladder.json"
+  },
+  "training_states": [
+    "mcb_experiments_gpu/exp3b/train/responses/ic1600_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic1800_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic2000_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic2200_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic2400_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic2600_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic2800_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic3000_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic3200_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic3400_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic3600_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic3800_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic4000_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic4200_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic4400_responses.npz",
+    "mcb_experiments_gpu/exp3b/train/responses/ic4600_responses.npz"
+  ],
+  "pooled": {
+    "uniform_cancel": {
+      "amplitudes": [
+        0.01860092406051287,
+        0.01860092406051287,
+        0.01860092406051287,
+        0.01860092406051287,
+        0.01860092406051287
+      ],
+      "uniform": 0.01860092406051287,
+      "clipped": false,
+      "predicted_objective": 0.003432854328092782
+    },
+    "linear_response": {
+      "amplitudes": [
+        0.024509944082605872,
+        0.030332301362466067,
+        0.0125494510971869,
+        0.013163524480797292,
+        0.01648884169213274
+      ],
+      "predicted_objective": 0.0027568903710654853
+    }
+  },
+  "per_planner_run": {}
+}

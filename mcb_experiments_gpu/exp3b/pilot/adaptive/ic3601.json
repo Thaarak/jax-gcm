@@ -1,0 +1,775 @@
+{
+  "stage": "feedback-adaptive",
+  "config": {
+    "stage": "feedback",
+    "ic_dir": "mcb_experiments_gpu/ics_macro3b/exp3b_train",
+    "ic_position": 21,
+    "references": "mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_train_b1/ic3601_references.npz",
+    "segments": 13,
+    "segment_days": 14,
+    "efficacy": [
+      0.729743,
+      0.829887,
+      1.16678,
+      1.04911,
+      1.348968
+    ],
+    "members": 3,
+    "score_start_day": 98,
+    "score_end_day": null,
+    "alpha": 1.0,
+    "beta": 0.5,
+    "mu": 0.0006325,
+    "lam": 0.006325,
+    "output": "mcb_experiments_gpu/exp3b/pilot/adaptive/ic3601.json",
+    "save_fields": true,
+    "warming_step_wm2": 0.0,
+    "warming_ramp_wm2_per_day": 0.03296703296703297,
+    "controller": "adaptive",
+    "sensitivity_from": [
+      "mcb_experiments_gpu/exp3b/train/responses/ic1600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic1800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4600_responses.npz"
+    ],
+    "sensitivity_references_dir": "mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_train_b0",
+    "fit_days": 60,
+    "closed_loop_days": 42.0,
+    "damping": 1.0,
+    "indices": [
+      "T0",
+      "T1",
+      "T2"
+    ],
+    "anti_windup": true,
+    "feedforward": false,
+    "pattern": [
+      0.024509944082605872,
+      0.030332301362466067,
+      0.0125494510971869,
+      0.013163524480797292,
+      0.01648884169213274
+    ],
+    "relaxation": 0.5
+  },
+  "ic": {
+    "index": 3601,
+    "split": "train",
+    "seed": 15601,
+    "macro_index": 36,
+    "branch": 1,
+    "spinup_days": 30,
+    "carry_file": "ic_m36_b1_train_seed15601_carry.pkl",
+    "baseline_file": "ic_m36_b1_train_seed15601_baseline60d.pkl"
+  },
+  "members": 3,
+  "member_seeds": [
+    null,
+    442298,
+    442299
+  ],
+  "reference_members": 5,
+  "schedules": [
+    [
+      [
+        0.0011103638680651784,
+        0.0013741316506639123,
+        0.0005685226060450077,
+        0.0005963416770100594,
+        0.000746987177990377
+      ],
+      [
+        0.0054364618845283985,
+        0.0067278980277478695,
+        0.0027835483197122812,
+        0.002919753547757864,
+        0.0036573302932083607
+      ],
+      [
+        0.01608692668378353,
+        0.019908389076590538,
+        0.008236742578446865,
+        0.008639785461127758,
+        0.01082233339548111
+      ],
+      [
+        0.02244442328810692,
+        0.027776114642620087,
+        0.011491874232888222,
+        0.012054197490215302,
+        0.015099281445145607
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.025955386459827423,
+        0.03212111070752144,
+        0.013289539143443108,
+        0.013939826749265194,
+        0.017461249604821205
+      ],
+      [
+        0.03354706987738609,
+        0.04151620343327522,
+        0.017176592722535133,
+        0.018017083406448364,
+        0.022568486630916595
+      ],
+      [
+        0.033030975610017776,
+        0.040877509862184525,
+        0.016912344843149185,
+        0.017739903181791306,
+        0.022221287712454796
+      ],
+      [
+        0.03909608721733093,
+        0.04838339239358902,
+        0.020017769187688828,
+        0.020997285842895508,
+        0.026301536709070206
+      ],
+      [
+        0.05273817479610443,
+        0.06526616960763931,
+        0.027002718299627304,
+        0.028324022889137268,
+        0.03547912463545799
+      ],
+      [
+        0.03428000584244728,
+        0.042423248291015625,
+        0.017551865428686142,
+        0.01841071806848049,
+        0.023061562329530716
+      ],
+      [
+        0.0412248931825161,
+        0.05101790279150009,
+        0.0211077518761158,
+        0.02214060164988041,
+        0.02773367241024971
+      ],
+      [
+        0.04976077377796173,
+        0.061581484973430634,
+        0.025478245690464973,
+        0.026724955067038536,
+        0.03347610682249069
+      ]
+    ],
+    [
+      [
+        0.0011103638680651784,
+        0.0013741316506639123,
+        0.0005685226060450077,
+        0.0005963416770100594,
+        0.000746987177990377
+      ],
+      [
+        0.005951993633061647,
+        0.007365894503891468,
+        0.003047507954761386,
+        0.0031966296955943108,
+        0.004004149232059717
+      ],
+      [
+        0.012807207182049751,
+        0.01584956981241703,
+        0.006557478103786707,
+        0.006878350395709276,
+        0.008615932427346706
+      ],
+      [
+        0.005029801279306412,
+        0.00622463459149003,
+        0.0025753320660442114,
+        0.002701349090784788,
+        0.0033837531227618456
+      ],
+      [
+        0.014303356409072876,
+        0.017701130360364914,
+        0.007323528174310923,
+        0.00768188526853919,
+        0.009622452780604362
+      ],
+      [
+        0.0230457354336977,
+        0.028520267456769943,
+        0.011799754574894905,
+        0.01237714383751154,
+        0.015503807924687862
+      ],
+      [
+        0.10396096110343933,
+        0.12865696847438812,
+        0.05322953686118126,
+        0.05583418160676956,
+        0.0699387863278389
+      ],
+      [
+        0.08987756073474884,
+        0.11122804880142212,
+        0.046018630266189575,
+        0.04827042669057846,
+        0.06046431139111519
+      ],
+      [
+        0.01141118723899126,
+        0.01412192452698946,
+        0.005842695478349924,
+        0.006128591950982809,
+        0.007676772307604551
+      ],
+      [
+        0.014134054072201252,
+        0.01749161072075367,
+        0.00723684299737215,
+        0.007590958382934332,
+        0.009508556686341763
+      ],
+      [
+        0.03622850775718689,
+        0.04483461752533913,
+        0.01854952797293663,
+        0.019457198679447174,
+        0.024372398853302002
+      ],
+      [
+        0.08851142227649689,
+        0.10953738540410995,
+        0.045319147408008575,
+        0.04753671586513519,
+        0.05954525247216225
+      ],
+      [
+        0.06343722343444824,
+        0.07850678265094757,
+        0.032480787485837936,
+        0.034070149064064026,
+        0.042676813900470734
+      ]
+    ],
+    [
+      [
+        0.0011103638680651784,
+        0.0013741316506639123,
+        0.0005685226060450077,
+        0.0005963416770100594,
+        0.000746987177990377
+      ],
+      [
+        0.005671381950378418,
+        0.007018623407930136,
+        0.002903830725699663,
+        0.0030459219124168158,
+        0.003815370611846447
+      ],
+      [
+        0.014195338822901249,
+        0.017567453905940056,
+        0.00726822204887867,
+        0.007623872719705105,
+        0.009549785405397415
+      ],
+      [
+        0.013110699132084846,
+        0.01622515544295311,
+        0.006712870206683874,
+        0.0070413462817668915,
+        0.008820103481411934
+      ],
+      [
+        0.0023982480634003878,
+        0.0029679536819458008,
+        0.0012279381044209003,
+        0.0012880240101367235,
+        0.0016133994795382023
+      ],
+      [
+        0.04839948192238808,
+        0.059896815568208694,
+        0.02478124387562275,
+        0.025993848219513893,
+        0.0325603112578392
+      ],
+      [
+        0.06818357855081558,
+        0.08438064157962799,
+        0.03491099178791046,
+        0.036619268357753754,
+        0.04586988314986229
+      ],
+      [
+        0.014357130043208599,
+        0.017767678946256638,
+        0.007351061329245567,
+        0.007710765581578016,
+        0.009658629074692726
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.037149205803871155,
+        0.04597402736544609,
+        0.019020937383174896,
+        0.019951675087213516,
+        0.02499178983271122
+      ],
+      [
+        0.06601065397262573,
+        0.08169154077768326,
+        0.033798426389694214,
+        0.035452257841825485,
+        0.04440806806087494
+      ],
+      [
+        0.06631764024496078,
+        0.082071453332901,
+        0.03395560756325722,
+        0.03561713173985481,
+        0.04461459070444107
+      ],
+      [
+        0.04047255590558052,
+        0.050086844712495804,
+        0.020722543820738792,
+        0.021736545488238335,
+        0.02722754515707493
+      ]
+    ]
+  ],
+  "true_efficacy": [
+    0.7297430038452148,
+    0.8298869729042053,
+    1.1667799949645996,
+    1.0491100549697876,
+    1.3489680290222168
+  ],
+  "score_window_days": [
+    98,
+    182
+  ],
+  "gains": {
+    "sst@ocean": 1.017802318069593,
+    "land_temperature@land": 0.772036746234451,
+    "precipitation@land": 0.9639589900886596,
+    "precipitation@global": 1.07977713367768,
+    "evaporation@land": 0.8520583393797706,
+    "evaporation@global": 0.7547060906458476
+  },
+  "effort": 0.03130689112372419,
+  "objective": {
+    "controlled": {
+      "bias_sq": 3.5474925227409193e-06,
+      "variance": 0.04584738612174988,
+      "amplitude": 4.1770686038944405e-06,
+      "movement": 1.729428731778171e-05,
+      "total": 0.04587240497019429,
+      "bias_K": 0.0018834788352251053,
+      "zonal_pattern": 0.004380053374916315
+    },
+    "uncontrolled": {
+      "bias_sq": 0.01793577147367409,
+      "variance": 0.03769749402999878,
+      "amplitude": 0.0,
+      "movement": 0.0,
+      "total": 0.05563326550367287,
+      "bias_K": 0.13392449915409088,
+      "zonal_pattern": 0.020978277549147606
+    }
+  },
+  "sensitivity": {
+    "source": [
+      "mcb_experiments_gpu/exp3b/train/responses/ic1600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic1800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic2800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3600_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic3800_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4000_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4200_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4400_responses.npz",
+      "mcb_experiments_gpu/exp3b/train/responses/ic4600_responses.npz"
+    ],
+    "rates": [
+      [
+        -0.0027835656655479167,
+        -0.008215557013548352,
+        -0.013773293031185014,
+        -0.013817422768781703,
+        -0.012421906304814082
+      ],
+      [
+        -0.001713265785615593,
+        -0.002842712539714145,
+        -0.000674438205127583,
+        0.003911274616818387,
+        0.0076997000037288335
+      ],
+      [
+        -0.000361518725165344,
+        0.002585677225372362,
+        0.0060532106372531945,
+        0.003559442599151471,
+        -0.0027408054641810974
+      ]
+    ]
+  },
+  "controller_logs": [
+    [
+      {
+        "segment": 0,
+        "anomaly": null,
+        "realized": 0.0,
+        "expected": 0.0,
+        "eta_hat": 1.0,
+        "gain": 0.0013741316968682276
+      },
+      {
+        "segment": 1,
+        "anomaly": 0.00016698628791878098,
+        "realized": 0.00038922484035396564,
+        "expected": 0.0002781055641363733,
+        "eta_hat": 1.0,
+        "gain": 0.006727897799588937
+      },
+      {
+        "segment": 2,
+        "anomaly": 0.0026653933134811294,
+        "realized": 0.00044710152678751214,
+        "expected": 0.0019178461282300847,
+        "eta_hat": 1.0,
+        "gain": 0.01990838879246322
+      },
+      {
+        "segment": 3,
+        "anomaly": -9.922689695537331e-05,
+        "realized": 0.008604702608390155,
+        "expected": 0.007308668220511056,
+        "eta_hat": 1.0,
+        "gain": 0.027776113806513184
+      },
+      {
+        "segment": 4,
+        "anomaly": -0.007871102588581067,
+        "realized": 0.027718820429472938,
+        "expected": 0.016959362929085547,
+        "eta_hat": 1.0,
+        "gain": 0.0
+      },
+      {
+        "segment": 5,
+        "anomaly": 0.00183385122762411,
+        "realized": 0.02317699929197395,
+        "expected": 0.022580870545336407,
+        "eta_hat": 1.0263997238476998,
+        "gain": 0.032121110863210005
+      },
+      {
+        "segment": 6,
+        "anomaly": -0.0031537392910083745,
+        "realized": 0.03967573307843643,
+        "expected": 0.029081746464041484,
+        "eta_hat": 1.364283026381996,
+        "gain": 0.04151620522455029
+      },
+      {
+        "segment": 7,
+        "anomaly": 0.001995167996710042,
+        "realized": 0.060606837163374117,
+        "expected": 0.043984937605580844,
+        "eta_hat": 1.3778998098586428,
+        "gain": 0.040877510620433925
+      },
+      {
+        "segment": 8,
+        "anomaly": 0.008743760605657494,
+        "realized": 0.07466195045123689,
+        "expected": 0.06066030495107242,
+        "eta_hat": 1.23082055903705,
+        "gain": 0.04838339380512134
+      },
+      {
+        "segment": 9,
+        "anomaly": 0.009846308296071669,
+        "realized": 0.08892037853857845,
+        "expected": 0.07872549785592137,
+        "eta_hat": 1.1294990944524115,
+        "gain": 0.06526616908700639
+      },
+      {
+        "segment": 10,
+        "anomaly": -0.004858054764553653,
+        "realized": 0.12361750616826586,
+        "expected": 0.10172662349329784,
+        "eta_hat": 1.2151932495470106,
+        "gain": 0.0424232486317363
+      },
+      {
+        "segment": 11,
+        "anomaly": 0.0011755404992693562,
+        "realized": 0.14330899309066927,
+        "expected": 0.12352149681908246,
+        "eta_hat": 1.1601947578450158,
+        "gain": 0.05101790200328551
+      },
+      {
+        "segment": 12,
+        "anomaly": 0.004832082000239381,
+        "realized": 0.16243569719064416,
+        "expected": 0.14243271469589164,
+        "eta_hat": 1.1404381187107255,
+        "gain": 0.06158148455804627
+      }
+    ],
+    [
+      {
+        "segment": 0,
+        "anomaly": null,
+        "realized": 0.0,
+        "expected": 0.0,
+        "eta_hat": 1.0,
+        "gain": 0.0013741316968682276
+      },
+      {
+        "segment": 1,
+        "anomaly": 0.00042522997309497944,
+        "realized": 0.0001309811551777672,
+        "expected": 0.0002781055641363733,
+        "eta_hat": 1.0,
+        "gain": 0.007365894443810451
+      },
+      {
+        "segment": 2,
+        "anomaly": 0.0010224939233253669,
+        "realized": 0.0020900009169432746,
+        "expected": 0.002046967970818184,
+        "eta_hat": 1.0,
+        "gain": 0.015849570095704812
+      },
+      {
+        "segment": 3,
+        "anomaly": -0.008822679332284852,
+        "realized": 0.017328155043719633,
+        "expected": 0.006745462210609375,
+        "eta_hat": 1.0,
+        "gain": 0.006224634722062944
+      },
+      {
+        "segment": 4,
+        "anomaly": 0.0020018032352810107,
+        "realized": 0.01784591460561086,
+        "expected": 0.011212981006441247,
+        "eta_hat": 1.0,
+        "gain": 0.017701130101466456
+      },
+      {
+        "segment": 5,
+        "anomaly": 3.3085294435092815e-05,
+        "realized": 0.024977765225162967,
+        "expected": 0.016055230362020965,
+        "eta_hat": 1.0,
+        "gain": 0.028520267892808464
+      },
+      {
+        "segment": 6,
+        "anomaly": 0.01599323022027802,
+        "realized": 0.020528763567150037,
+        "expected": 0.025409812600147106,
+        "eta_hat": 0.8079069251786292,
+        "gain": 0.12865697239278384
+      },
+      {
+        "segment": 7,
+        "anomaly": 0.015923698384116097,
+        "realized": 0.046678306775968056,
+        "expected": 0.057220348066759456,
+        "eta_hat": 0.8157641180635268,
+        "gain": 0.1112280493124042
+      },
+      {
+        "segment": 8,
+        "anomaly": -0.010296955847078923,
+        "realized": 0.0937026669039733,
+        "expected": 0.10576981347916013,
+        "eta_hat": 0.8859112427425768,
+        "gain": 0.014121924229185914
+      },
+      {
+        "segment": 9,
+        "anomaly": -0.013909435285128337,
+        "realized": 0.11267612211977845,
+        "expected": 0.1311389430798481,
+        "eta_hat": 0.8592117602409837,
+        "gain": 0.017491610426030903
+      },
+      {
+        "segment": 10,
+        "anomaly": -0.008882852485007454,
+        "realized": 0.12764230388871967,
+        "expected": 0.13753709247824378,
+        "eta_hat": 0.928057308677735,
+        "gain": 0.044834618093703274
+      },
+      {
+        "segment": 11,
+        "anomaly": 0.015348906669744942,
+        "realized": 0.12913562692019367,
+        "expected": 0.1501510733524768,
+        "eta_hat": 0.8600379873212777,
+        "gain": 0.1095373848823021
+      },
+      {
+        "segment": 12,
+        "anomaly": 0.004856835695622143,
+        "realized": 0.1624109434952614,
+        "expected": 0.18139386694522286,
+        "eta_hat": 0.8953496952810763,
+        "gain": 0.07850678601936373
+      }
+    ],
+    [
+      {
+        "segment": 0,
+        "anomaly": null,
+        "realized": 0.0,
+        "expected": 0.0,
+        "eta_hat": 1.0,
+        "gain": 0.0013741316968682276
+      },
+      {
+        "segment": 1,
+        "anomaly": 0.00028466407609874234,
+        "realized": 0.0002715470521740043,
+        "expected": 0.0002781055641363733,
+        "eta_hat": 1.0,
+        "gain": 0.007018623336234683
+      },
+      {
+        "segment": 2,
+        "anomaly": 0.0017178463334924757,
+        "realized": 0.0013946485067761658,
+        "expected": 0.0019766850223200652,
+        "eta_hat": 1.0,
+        "gain": 0.017567453357536626
+      },
+      {
+        "segment": 3,
+        "anomaly": -0.0047747402325323636,
+        "realized": 0.013280215943967145,
+        "expected": 0.00695257251869669,
+        "eta_hat": 1.0,
+        "gain": 0.016225156360735595
+      },
+      {
+        "segment": 4,
+        "anomaly": -0.003961785747061166,
+        "realized": 0.023809503587953036,
+        "expected": 0.013791737069488361,
+        "eta_hat": 1.0,
+        "gain": 0.002967953738781214
+      },
+      {
+        "segment": 5,
+        "anomaly": 0.012733458563679703,
+        "realized": 0.012277391955918357,
+        "expected": 0.017676161483773236,
+        "eta_hat": 1.0,
+        "gain": 0.059896816444654645
+      },
+      {
+        "segment": 6,
+        "anomaly": 0.007042129079746891,
+        "realized": 0.029479864707681165,
+        "expected": 0.030399135865350597,
+        "eta_hat": 0.9697599575941489,
+        "gain": 0.08438064302719571
+      },
+      {
+        "segment": 7,
+        "anomaly": -0.011822779896126897,
+        "realized": 0.07442478505621106,
+        "expected": 0.059598931161557504,
+        "eta_hat": 1.248760398982063,
+        "gain": 0.017767678370468346
+      },
+      {
+        "segment": 8,
+        "anomaly": -0.01977551343830109,
+        "realized": 0.10318122449519548,
+        "expected": 0.08027236196344163,
+        "eta_hat": 1.285389167222801,
+        "gain": 0.0
+      },
+      {
+        "segment": 9,
+        "anomaly": 0.0015729690780832994,
+        "realized": 0.09719371775656682,
+        "expected": 0.08386829838487372,
+        "eta_hat": 1.1588850570276557,
+        "gain": 0.04597402820373066
+      },
+      {
+        "segment": 10,
+        "anomaly": 0.012120490843229728,
+        "realized": 0.10663896056048247,
+        "expected": 0.09317281634218429,
+        "eta_hat": 1.1445286806491148,
+        "gain": 0.08169154112020478
+      },
+      {
+        "segment": 11,
+        "anomaly": 0.013718443810175819,
+        "realized": 0.1307660897797628,
+        "expected": 0.11901059103186097,
+        "eta_hat": 1.0987769125922138,
+        "gain": 0.08207145328578909
+      },
+      {
+        "segment": 12,
+        "anomaly": -0.0011537018621323454,
+        "realized": 0.16842148105301588,
+        "expected": 0.15215399355123976,
+        "eta_hat": 1.1069146272279593,
+        "gain": 0.05008684656993222
+      }
+    ]
+  ],
+  "references": "mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_train_b1/ic3601_references.npz",
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_controllers.py feedback --controller adaptive --ic-dir mcb_experiments_gpu/ics_macro3b/exp3b_train --ic-position 21 --references mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_train_b1/ic3601_references.npz --segments 13 --segment-days 14 --members 3 --score-start-day 98 --warming-step-wm2 0.0 --warming-ramp-wm2-per-day 0.03296703296703297 --mu 0.0006325 --lam 0.006325 --efficacy 0.729743 0.829887 1.16678 1.04911 1.348968 --save-fields --output mcb_experiments_gpu/exp3b/pilot/adaptive/ic3601.json --sensitivity-from mcb_experiments_gpu/exp3b/train/responses/ic1600_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic1800_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic2000_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic2200_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic2400_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic2600_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic2800_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic3000_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic3200_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic3400_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic3600_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic3800_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic4000_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic4200_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic4400_responses.npz mcb_experiments_gpu/exp3b/train/responses/ic4600_responses.npz --sensitivity-references-dir mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_train_b0 --pattern 0.024509944082605872 0.030332301362466067 0.0125494510971869 0.013163524480797292 0.01648884169213274",
+  "seconds": 95.3
+}

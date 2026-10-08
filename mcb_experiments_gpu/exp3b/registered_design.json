@@ -1,0 +1,50 @@
+{
+  "experiment": "3b",
+  "revision": "Amendment 9 revision 2",
+  "members": 6,
+  "reference_members": 10,
+  "learner_mode": "bands",
+  "learner_noise_k": 0.00067286,
+  "learner_prior_sd": 1.0,
+  "learner_bounds": [
+    0.2,
+    5.0
+  ],
+  "pi_closed_loop_days": 42.0,
+  "fixed_amplitudes": [
+    0.02451,
+    0.030332,
+    0.012549,
+    0.013164,
+    0.016489
+  ],
+  "pilot": {
+    "noise_k_measured": 0.0006728563016474844,
+    "noise_n": 576,
+    "switches": {
+      "pi_slow": {
+        "default": "pi",
+        "mean_diff": 0.00012395484372973442,
+        "se": 0.0007486495168566154,
+        "switch": false
+      },
+      "plan_learn_cautious": {
+        "default": "plan_learn",
+        "mean_diff": 0.0003948715311707929,
+        "se": 0.0005245860653330812,
+        "switch": false
+      },
+      "plan_learn_global": {
+        "default": "plan_learn",
+        "mean_diff": 0.000422812721808441,
+        "se": 0.00045840871806660666,
+        "switch": false
+      }
+    },
+    "chosen": {
+      "learner": "plan_learn",
+      "pi": "pi",
+      "members": 6
+    }
+  }
+}
