@@ -2345,3 +2345,170 @@ a good map once, and whether it does so more cheaply than surveying every road b
 > several weather samples. *Equal cost* = giving two methods the same amount of model time.
 > *Gauss–Newton step* = treat the response as locally linear, solve for the best setting, then re-run
 > to check.
+
+---
+
+# Part 26 — A bug in the land model, the data archive, and the methods write-up
+
+*Added 2026-10-07. Bug report draft: `upstream_reports/jax-esm-monthly-climatology/` (`ISSUE.md`,
+`repro.py`; not posted). Archive builder: `make_zenodo_archive.py`, with `jcm/mcb/state_netcdf.py`.
+Write-up: `~/workspace/mcb-methods-writeup/` (outside this repository on purpose).*
+
+**In one sentence:** while drafting the jax-esm bug report, we found that the same bug makes the
+model's land surface run a full year every 12 days in every experiment so far. The data archive for
+Zenodo is built and verified, and the methods write-up now includes Experiment 3a.
+
+*Analogy:* imagine a weather station whose calendar page is flipped every day instead of every month.
+The thermometer would show January, then July, then January again within two weeks.
+
+## 26.1 The land model's 12-day year
+
+- **What is wrong.** jax-esm (0.1.0) picks its climatology entry with "day number mod the number of
+  entries". That is correct for a daily climatology. The land climatology in `forcing.nc` has 12
+  monthly entries, so the slab land model moves on one month per model day and repeats the year every
+  12 days. The ocean's Q-flux and relaxation modes have the same bug, which we already worked around
+  (Part 17, Step 0). The land model was never fixed.
+- **What it does** (normal-climate references, 240 days):
+
+| Variable | Strength of the 12-day cycle (spectral peak ÷ median) |
+|---|---|
+| Land temperature | 7,600 |
+| Evaporation over land | 211 |
+| Rainfall over land | 15 |
+| Ocean temperature (SST) | 7 |
+
+  - The 12-day swing in land temperature averages 20 K peak to peak and reaches 64 K.
+  - At 60°N 100°E in January it goes from −40 °C to +7 °C and back every 12 days.
+  - Its size matches each cell's true annual range (correlation 0.99): it is the whole year,
+    compressed into 12 days.
+- **What it means for our results.**
+  - *Still fair:* every controller arm, every truth run and every reference share the defect, and the
+    registered scores compare ocean temperature between them. Experiment 1's gradients, 3a's ranking
+    and the frozen 2 and 3b rules stay internally valid.
+  - *Not physical:* land temperature, and rainfall over land, in this model. Experiment 1's LAND
+    objective (truth unresolved) and the descriptive land and rain numbers of the pilot and 3a should
+    be read in that light.
+  - *An open question:* whether the land swing also shapes the SST weather noise that limited every
+    test's power. The 12-day peak in SST is real but small.
+- **Decisions this needs (for the user and the advisor):**
+  1. Whether to fix it before any new experiment. A fix is easy: either expand the monthly files to
+     365 daily entries (the existing indexing then works) or interpolate between months, as our
+     ocean subclass does.
+  2. Whether 3b, already running, continues in the buggy model, so that it stays comparable with 3a.
+  3. How to tell jax-esm's developers. The advisor is one of them, so the draft could go to him
+     before GitHub.
+
+## 26.2 The data archive (Part 18 step 33), version 1
+
+- **Built and verified on the GX10** in `~/zenodo_archive_v1/upload/` (7.1 GB in 10 files, not yet
+  uploaded). It holds:
+  - the settled base climate;
+  - every starting state of Experiments 1–3a (96 states);
+  - the reference ensembles 3a used;
+  - the results of Experiment 1, the pilot, 3a and the planning-cost test;
+  - the source code.
+- **States are converted from pickles to NetCDF.** Pickles are unsafe to open and tied to the code
+  that wrote them. Every one of the 97 conversions reads back identically, leaf by leaf, and the files
+  are about 3.5 times smaller.
+- **Checksums** cover every file and every upload file.
+- **The README** links the three OSF registrations and states the land-model bug.
+- **Still to do before publishing:** decide the author list and affiliations (Part 21.7), upload
+  through Zenodo's website or API with the user's account, and add 2, 3b and the snip test in
+  version 2.
+
+## 26.3 The methods write-up
+
+- **New section: Experiment 7 (= 3a).** It has its own figure (each arm's score and the four
+  registered tests) and table.
+- **Updated:** the abstract, the plain-language summary, the discussion of why classical feedback is
+  hard to beat and of where to intervene, the caveats (Q-flux climate, eight ocean states, the land
+  bug), the planned experiments and the conclusions.
+- **Compiled:** cleanly with Tectonic, and the upload folder and zip for Prism are refreshed.
+- **Backups** of the previous version are kept next to it (`*_before_exp3a.*`).
+- **Open notes for the advisor remain** (TODO markers in the PDF). The abstract is now about 25 words
+  over its limit.
+
+> **New terms:** *Climatology* = a model's typical value of a field for each time of year. *NetCDF* = a
+> standard, self-describing file format for gridded data. *Zenodo* = a free research-data archive
+> that gives each deposit a permanent DOI.
+
+---
+
+# Part 27 — Detection with one Earth: how soon could anyone tell it is working? (exploratory)
+
+*Added 2026-10-07. Code: `analyze_detection.py` (`reduce` on the GX10, `analyze` on the laptop).
+Results: `mcb_experiments_gpu/detection/` (`detection_analysis.json`, `fig_detection.png`, and the
+3.5 MB reduced inputs). Exploratory, not registered: Experiment 3a's skill scores were known when
+this was designed. Experiment 3b's learning curves answer a different question: how fast a planner
+that knows the exact current state learns the spraying's strength (Part 24).*
+
+**In one sentence:** with one Earth and no twin, whether anyone can tell that brightening is working
+depends mostly on how good the forecast of the world without brightening is. With a realistic
+forecast it takes four to five months for every strategy in 3a, and matching the latitude pattern
+instead of the ocean average cuts that by one to two months.
+
+*Analogy:* to tell that a new diet works, you compare your weight with what you would have weighed
+without it. If you can predict that well (a forecast), a small change shows quickly. If all you know
+is the average for people like you (climatology), even a large change hides in the spread.
+
+## 27.1 What was measured
+
+- **The signal.** Each 3a arm's ocean temperature minus the no-brightening arm's, in the same three
+  weather samples, averaged over the 24 evaluation states. These are 30-day means of the latitude
+  profile.
+- **The noise for one Earth.** What a single weather sample does that a forecast cannot predict, from
+  the references' 5 separate members:
+  - *perfect-start forecast:* the spread of members started 0.001 K apart (a best case);
+  - *saturated forecast:* that spread, held at its end-of-episode level (33 mK for a 30-day ocean
+    average), which is a forecast that knows the ocean but no longer the weather (realistic);
+  - *climatology:* no forecast at all, so the 8 independent ocean states' normal climates differ by
+    about 0.3 K as well.
+- **Two ways to look:**
+  - *index:* the ocean average;
+  - *fingerprint:* the best-weighted match to the expected latitude pattern. Its noise covariance
+    is shrunk (Ledoit–Wolf) so it is always at least as good as the index.
+- **The rule:** "detected" means a one-sided 5% test succeeds with 95% probability.
+
+## 27.2 What it found
+
+| Strategy (3a arm) | Perfect-start forecast | Realistic forecast: index | Realistic forecast: fingerprint | Climatology: fingerprint |
+|---|---|---|---|---|
+| Uniform brightening (fixed) | day 30 | day 140 | day 80 | not within 6 months |
+| Best fixed pattern | day 30 | day 145 | day 80 | not within 6 months |
+| Planner, 14-day look-ahead | days 100 / 30 | day 140 | day 105 | day 180 |
+| Planner, 120-day look-ahead | day 30 | day 125 | day 90 | day 160 |
+| Classical feedback (PI) | days 115 / 90 | day 145 | day 115 | not within 6 months |
+| Uniform at the planners' effort | day 30 | day 75 | day 45 | day 120 |
+
+In the perfect-start column, where two days appear they are the index and the fingerprint; one day
+means both agree. With climatology, the ocean average detects nothing within six months.
+
+- **Forecast skill decides almost everything.**
+  - A perfect-start forecast sees every strategy within one to four months.
+  - Climatology sees almost nothing within six months.
+  - A real observer sits between them, close to the "realistic" column, about four to five months.
+- **The latitude pattern helps.** The fingerprint's signal-to-noise is about 1.6 to 1.8 times the
+  index's, which brings detection 25 to 60 days earlier.
+- **Feedback and planners are harder to detect early.** They brighten in proportion to the
+  warming, which starts small, while fixed patterns brighten fully from day 0. The very controllers
+  that cancel the warming best are the slowest to reveal themselves.
+- **This matches Part 20.5,** whose before/after noise was 33 mK at 60 days, two to three times the
+  same-weather twin's.
+
+## 27.3 Caveats, and what would make it registered
+
+- **Upper estimates.**
+  - The fingerprint uses the expected pattern averaged over the same 24 states.
+  - Its covariance comes from 96 degrees of freedom for 46 latitudes, which inflates it somewhat.
+- **One assumption about noise.** It comes from runs without brightening, which assumes brightening
+  does not change the weather noise.
+- **Perfect model.** The forecast is the model itself, and the land-model defect (Part 26) is in
+  every run.
+- **What a registered version would add** (the one-Earth sensing experiment of Part 21.3): a
+  forecast started from an imperfect analysis, a fingerprint estimated on training states only, the
+  disturbance kept out of the sensor, and controllers that act on what one Earth can sense. 3b's
+  per-member latitude profiles will also show how this noise falls with more members.
+
+> **New terms:** *Detection* = telling, at a chosen confidence, that an observed change is not just
+> weather. *Fingerprint* = a pattern-matching test that weighs each latitude by how noisy it is.
+> *Forecast skill* = how well a model predicts the actual weather path, not just its average.

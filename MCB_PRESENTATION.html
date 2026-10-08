@@ -1399,7 +1399,128 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
         <div class="slide-number"></div>
     </div>
 
-    <!-- Update 8: what's next -->
+    <!-- Update 8: Experiment 3a results -->
+    <div class="slide upd">
+        <h2>Experiment 3a: The Planner Meets Its Opponents</h2>
+        <p class="subtitle">Pre-registered (OSF 7bwe4); 24 held-out states; growing warming; no same-weather twin</p>
+        <div class="two-column" style="grid-template-columns: 1.1fr 1fr; align-items: start;">
+            <table class="compact">
+                <tr><th>Arm</th><th>Leftover pattern</th><th>vs nothing</th></tr>
+                <tr><td>Planner, 60-day look-ahead</td><td>3.29</td><td>&minus;84%</td></tr>
+                <tr><td>Planner, 14-day look-ahead</td><td>3.35</td><td>&minus;84%</td></tr>
+                <tr><td>Classical feedback (GLENS-style)</td><td>3.66</td><td>&minus;82%</td></tr>
+                <tr><td>Best fixed pattern</td><td>4.07</td><td>&minus;81%</td></tr>
+                <tr><td>Adaptive law</td><td>4.30</td><td>&minus;79%</td></tr>
+                <tr><td>One uniform setting</td><td>4.87</td><td>&minus;77%</td></tr>
+                <tr><td><strong>Planner, 120-day (primary)</strong></td><td><strong>4.92</strong></td><td>&minus;77%</td></tr>
+                <tr><td>Planner's average, fixed</td><td>11.25</td><td>&minus;46%</td></tr>
+                <tr><td>No brightening</td><td>20.96</td><td>&mdash;</td></tr>
+            </table>
+            <div class="column">
+                <div class="card">
+                    <h4>The four registered tests (120-day planner vs &hellip;)</h4>
+                    <ul>
+                        <li>14-day planner: +47% worse &mdash; inconclusive</li>
+                        <li>Best fixed pattern: +21% worse &mdash; inconclusive</li>
+                        <li>Classical feedback: +35% worse &mdash; inconclusive</li>
+                        <li>Its own average, held fixed: <strong>56% better</strong></li>
+                    </ul>
+                </div>
+                <div class="card warning">
+                    <h4>The further it looks, the more it overcools</h4>
+                    <p>Ocean bias &minus;0.008, &minus;0.013, &minus;0.031 K at 14, 60, 120 days. Likely cause (after the fact): the snipped gradient is about 30% too small at 120 days, so one step overshoots.</p>
+                </div>
+            </div>
+        </div>
+        <p class="note">In a perfect model, a short look-ahead or the field's standard feedback is enough; planning has to earn its place under uncertainty (Experiment 3b, running).</p>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 9: Experiment 2 and the snip test, registered -->
+    <div class="slide upd">
+        <h2>Experiment 2 and the Snip Test: Registered</h2>
+        <p class="subtitle">Frozen before any data (OSF pvwx9, 2026-10-07); runs on the GX10 after 3b, about 9 GPU-hours</p>
+        <div class="two-column" style="align-items: start;">
+            <div class="card">
+                <h4>Snip test (about 1 GPU-hour)</h4>
+                <ul>
+                    <li>Snip the atmosphere every 21 or 30 days instead of 14</li>
+                    <li>Scored against Experiment 1's stored truth, by Experiment 1's own frozen analysis</li>
+                    <li>Question: does a longer snip shrink the 30% undercount at 120 days and stay useful?</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h4>Experiment 2: design one fixed pattern</h4>
+                <ul>
+                    <li>Gradient (4 Gauss&ndash;Newton steps) vs brute force vs brute force at equal cost vs the sunlight formula vs uniform</li>
+                    <li>5 wide bands and 13 narrow bands; 16 untouched states</li>
+                    <li>Main tests: gradient vs equal-cost brute force (13 bands); vs the formula; snip vs no snip; 13 vs 5 bands</li>
+                </ul>
+            </div>
+        </div>
+        <p class="note">Every stage passed a real-model smoke test on the laptop; 39 new tests pass.</p>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 10: the land-model bug -->
+    <div class="slide upd">
+        <h2>Found: The Land Model Runs a Year Every 12 Days</h2>
+        <p class="subtitle">A jax-esm bug reads the monthly land climatology one month per model day</p>
+        <div class="three-column" style="flex: 0;">
+            <div class="stat-box">
+                <div class="number warning">20 K</div>
+                <div class="label">Average 12-day swing of land temperature (up to 64 K)</div>
+            </div>
+            <div class="stat-box">
+                <div class="number warning">&minus;40 to +7 &deg;C</div>
+                <div class="label">At 60&deg;N 100&deg;E in January, every 12 days</div>
+            </div>
+            <div class="stat-box">
+                <div class="number">0.99</div>
+                <div class="label">Match with each cell's true annual range: the whole year, compressed</div>
+            </div>
+        </div>
+        <div class="two-column" style="margin-top: 30px; align-items: start;">
+            <div class="card success">
+                <h4>Still fair</h4>
+                <p>Every arm and reference shares it, and the registered scores compare ocean temperature between them.</p>
+            </div>
+            <div class="card warning">
+                <h4>Not physical</h4>
+                <p>Land temperature and rainfall over land. A bug report with a reproduction and a fix is drafted (not yet sent).</p>
+            </div>
+        </div>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 10b: detection with one Earth -->
+    <div class="slide upd">
+        <h2>Can Anyone Tell It Is Working? (One Earth)</h2>
+        <p class="subtitle">Exploratory, from Experiment 3a's runs: how soon one weather realization reveals each strategy</p>
+        <table class="compact">
+            <tr><th>Observer's forecast of the world without brightening</th><th>Noise (30-day ocean mean)</th><th>Day by which detection is 95% likely</th></tr>
+            <tr><td>Perfect-start forecast (best case)</td><td>1 &rarr; 33 mK</td><td>Fixed patterns: day 30 &middot; feedback / planners: days 30&ndash;115</td></tr>
+            <tr><td><strong>Realistic: knows the ocean, not the weather</strong></td><td><strong>33 mK</strong></td><td><strong>Ocean average: days 125&ndash;145 &middot; latitude pattern: days 80&ndash;115</strong></td></tr>
+            <tr><td>Climatology only</td><td>~300 mK</td><td>Ocean average: not within 6 months</td></tr>
+        </table>
+        <div class="three-column" style="flex: 0; margin-top: 20px;">
+            <div class="card">
+                <h4>Forecast skill decides</h4>
+                <p>The same brightening is visible within a month or not within six, depending on how well the no-brightening world is forecast.</p>
+            </div>
+            <div class="card success">
+                <h4>Patterns help</h4>
+                <p>Matching the latitude pattern gives 1.6&ndash;1.8&times; the signal-to-noise of the ocean average: 25&ndash;60 days sooner.</p>
+            </div>
+            <div class="card warning">
+                <h4>Good control hides itself</h4>
+                <p>Feedback and planners brighten only as the warming grows, so they reveal themselves later than fixed patterns.</p>
+            </div>
+        </div>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 11: what's next -->
     <div class="slide upd">
         <h2>What Happens Next</h2>
         <div class="timeline">
@@ -1409,40 +1530,40 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
             </div>
             <div class="timeline-item completed">
                 <div class="dot">&#10003;</div>
-                <div class="label">Test world, planner,<br>5 methods<br><span class="checkmark">Built</span></div>
+                <div class="label">Pilot and<br>revision 1<br><span class="checkmark">Done</span></div>
+            </div>
+            <div class="timeline-item completed">
+                <div class="dot">&#10003;</div>
+                <div class="label">Experiment 3a<br><span class="checkmark">Done</span></div>
             </div>
             <div class="timeline-item current">
-                <div class="dot">23</div>
-                <div class="label">Pilot on<br>training states<br><span class="pending-mark">Running</span></div>
-            </div>
-            <div class="timeline-item pending">
-                <div class="dot">24</div>
-                <div class="label">Freeze the rules<br>(revision 1, OSF)</div>
+                <div class="dot">3b</div>
+                <div class="label">Hidden strength<br><span class="pending-mark">Running</span></div>
             </div>
             <div class="timeline-item pending">
                 <div class="dot">E2</div>
-                <div class="label">Experiment 2<br>fixed designs</div>
+                <div class="label">Experiment 2 and<br>snip test<br>(registered)</div>
             </div>
             <div class="timeline-item pending">
-                <div class="dot">E3</div>
-                <div class="label">Experiment 3<br>planning vs the rest</div>
+                <div class="dot">&#9998;</div>
+                <div class="label">Papers, archive,<br>advisor Oct 20</div>
             </div>
         </div>
         <div class="two-column" style="margin-top: 10px; align-items: start;">
             <div class="card">
-                <h4>Decisions for the frozen rules</h4>
+                <h4>Decisions waiting</h4>
                 <ul>
-                    <li>The feedback controller's time scale, and whether it gets the forecast</li>
-                    <li>The ladder's design window and the hidden-strength range</li>
-                    <li>Whether steps 20&ndash;22 run at all: the October 2 advisor meeting deferred them "unless time allows"</li>
+                    <li>Fix the land-model bug before new experiments? Keep 3b in the current model so it compares with 3a?</li>
+                    <li>Who tells jax-esm's developers, and how (the advisor is one of them)</li>
+                    <li>Author list and AI disclosure, before the Zenodo archive is published</li>
                 </ul>
             </div>
             <div class="card">
-                <h4>What it will cost (from measured speeds)</h4>
+                <h4>Ready to use</h4>
                 <ul>
-                    <li>Planner: about 0.5 GPU-hours per six-month run</li>
-                    <li>Ladder response runs: about 5 GPU-minutes per training state</li>
-                    <li>Copying loop: about 3.6 GPU-hours per round of 8 episodes; each direct method gets the same total</li>
+                    <li>Zenodo archive v1 built and verified: 7.1 GB, 97 states, all exact</li>
+                    <li>Methods write-up updated with Experiment 3a (new section, figure, table)</li>
+                    <li>Experiment 2 and the snip test ready to run after 3b</li>
                 </ul>
             </div>
         </div>

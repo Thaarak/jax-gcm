@@ -1,5 +1,22 @@
 # Paper Plan (frozen 2026-08-13)
 
+> **Superseded (note added 2026-10-07).** This plan is kept as the record of the August framing; the
+> current paper plan is `MCB_PROJECT_REPORT.md` Part 21. Since this was frozen:
+> - *Its central claim fell.* The "gradients design" half was never tested: the Stage-1 v2 pattern was
+>   the first-iteration pick of a loss dominated by weather noise (report Part 16).
+> - *The gradient was tested directly* (Experiment 1, Part 20). Snipping the atmosphere's memory
+>   every 14 days keeps the gradient useful for about four months, though it undercounts the
+>   response by about 30% at 120 days. Plain backpropagation explodes by then.
+> - *Planning with it was tested* (Experiment 3a, Part 23, OSF https://osf.io/7bwe4/). A 120-day
+>   planner did not beat two-week planning, the best fixed pattern or classical feedback in a
+>   perfect model.
+> - *Gradient design is now registered* (Experiment 2, Part 25, OSF https://osf.io/pvwx9/), and
+>   planning under hidden efficacy (Experiment 3b, Part 24) is running.
+> - *A model defect affects every run* (Part 26): the slab land model has a 12-day year.
+>
+> The papers are now a methods/controllers paper (Paper 2, written first) and a gradients paper
+> (Paper 1); rewriting this file waits for the advisor's decisions in Part 21.7.
+
 *Produced by a four-lens assessment (literature/novelty, claims audit, hostile
 review, framing) plus independent re-verification of every load-bearing number
 against the pickles in `mcb_experiments_gpu/`. Two of the assessment's new
