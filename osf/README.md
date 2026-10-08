@@ -29,3 +29,19 @@
   1.1 (Experiment 2 in full, and the 21/30-day snip test).
 - `PREREGISTRATION_at_66e2c04e.md`: the full pre-registration file at that commit.
 - `analyze_experiment2.py` and `analyze_snip_test.py` were also uploaded: the registered analyses.
+
+# OSF posting of Amendment 9 revision 2 (2026-10-07)
+
+- Files uploaded to https://osf.io/pqabf/ at 22:50 PDT; each upload's SHA-256 matches the local file.
+- Registration: https://osf.io/g7y2e/ (registered 22:50 PDT; pending admin approval, which happens
+  automatically after 48 hours).
+- `REVISION2_OSF.md`: the posted document. A cover note gives the frozen commit 676ce331 and the
+  SHA-256 checksums of the text, code, hidden-strength table, registered design, fixed design and
+  pilot decisions. It is followed verbatim by everything logged after revision 1's posting:
+  Deviation D1, the Experiment 3a result, revision 1.1 (posted separately as pvwx9) and revision 2
+  (Experiment 3b).
+- `PREREGISTRATION_at_676ce331.md`: the full pre-registration file at that commit.
+- Also uploaded: `analyze_experiment3b.py` (the registered analysis), `hidden_strength.json` and
+  `registered_design.json`.
+- `rev2_tools/`: the freeze helper that filled revision 2 from the pilot's outputs, the draft it
+  filled, and the posting script.

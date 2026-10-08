@@ -52,8 +52,10 @@ now = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
 cover = f"""# Pre-registration: Amendment 9 revision 2 (Experiment 3b), with the Experiment 3a result
 
 This file is the OSF posting of revision 2 of Amendment 9 of this project's pre-registration
-(`PREREGISTRATION.md`), together with what was logged after revision 1's posting: Deviation D1 and
-the Experiment 3a result.
+(`PREREGISTRATION.md`), together with everything logged after revision 1's posting, in file order:
+Deviation D1, the Experiment 3a result, and revision 1.1 (Experiment 2 and the snip test), which
+was frozen and posted separately as https://osf.io/pvwx9/ and is reproduced here only because it
+sits between them in the file.
 Everything below the horizontal line is the registered text exactly as frozen in the public
 repository; nothing in it has been edited.
 
@@ -67,7 +69,8 @@ repository; nothing in it has been edited.
 - SHA-256 of the frozen code and designs at that commit:
 {code_lines}
 - Earlier postings: Amendment 9 with revisions 0.1-0.4 (https://osf.io/2bs8p/); revision 1
-  (Experiment 3a; https://osf.io/7bwe4/).
+  (Experiment 3a; https://osf.io/7bwe4/); revision 1.1 (Experiment 2 and the snip test;
+  https://osf.io/pvwx9/).
 
 ## Timeline
 
