@@ -1902,3 +1902,42 @@ unchanged functions of `analyze_experiment3a.py`). As revision 1:
   their SHA-256 in the OSF posting.
 * *Cost:* about 65 GPU-hours of runs on the GX10 (about 16 hours of wall time, 4 runs at a time), after about 3 hours for the 10-member evaluation references.
 * *Posting:* this revision is posted to OSF (project pqabf) before any evaluation reference is built.
+
+**Amendment 9, revision 2 — Experiment 3b RESULT (logged 2026-10-08; evaluation 2026-10-07 22:51 to
+2026-10-08 21:54 PDT; the registered `analyze_experiment3b.py` was applied unchanged).**
+All 48 states and 7 arms are complete (6 members each, against 10-member references). No run failed,
+no state was dropped, and there was no deviation. The 13 frozen files on the GX10 were re-checked
+against 676ce331 after the run. Primary endpoint `J_zonal`, on the means of the 16 macro states:
+* **H1** `plan_learn` vs `pi`: rel −38.0% (90% CI −46.4% to −28.2%), t p 6.5×10⁻⁶, Wilcoxon p
+  3.1×10⁻⁵ (all 16 macro states favour `plan_learn`) → **better**.
+* **H2** `plan_learn` vs `plan_naive`: rel −19.1% (−31.7% to −5.2%), Holm p 0.0095 (Wilcoxon
+  0.005) → **better**.
+* **H3** `pi` vs `fixed`: rel −68.3% (−74.5% to −59.3%), Holm p 3.4×10⁻⁷ (Wilcoxon 3.1×10⁻⁵) →
+  **better**.
+
+*Arm means:* `plan_learn` 0.00276, `plan_oracle` 0.00295, `plan_naive` 0.00341, `adaptive` 0.00391,
+`pi` 0.00445, `fixed` 0.01405, `uncontrolled` 0.01900.
+
+*Descriptive* (unadjusted p):
+* `plan_learn` vs `plan_oracle`: −6.5% (−21% to +10%, p 0.41).
+* `plan_naive` vs `plan_oracle`: +15.6% (p 0.039).
+* `plan_naive` vs `pi`: −23% (p 1.5×10⁻⁵).
+* `adaptive` vs `pi`: −12% (p 0.026).
+* `plan_learn` vs `adaptive`: −29% (p 1.5×10⁻⁴).
+* By overall factor 0.5 / 1 / 2: `plan_learn` vs `pi` is −33% / −44% / −37%, and `fixed` scores
+  0.0074 / 0.0044 / 0.030.
+* Learning curve (mean |log(estimate/truth)| per band at days 0, 28, 56, 98 and 168): 0.59, 0.35,
+  0.15, 0.08, 0.03.
+
+The full output is `mcb_experiments_gpu/exp3b/exp3b_analysis.json` (SHA-256 d4bee14e…a83e18), and
+the plain-language account is `MCB_PROJECT_REPORT.md` Part 24.7.
+
+*By section 9:*
+* H1 supports "a planner that learns how strongly and where brightening works, from its own forecast
+  misses and using the model's gradients, beats the field's standard feedback controller when the
+  strength is unknown".
+* H2 says learning the strength is what the planner needs.
+* H3 says that, without feedback, a design made at nominal strength fails under realistic strength
+  uncertainty.
+* The learning curve is a lower bound on how fast one Earth reveals the strength, because the
+  planners know the current state exactly (§11).

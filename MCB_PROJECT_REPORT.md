@@ -2,17 +2,23 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run; updated 2026-10-05 with the step-23 pilot, which fixes the planner's settings (Part 22); updated 2026-10-07 with Experiment 3a, the pre-registered test of the planner against its opponents (Part 23).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run; updated 2026-10-05 with the step-23 pilot, which fixes the planner's settings (Part 22); updated 2026-10-07 with Experiment 3a, the pre-registered test of the planner against its opponents (Part 23); updated 2026-10-08 with Experiment 3b's pilot and result: a planner that learns the spraying's strength beats the classical controller (Part 24.6–24.7).*
 
 ---
 
 ## The one-paragraph version
 
-> **Latest status (2026-10-07):** Experiment 3a (**Part 23**, registered at https://osf.io/7bwe4/)
-> finished. Every sensible controller removes about 80% of the warming's latitude pattern, but the
-> 120-day planner does **not** beat a 14-day planner, the classical feedback controller or the best fixed
-> pattern. It overshoots, and the data lean against it, though not past the pre-registered bar. Next is
-> Experiment 3b (uncertain brightening strength).
+> **Latest status (2026-10-08):** Experiment 3b (**Part 24.7**, registered at https://osf.io/g7y2e/)
+> finished, and all three registered hypotheses came out **better**. When nobody knows how strongly
+> brightening works, a planner that learns the strength from its own two-week forecast misses beats
+> the classical feedback controller by **38%** in all 16 ocean states (p = 6×10⁻⁶). Learning improves the
+> planner by 19%, and it does as well as a planner told the true strength. A fixed plan fails badly
+> either way. Experiment 2 is now running on the GX10.
+>
+> *Earlier (2026-10-07):* Experiment 3a (**Part 23**, registered at https://osf.io/7bwe4/). With the
+> strength known, every sensible controller removes about 80% of the warming's latitude pattern, and
+> the 120-day planner does **not** beat a 14-day planner, the classical feedback controller or the
+> best fixed pattern.
 >
 > *Earlier (2026-10-05):* Experiment 1 passed (outcome A′; Part 20). After the advisor meeting, the
 > current plan is in **Part 21**: write up the controller/methods paper first (draft skeleton done), then
@@ -2265,6 +2271,165 @@ a thermostat that already knows the true strengths (the oracle).
 - **Code:** 389 fast tests pass; committed (81a920ed).
 - **Running on the GX10:** the training references, then the response runs and the fixed design,
   then the pilot (chained automatically). The freeze and the evaluation follow, as approved.
+
+## 24.6 The pilot and the freeze (2026-10-07)
+
+- **Pilot:** the 16 branch-1 training states, 3 members each, whole closed-loop episodes under the
+  hidden strengths. Mean `J_zonal`:
+
+| Arm | `J_zonal` |
+|---|---|
+| `plan_learn` | 0.00370 |
+| `plan_naive` | 0.00397 |
+| `plan_learn_cautious` (4× the noise level) | 0.00409 |
+| `plan_learn_global` (one overall strength) | 0.00412 |
+| `plan_oracle` | 0.00471 |
+| `pi` | 0.00643 |
+| `pi_slow` (84-day loop) | 0.00655 |
+| `adaptive` | 0.00675 |
+| `fixed` | 0.01348 |
+| `uncontrolled` | 0.02027 |
+
+- **The registered rules settled everything else.** Nobody chose these by hand:
+  - *Learner noise level:* 0.00067 K, from 576 of the oracle's two-week forecast misses.
+  - *Variants:* none beat its default by 2 standard errors, so the defaults stayed (`pi`, and the
+    per-band learner).
+  - *Members:* with 6 members the smallest detectable H1 effect is 18% of PI's score (8 members:
+    16%; 10 members: 15%). So **6 members**, the cheapest that met the 20% rule.
+- **A surprise, written down before the evaluation:** the learner beat the oracle in the pilot (−22%,
+  p 0.08). So revision 2 stopped calling the oracle "the ceiling".
+- **Frozen** as Amendment 9 revision 2 (commit 676ce331) and posted on OSF
+  (https://osf.io/g7y2e/) on 2026-10-07, before any evaluation reference existed. The evaluation
+  started at 22:51 the same evening.
+
+## 24.7 Results (2026-10-08)
+
+*The evaluation ran 2026-10-07 22:51 to 2026-10-08 21:54 PDT on the GX10: 10-member references for
+the 48 states (3.8 h), then 7 arms × 48 states × 6 members (19.2 h). All 336 runs finished, none
+failed and no state was dropped. The registered analysis ran unchanged, and the frozen files on the
+GX10 were re-checked against 676ce331 afterwards. Output: `mcb_experiments_gpu/exp3b/exp3b_analysis.json`.*
+
+**In one sentence:** the planner that learns how strongly brightening works beat the classical feedback
+controller by 38% in every one of the 16 ocean states. Learning improved the planner by 19%, and it
+did as well as a planner that was told the true strength.
+
+*Analogy (the house with wrongly labelled radiators):* the smart thermostat that corrects its notes
+about each radiator kept the house 38% closer to the right temperature than the standard thermostat.
+It did about as well as a thermostat handed the true labels. A plan that never checks the rooms (the
+fixed pattern) went badly wrong whenever the labels were wrong.
+
+**The registered tests** (`J_zonal`, macro-state means, 16 ocean states)
+
+| Hypothesis | Difference | 90% interval | p | Ocean states favouring the first arm | Verdict |
+|---|---|---|---|---|---|
+| **H1 (primary):** `plan_learn` vs `pi` | **−38.0%** | −46.4% to −28.2% | t 6.5×10⁻⁶; Wilcoxon 3.1×10⁻⁵ | 16 of 16 | **better** |
+| H2: `plan_learn` vs `plan_naive` | −19.1% | −31.7% to −5.2% | Holm 0.0095; Wilcoxon 0.005 | 13 of 16 | **better** |
+| H3: `pi` vs `fixed` | −68.3% | −74.5% to −59.3% | Holm 3.4×10⁻⁷; Wilcoxon 3.1×10⁻⁵ | 16 of 16 | **better** |
+
+A Wilcoxon p of 3.1×10⁻⁵ is the smallest possible with 16 states: every one of them favoured the first
+arm. The t and Wilcoxon tests agree on all three.
+
+**Every arm** (means over the 48 states, scored on days 98–182)
+
+| Arm | `J_zonal` | bias part | pattern part | ocean bias (K) | vs no brightening | cap used |
+|---|---|---|---|---|---|---|
+| `plan_learn` | **0.00276** | 0.00020 | 0.00256 | −0.006 | −85% | 29% |
+| `plan_oracle` | 0.00295 | 0.00024 | 0.00271 | −0.006 | −84% | 29% |
+| `plan_naive` | 0.00341 | 0.00039 | 0.00302 | −0.006 | −82% | 28% |
+| `adaptive` | 0.00391 | 0.00005 | 0.00386 | +0.001 | −79% | 26% |
+| `pi` | 0.00445 | 0.00040 | 0.00405 | −0.004 | −77% | 31% |
+| `fixed` | 0.01405 | 0.00863 | 0.00542 | −0.026 | −26% | 13% |
+| `uncontrolled` | 0.01900 | 0.01680 | 0.00220 | +0.129 | — | 0% |
+
+The learner wins on the pattern, not the average. Every feedback arm cancels the ocean-mean warming
+almost exactly, and the learner leaves the smallest latitude pattern of error, using slightly less
+brightening than PI.
+
+**Descriptive comparisons** (no test claims; p unadjusted):
+- `plan_learn` vs `plan_oracle`: −6.5% (90% interval −21% to +10%; p 0.41). Once the strength is
+  learned, not knowing it costs nothing detectable.
+- `plan_naive` vs `plan_oracle`: +15.6% (−0.2% to +33%; p 0.04). This is the cost of assuming nominal
+  strength.
+- `plan_naive` vs `pi`: −23% (−32% to −14%; p 1.5×10⁻⁵). Under hidden strength, even the planner
+  that never learns beats PI. In 3a, with the strength known, they differed by only about 8%.
+- `adaptive` vs `pi`: −12% (−23% to −0.3%; p 0.03). `plan_learn` vs `adaptive`: −29% (−39% to −18%;
+  p 0.0002).
+- `pi` vs `plan_oracle`: +51% (+33% to +72%).
+
+**By overall strength** (16 states each; `J_zonal`)
+
+| Arm | weak (g = 0.5) | nominal (g = 1) | strong (g = 2) |
+|---|---|---|---|
+| `plan_learn` | 0.00259 | **0.00230** | **0.00339** |
+| `plan_oracle` | **0.00251** | 0.00277 | 0.00358 |
+| `plan_naive` | 0.00321 | 0.00334 | 0.00369 |
+| `adaptive` | 0.00385 | 0.00418 | 0.00369 |
+| `pi` | 0.00388 | 0.00409 | 0.00537 |
+| `fixed` | 0.00736 | 0.00442 | 0.03035 |
+| `uncontrolled` | 0.01991 | 0.01889 | 0.01822 |
+
+- **The learner beats PI at every strength:** by 33% (weak), 44% (nominal) and 37% (strong).
+- **Learning pays most at nominal overall strength** (−31% against the naive planner, versus −20% weak
+  and −8% strong). There the naive planner is right on average but wrong band by band, so what the
+  learner gains is the regional pattern.
+- **PI's gains were tuned at nominal strength.** It is sluggish when the spraying is weak (+0.020 K
+  left over) and overshoots when it is strong (−0.026 K).
+- **The fixed pattern fails both ways.** Weak spraying leaves +0.068 K of warming. Strong spraying
+  overcools by 0.14 K, scoring worse than no brightening at all (0.030 against 0.018).
+
+**How fast one Earth reveals the strength.** The learner's error per band is the mean
+|log(estimate/truth)| over 48 states and 5 bands, at each re-plan:
+
+| Day | 0 | 14 | 28 | 42 | 56 | 70 | 84 | 98 | 112 | 126 | 140 | 154 | 168 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Error | 0.59 | 0.56 | 0.35 | 0.22 | 0.15 | 0.11 | 0.09 | 0.08 | 0.06 | 0.05 | 0.04 | 0.03 | 0.03 |
+
+It starts about 1.8-fold off (the hidden strengths), is within about 16% after 8 weeks, within about
+8% when scoring starts (day 98), and ends within about 3%. This is a best case: the planners know
+the exact current state (revision 2 §11).
+
+**Side effects.** The ocean temperature *maps* are dominated by weather noise that no controller can
+remove. `J_map` falls only from 0.046 to 0.030–0.033, and the gains G (squared error against the
+normal climate, no brightening over controlled; G > 1 is better) are 1.11–1.22 for the feedback arms.
+Global rainfall ends slightly further from normal than with no brightening for every arm (G 0.81–0.99).
+Land temperature and land rainfall are not physical in this model (the 12-day land "year", Part 26),
+so they are not interpreted.
+
+**What it means** (the interpretations fixed in revision 2 §9):
+- *H1 better:* "a planner that learns how strongly and where brightening works, from its own forecast
+  misses and using the model's gradients, beats the field's standard feedback controller when the
+  strength is unknown".
+- *H2 better:* learning the strength is what the planner needs.
+- *H3 better:* without feedback, a design made at nominal strength fails under realistic strength
+  uncertainty. This replicates Tier 2 over a far wider range.
+- *Learning curve:* one Earth reveals each band's strength to within about 16% in four fortnights.
+  This is a lower bound on the time needed, because the planners know the exact state.
+- *With 3a:* with a perfect model, planning and classical feedback tie. When the strength is unknown,
+  the learning planner wins clearly. What the gradients buy is learning, not foresight.
+
+**Why might the learner match or even edge out the oracle?** This explanation is post hoc and not
+registered. The learner's 6.5% edge is within noise (p 0.41), as was its 22% edge in the pilot
+(p 0.08). The oracle knows the true strength, but it still plans from a one-step Gauss–Newton forecast
+whose other errors it cannot correct. The learner's strength is fitted to what actually happened, so
+it may absorb part of those errors too. The safe claim is that learning reaches the oracle's level.
+Whether it truly beats the oracle is untested.
+
+**Caveats** (registered in §11, plus one found later):
+- *Perfect model and exact state, except the strength.* Real observations would make learning slower
+  and noisier. Part 27 shows that a realistic observer needs months just to detect the brightening.
+- *Constant strength:* no drift with season or time.
+- *The land-model bug* (Part 26) affects every arm alike. The scores use only ocean temperatures.
+- *One model, five bands, a cap of 0.15 and an idealized warming ramp.*
+
+**For the papers:**
+- This is the headline result for Paper 2 (control with one noisy Earth). A gradient planner that
+  learns the brightening strength beats the GLENS-style controller by 38% in all 16 ocean states. It
+  learns the strength to within about 16% in two months, and matches a planner that knows the truth.
+- Experiment 2 (the gradient paper's design test) started automatically on the GX10 at 21:55, as
+  soon as 3b finished.
+- The natural follow-up is 3b with realistic sensing: noisy observations instead of the exact state.
+  Before publication, the land fix and a replication of the key comparisons in the fixed model
+  (Part 26).
 
 ---
 

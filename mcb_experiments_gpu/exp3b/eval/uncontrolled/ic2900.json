@@ -1,0 +1,105 @@
+{
+  "stage": "episode",
+  "config": {
+    "stage": "episode",
+    "ic_dir": "mcb_experiments_gpu/ics_macro3b/exp3b_eval",
+    "ic_position": 18,
+    "references": "mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_eval_b0/ic2900_references.npz",
+    "segments": 13,
+    "segment_days": 14,
+    "efficacy": [
+      2.924239,
+      1.286536,
+      3.413614,
+      1.402508,
+      1.776623
+    ],
+    "members": 6,
+    "score_start_day": 98,
+    "score_end_day": null,
+    "alpha": 1.0,
+    "beta": 0.5,
+    "mu": 0.0006325,
+    "lam": 0.006325,
+    "output": "mcb_experiments_gpu/exp3b/eval/uncontrolled/ic2900.json",
+    "save_fields": true,
+    "warming_step_wm2": 0.0,
+    "warming_ramp_wm2_per_day": 0.03296703296703297,
+    "amplitudes": null,
+    "uniform": 0.0
+  },
+  "ic": {
+    "index": 2900,
+    "split": "heldout",
+    "seed": 14900,
+    "macro_index": 29,
+    "branch": 0,
+    "spinup_days": 30,
+    "carry_file": "ic_m29_b0_heldout_seed14900_carry.pkl",
+    "baseline_file": "ic_m29_b0_heldout_seed14900_baseline60d.pkl"
+  },
+  "members": 6,
+  "member_seeds": [
+    null,
+    374301,
+    374302,
+    374303,
+    374304,
+    374305
+  ],
+  "reference_members": 10,
+  "amplitudes": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "true_efficacy": [
+    2.924238920211792,
+    1.2865359783172607,
+    3.41361403465271,
+    1.402508020401001,
+    1.776623010635376
+  ],
+  "score_window_days": [
+    98,
+    182
+  ],
+  "gains": {
+    "sst@ocean": 0.9333973465894893,
+    "land_temperature@land": 1.2236236117968347,
+    "precipitation@land": 0.5012685135246678,
+    "precipitation@global": 0.828635894827588,
+    "evaporation@land": 0.9181398606307111,
+    "evaporation@global": 0.8892889451929438
+  },
+  "effort": 0.0,
+  "objective": {
+    "controlled": {
+      "bias_sq": 0.01393149169194885,
+      "variance": 0.02154986932873726,
+      "amplitude": 0.0,
+      "movement": 0.0,
+      "total": 0.03548136102068611,
+      "bias_K": 0.11803174018859863,
+      "zonal_pattern": 0.01544395461678505
+    },
+    "uncontrolled": {
+      "bias_sq": 0.015580428929956591,
+      "variance": 0.018826184794306755,
+      "amplitude": 0.0,
+      "movement": 0.0,
+      "total": 0.034406613724263346,
+      "bias_K": 0.12482158839702606,
+      "zonal_pattern": 0.01670539565384388
+    }
+  },
+  "references": "mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_eval_b0/ic2900_references.npz",
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_test_world.py episode --ic-dir mcb_experiments_gpu/ics_macro3b/exp3b_eval --ic-position 18 --references mcb_experiments_gpu/test_world_refs_ramp6_3b/exp3b_eval_b0/ic2900_references.npz --segments 13 --segment-days 14 --members 6 --score-start-day 98 --warming-step-wm2 0.0 --warming-ramp-wm2-per-day 0.03296703296703297 --mu 0.0006325 --lam 0.006325 --efficacy 2.924239 1.286536 3.413614 1.402508 1.776623 --save-fields --output mcb_experiments_gpu/exp3b/eval/uncontrolled/ic2900.json --uniform 0.0",
+  "seconds": 285.9
+}
