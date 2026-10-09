@@ -1,0 +1,48 @@
+{
+  "stage": "episode",
+  "arm": "sunlight13",
+  "layout": "b13",
+  "method": "sunlight",
+  "amplitudes": [
+    0.014215195551514626,
+    0.0078975735232234,
+    0.00889971386641264,
+    0.009109770879149437,
+    0.009432945400476456,
+    0.006895713973790407,
+    0.006870020180940628,
+    0.007297437638044357,
+    0.00928322784602642,
+    0.008822043426334858,
+    0.012226518243551254,
+    0.009508290328085423,
+    0.016982533037662506
+  ],
+  "effort": 0.010560421872219354,
+  "ic": {
+    "index": 301,
+    "split": "heldout",
+    "seed": 12301,
+    "macro_index": 3,
+    "branch": 1,
+    "spinup_days": 30,
+    "carry_file": "ic_m03_b1_heldout_seed12301_carry.pkl",
+    "baseline_file": "ic_m03_b1_heldout_seed12301_baseline60d.pkl"
+  },
+  "members": 5,
+  "member_seeds": [
+    null,
+    122198,
+    122199,
+    122200,
+    122201
+  ],
+  "smoke": false,
+  "designs_sha256": "ddf6234456f7fb90ea29aca657f0b6f10c4fe2e24245f9eebebf1db01d2ecacd",
+  "seconds": 166.6,
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_experiment2.py episode --ic-dir mcb_experiments_gpu/ics_macro/exp2_eval --ic-position 3 --references-dir mcb_experiments_gpu/exp2/eval/refs --designs mcb_experiments_gpu/exp2/designs.json --arm sunlight13 --output-dir mcb_experiments_gpu/exp2/eval/runs --allow-eval-roles"
+}

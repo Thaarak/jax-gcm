@@ -1,0 +1,31 @@
+{
+  "ic": {
+    "index": 1,
+    "split": "train",
+    "seed": 12001,
+    "macro_index": 0,
+    "branch": 1,
+    "spinup_days": 30,
+    "carry_file": "ic_m00_b1_train_seed12001_carry.pkl",
+    "baseline_file": "ic_m00_b1_train_seed12001_baseline60d.pkl"
+  },
+  "days": 182,
+  "repeats": 2,
+  "smoke": false,
+  "devices": [
+    "cuda:0"
+  ],
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "forward_s": 11.816423773765564,
+  "forward_runs_s": [
+    11.82389521598816,
+    11.808952331542969
+  ],
+  "jacobian_s": {
+    "b5": 43.49768126010895,
+    "b13": 96.33156383037567
+  }
+}

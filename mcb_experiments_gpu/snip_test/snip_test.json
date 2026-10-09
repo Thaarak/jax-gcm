@@ -1,0 +1,126 @@
+{
+  "experiment": "snip_test",
+  "preregistration": "PREREGISTRATION.md Amendment 9 revision 1.1, Part A",
+  "windows": [
+    21,
+    30
+  ],
+  "horizons": [
+    15,
+    30,
+    60,
+    120
+  ],
+  "objective_names": [
+    "T0",
+    "T1",
+    "T2",
+    "LAND"
+  ],
+  "tail_days": 10,
+  "a0": 0.03,
+  "grad_members": 1,
+  "align": "episode",
+  "ic_entries": [
+    {
+      "index": 0,
+      "split": "heldout",
+      "seed": 12000,
+      "macro_index": 0,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m00_b0_heldout_seed12000_carry.pkl",
+      "baseline_file": "ic_m00_b0_heldout_seed12000_baseline120d.pkl"
+    },
+    {
+      "index": 200,
+      "split": "heldout",
+      "seed": 12200,
+      "macro_index": 2,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m02_b0_heldout_seed12200_carry.pkl",
+      "baseline_file": "ic_m02_b0_heldout_seed12200_baseline120d.pkl"
+    },
+    {
+      "index": 400,
+      "split": "heldout",
+      "seed": 12400,
+      "macro_index": 4,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m04_b0_heldout_seed12400_carry.pkl",
+      "baseline_file": "ic_m04_b0_heldout_seed12400_baseline120d.pkl"
+    },
+    {
+      "index": 600,
+      "split": "heldout",
+      "seed": 12600,
+      "macro_index": 6,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m06_b0_heldout_seed12600_carry.pkl",
+      "baseline_file": "ic_m06_b0_heldout_seed12600_baseline120d.pkl"
+    },
+    {
+      "index": 800,
+      "split": "heldout",
+      "seed": 12800,
+      "macro_index": 8,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m08_b0_heldout_seed12800_carry.pkl",
+      "baseline_file": "ic_m08_b0_heldout_seed12800_baseline120d.pkl"
+    },
+    {
+      "index": 1000,
+      "split": "heldout",
+      "seed": 13000,
+      "macro_index": 10,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m10_b0_heldout_seed13000_carry.pkl",
+      "baseline_file": "ic_m10_b0_heldout_seed13000_baseline120d.pkl"
+    },
+    {
+      "index": 1200,
+      "split": "heldout",
+      "seed": 13200,
+      "macro_index": 12,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m12_b0_heldout_seed13200_carry.pkl",
+      "baseline_file": "ic_m12_b0_heldout_seed13200_baseline120d.pkl"
+    },
+    {
+      "index": 1400,
+      "split": "heldout",
+      "seed": 13400,
+      "macro_index": 14,
+      "branch": 0,
+      "spinup_days": 30,
+      "carry_file": "ic_m14_b0_heldout_seed13400_carry.pkl",
+      "baseline_file": "ic_m14_b0_heldout_seed13400_baseline120d.pkl"
+    }
+  ],
+  "timing_s": {
+    "0": 455.3,
+    "200": 251.5,
+    "400": 250.5,
+    "600": 250.4,
+    "800": 250.5,
+    "1000": 250.5,
+    "1200": 250.5,
+    "1400": 250.7
+  },
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_snip_test.py --ic-dir mcb_experiments_gpu/ics_macro/exp1 --output mcb_experiments_gpu/snip_test/snip_test",
+  "jax_devices": [
+    "cuda:0"
+  ],
+  "finished_utc": "2026-10-09T05:32:32.894859+00:00",
+  "total_s": 2233.6
+}

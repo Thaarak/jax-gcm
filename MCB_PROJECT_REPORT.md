@@ -2,18 +2,26 @@
 
 *A beginner-friendly account of the whole effort — what we set out to do, what we built, what worked, what didn't, and what we honestly know now. No prior background assumed. Every technical term is explained the first time it appears.*
 
-*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run; updated 2026-10-05 with the step-23 pilot, which fixes the planner's settings (Part 22); updated 2026-10-07 with Experiment 3a, the pre-registered test of the planner against its opponents (Part 23); updated 2026-10-08 with Experiment 3b's pilot and result: a planner that learns the spraying's strength beats the classical controller (Part 24.6–24.7).*
+*Companion to the detailed engineering log in `MCB_IMPLEMENTATION_PLAN.md` and the independent validation report `MCB_META_AUDIT.md`. Written 2026-07-28; updated 2026-08-03 to cover the second audit and the Tier-1, Tier-2, and Tier-2b campaigns (Parts 7–11); updated 2026-08-07 with the rainfall side-effect analysis (Part 12); updated 2026-08-09 with the ENSO campaign and its audit (Part 13); updated 2026-08-12 with the anticipation ablation and the growing-disturbance test (Parts 14-15); updated 2026-09-29 with a fresh-eyes review of the whole project and the two closest published papers (Part 16), and with the new research direction — months-long gradients — and its Step 0 preparation (Part 17); and, the same day, with the step-by-step plan for the experiments and code that follow from Dubey et al.'s approach (Part 18); updated 2026-09-30 with the Q-flux that fixes the too-cold ocean: the first attempt failed its pre-written check, and the one registered correction passed (Part 17, Step 0); updated 2026-10-01 with interleaved training and evaluation states and the maps from Experiment 1 (Part 18 steps 2–3; Amendment 9 revision 0.4), and with a map of every publishable idea, how finished it is, and how they combine into papers (Part 19); updated 2026-10-01 with the test world for Experiments 2-3 (Part 18 steps 10-12); updated 2026-10-02 with the planner (Part 18 steps 13-16); updated 2026-10-02 with Experiment 1's result and four follow-up checks (Part 20) and with the advisor meeting and the current paper plan (Part 21); updated 2026-10-05 with measured planning costs (Part 18 step 17) and with the methods of steps 18–22, built but not yet run; updated 2026-10-05 with the step-23 pilot, which fixes the planner's settings (Part 22); updated 2026-10-07 with Experiment 3a, the pre-registered test of the planner against its opponents (Part 23); updated 2026-10-08 with Experiment 3b's pilot and result: a planner that learns the spraying's strength beats the classical controller (Part 24.6–24.7); updated 2026-10-09 with the results of Experiment 2 and the snip test (Part 25.4).*
 
 ---
 
 ## The one-paragraph version
 
-> **Latest status (2026-10-08):** Experiment 3b (**Part 24.7**, registered at https://osf.io/g7y2e/)
+> **Latest status (2026-10-09):** Experiment 2 and the snip test (**Part 25.4**, registered at
+> https://osf.io/pvwx9/) finished.
+> - A 30-day snip cuts the long-range gradient's undercount from 31% to 20%.
+> - Snipping is essential: plain backpropagation could not design anything (H3 **better**).
+> - With 5 knobs, the snipped gradient matched brute force at half the model time.
+> - The registered efficiency, formula and 13-knob tests were **inconclusive**, and one uniform
+>   setting did as well as any designed pattern.
+>
+> *Earlier (2026-10-08):* Experiment 3b (**Part 24.7**, registered at https://osf.io/g7y2e/)
 > finished, and all three registered hypotheses came out **better**. When nobody knows how strongly
 > brightening works, a planner that learns the strength from its own two-week forecast misses beats
 > the classical feedback controller by **38%** in all 16 ocean states (p = 6×10⁻⁶). Learning improves the
 > planner by 19%, and it does as well as a planner told the true strength. A fixed plan fails badly
-> either way. Experiment 2 is now running on the GX10.
+> either way.
 >
 > *Earlier (2026-10-07):* Experiment 3a (**Part 23**, registered at https://osf.io/7bwe4/). With the
 > strength known, every sensible controller removes about 80% of the warming's latitude pattern, and
@@ -2510,6 +2518,138 @@ a good map once, and whether it does so more cheaply than surveying every road b
 > several weather samples. *Equal cost* = giving two methods the same amount of model time.
 > *Gauss–Newton step* = treat the response as locally linear, solve for the best setting, then re-run
 > to check.
+
+## 25.4 Results (2026-10-09)
+
+*Both tests ran on the GX10 from the export of the frozen commit 66e2c04e, starting by themselves when
+3b finished. The snip test ran 2026-10-08 21:55–22:32 PDT, and Experiment 2 ran from 22:32 to
+2026-10-09 07:10. Every stage and all 176 evaluation episodes finished; nothing failed and nothing
+was re-run. The designs' SHA-256 (ddf62344…) was logged at 03:08, before any evaluation reference
+existed. The registered analyses ran unchanged. Outputs are in `mcb_experiments_gpu/snip_test/` and
+`mcb_experiments_gpu/exp2/`.*
+
+**In one sentence:** a longer snip makes the long-range gradient more accurate, and the snipped
+gradient designs a 5-knob brightening pattern as well as brute force at half the model time, while
+plain backpropagation cannot design anything. But no designed pattern beat brightening every band
+equally, and 13 knobs did not help.
+
+*Analogy:* tuning a graphic equaliser to cancel a hum. Reading the circuit diagram (the gradient) found
+settings as good as trying each slider one at a time (brute force), with half the effort. Reading a
+diagram smudged by six months of static (plain backpropagation) never moved a slider. With 13
+sliders, the diagram reader pushed one barely audible slider almost to the top. And simply raising
+every slider by the same amount worked as well as any careful setting.
+
+### Part A — the snip test: outcome S-A (a 30-day snip)
+
+| Window | T0 ratio at 120 days (95% interval) | mean angle | median single angle | verdict |
+|---|---|---|---|---|
+| 14 days (W*) | 0.69 (0.65–0.73) | 8.2° | 8.9° | useful |
+| 21 days | 0.74 (0.69–0.79) | 7.3° | 7.8° | useful |
+| 30 days | **0.80** (0.73–0.87) | 5.6° | 9.7° | useful |
+| no snip (full backpropagation) | meaningless | 95° | 93° | failed |
+
+- **A 30-day snip cuts the 120-day undercount from 31% to 20% and stays useful**, so `W_long` = 30
+  (outcome S-A).
+- **P1 is confirmed:** the ratio rises with the window. T2 rises too (0.72, 0.78, 0.83), and T1
+  flattens (0.75, 0.79, 0.78).
+- **P2 is refuted:** the median single-realization angle did not rise (8.9°, 7.8°, 9.7°). The price of
+  the longer memory shows up as noise instead: the noise-to-signal ratio doubles from 0.10 to 0.22.
+- At 60 days every snip is close to exact (T0 ratios 0.86, 0.89 and 0.93). Land stays unresolved, as
+  in Experiment 1.
+- *As registered,* W* stays 14 for everything frozen with revision 1.1, Experiment 2 included. The
+  merged re-analysis would now pick 30 days. That is for the record and for future registrations.
+
+### Part B — Experiment 2
+
+**The registered tests** (`J_zonal`, macro-state means, 8 ocean states, Holm over four)
+
+| Hypothesis | Difference | 90% interval | Holm p | Verdict |
+|---|---|---|---|---|
+| H1: `grad13` vs `brute13_eq` (gradient vs brute force at equal model time) | +6.4% | −21% to +39% | 1.0 | inconclusive |
+| H2: `grad13` vs `sunlight13` (gradient vs the sunlight formula) | −7.8% | −32% to +24% | 1.0 | inconclusive |
+| **H3: `grad5` vs `bptt5`** (snipped vs plain backpropagation) | **−77.7%** | −84% to −70% | 5×10⁻⁵ | **better** |
+| H4: `grad13` vs `grad5` (13 knobs vs 5) | +27.0% | −4% to +71% | 0.58 | inconclusive |
+
+**Every arm** (means over 16 states, scored on days 98–182)
+
+| Arm | `J_zonal` | ocean bias (K) | vs no brightening | cap used | design, bands north to south |
+|---|---|---|---|---|---|
+| `uniform` | **0.00412** | 0.000 | −79% | 13% | 0.019 in every band |
+| `brute5_eq` (2 members) | 0.00415 | +0.009 | −79% | 13% | 0.023 0.028 0.007 0.020 0.019 |
+| `brute5` | 0.00424 | +0.010 | −79% | 13% | 0.026 0.024 0.008 0.019 0.020 |
+| `grad5` | 0.00424 | +0.015 | −79% | 12% | 0.030 0.022 0.011 0.015 0.012 |
+| `brute13` | 0.00494 | +0.015 | −75% | 9% | none at 60°N or 40°N; the most, 0.033, at 20°N |
+| `brute13_eq` | 0.00506 | +0.035 | −74% | 7% | similar |
+| `grad13` | 0.00539 | +0.009 | −73% | 16% | **0.136 at 60°N (90% of the cap)**; the rest 0–0.04 |
+| `sunlight13` | 0.00584 | +0.052 | −70% | 7% | 0.007–0.017 |
+| `sunlight5` | 0.00763 | +0.060 | −61% | 7% | 0.013 0.010 0.006 0.010 0.017 |
+| `bptt5` | 0.01898 | +0.126 | −4% | 0% | zero: it never moved |
+| `uncontrolled` | 0.01973 | +0.129 | — | 0% | — |
+
+**Costs.** On the GX10 one 182-day forward run takes 11.8 s, and one Jacobian run takes 43.5 s for 5
+knobs and 96.3 s for 13:
+- *5 knobs:* the gradient design took 23 minutes of model time (4 steps × 8 states). Brute force with
+  5 members took 47 minutes (2.0×).
+- *13 knobs:* 51 minutes against 110 (2.1×).
+- *At equal cost* brute force gets 2 members. With 2 members it scored the same as with 5 (`brute5_eq`
+  0.00415, `brute5` 0.00424).
+
+**Secondary comparisons** (unadjusted):
+- `grad5` vs `brute5`: +0.1% (p 0.99); vs `brute5_eq`: +2.3% (p 0.88). With 5 knobs the gradient
+  matches brute force at half the model time.
+- `grad5` vs `sunlight5`: −44% (p 0.0004). With 5 bands the gradient clearly beats the formula. The
+  formula under-brightens, using about half of brute force's settings and leaving +0.06 K, because it
+  overstates the cooling about twice, as expected (20.2).
+- `brute5` vs `uniform`: +2.8% (p 0.82). `grad13` vs `uniform`: +31% (p 0.16). `sunlight5` vs
+  `uniform`: +85% (p 0.002).
+- `brute13` vs `brute5`: +17% (p 0.19). `brute13` vs `brute13_eq`: −2%. `brute5` vs `brute5_eq`: +2%.
+- Every arm but `bptt5` removes 61–79% of the score against no brightening.
+
+**What the training logs show:**
+- *`bptt5` never moved.* At zero, plain backpropagation's Jacobian predicted that no brightening would
+  help (predicted objective 0.02977 against the actual 0.02978), so all four Gauss–Newton steps stayed
+  at zero. This is Experiment 1's "failed" verdict (95°) turned into a design.
+- *`grad13` wandered.* Its 60°N band went 0.083, 0.060, 0.045 and then 0.136, while the training
+  objective stalled at about 0.0095–0.0106 after the first step. That band is narrow and covers little
+  ocean, so the score barely constrains it, and the tiny penalty let the last step push it to 90% of the
+  cap. The registered rule ("the last iterate is the design") then froze it.
+- *`grad5` oscillated too* (20°N: 0.049, 0.018, 0.042, 0.022), as the snip's undercount and
+  single-member noise would make it. Its final design still landed next to brute force's.
+
+**What it means** (the interpretations fixed in revision 1.1 §11):
+- *H1 inconclusive:* the efficiency claim is not established. The interval (−21% to +39%) and the cost
+  ratio (brute force with 5 members costs 2.1× the gradient) are what is reported.
+- *H2 inconclusive:* with 13 bands, it is not shown that the gradient knows more than geometry. With 5
+  bands it does (−44%), but that comparison is secondary.
+- *H3 better:* "snipping is what makes gradient design possible at 3-6-month horizons". This is
+  Experiment 1's finding, carried over to design.
+- *H4 inconclusive, leaning worse:* finer latitude control did not help here.
+- *Not registered, but important:* no fixed pattern beat one uniform setting that cancels the
+  ocean-mean warming. For a fixed pattern in this test world, *how much* matters far more than
+  *where*: getting the total right removes about 79% of the score, and no arrangement removed
+  measurably more. Earlier hints that "where" matters were not confirmed here for fixed patterns:
+  the planner pilot (Part 22, −31%) and 3a's linear response against uniform (−16%). In 3b, by
+  contrast, the learning planner won on the pattern. Adapting the pattern over time may be where
+  "where" pays.
+
+**For the gradients paper:**
+- *Solid:*
+  - snipping is essential (H3, with Experiment 1);
+  - a longer, 30-day snip shrinks the 120-day undercount from 31% to 20% and stays useful (Part A);
+  - the snipped gradient designs a 5-knob pattern as well as brute force at half the model time
+    (secondary).
+- *Not established:* that gradients beat brute force at equal cost, or beat the sunlight formula with
+  many knobs (H1, H2), or that more knobs help (H4).
+- *Worth reporting honestly:* one uniform setting did as well as any designed fixed pattern. The
+  13-knob gradient design failed through one poorly constrained knob. A stronger penalty or a
+  best-iterate rule might fix that, but such a fix would have to be registered for a new test.
+
+**Caveats:**
+- *Only 8 ocean states for the tests.* The intervals span about ±30%, so differences of 10–20%
+  between designs could not be seen. Experiment 2 was designed as the cheap test.
+- *One test world:* the ramp, a late-January start and the latitude-profile score.
+- *Single-member gradient designs*, as registered.
+- *The land-model bug* (Part 26) affects every arm alike. The scores use only ocean temperatures.
 
 ---
 

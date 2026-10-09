@@ -1755,6 +1755,53 @@ exists, and the evaluation reads only that file.
 *14. Posting.* Before any snip-test Jacobian or Experiment-2 run exists, this revision and its frozen
 commit are posted to OSF (project https://osf.io/pqabf/), as revision 1 was.
 
+**Amendment 9, revision 1.1 — snip test and Experiment 2 RESULT (logged 2026-10-09; run 2026-10-08
+21:55 to 2026-10-09 07:10 PDT on the GX10 from an export of 66e2c04e; the registered analyses were
+applied unchanged).**
+Every stage and all 176 evaluation episodes finished. Nothing failed, nothing was re-run, and there was
+no deviation. Two operational settings do not affect results: the snip test ran alone with a larger
+memory cap (0.25), and the evaluation episodes ran 3 at a time. The SHA-256 of `designs.json`,
+ddf62344…ecacd, was logged at 03:08, before any evaluation reference existed.
+* **Part A:** outcome **S-A**, `W_long` = 30.
+  * T0@120 ratios are 0.69 (W 14), 0.74 (21) and 0.80 (30), all `useful`; full backpropagation is
+    `failed` (95°).
+  * **P1 confirmed:** the ratio rises, 14 < 21 < 30.
+  * **P2 refuted:** the median single angles are 8.9°, 7.8° and 9.7°.
+  * The merged re-analysis's W* is 30, for the record only; W* stays 14 for this revision.
+* **Part B** (`J_zonal`, 8 macro states, Holm over four):
+  * H1 `grad13` vs `brute13_eq`: rel +6.4% (90% CI −21% to +39%), Holm p 1.0 → **inconclusive**.
+  * H2 `grad13` vs `sunlight13`: rel −7.8% (−32% to +24%), Holm p 1.0 → **inconclusive**.
+  * H3 `grad5` vs `bptt5`: rel −77.7% (−84% to −70%), Holm p 5.0×10⁻⁵ → **better**.
+  * H4 `grad13` vs `grad5`: rel +27.0% (−4% to +71%), Holm p 0.58 → **inconclusive**.
+* *Arm means:* `uniform` 0.00412, `brute5_eq` 0.00415, `brute5` 0.00424, `grad5` 0.00424, `brute13`
+  0.00494, `brute13_eq` 0.00506, `grad13` 0.00539, `sunlight13` 0.00584, `sunlight5` 0.00763,
+  `bptt5` 0.01898, `uncontrolled` 0.01973.
+* *Costs:* `M_eq` = 2 for both layouts. Brute force with 5 members costs 2.0× (b5) and 2.1× (b13) the
+  gradient design's model time.
+* *Secondary* (unadjusted):
+  * `grad5` vs `brute5`: +0.1% (p 0.99).
+  * `grad5` vs `sunlight5`: −44% (p 0.0004).
+  * `brute5` vs `uniform`: +2.8% (p 0.82).
+  * `sunlight5` vs `uniform`: +85% (p 0.002).
+  * `grad13` vs `uniform`: +31% (p 0.16).
+* *Training logs:* `bptt5`'s design never left zero. `grad13`'s last step put 0.136 (90% of the cap)
+  in the 60°N band.
+* *Expectations:*
+  * `brute5` (0.0042) matches 3a's `linear_response` (0.0041).
+  * The sunlight formula under-brightens: about half of brute force's settings, leaving a bias of
+    +0.06 K.
+  * `bptt5`'s Jacobians are useless.
+
+The full outputs are `mcb_experiments_gpu/snip_test/snip_test_analysis.json` and
+`mcb_experiments_gpu/exp2/exp2_analysis.json`, and the plain-language account is
+`MCB_PROJECT_REPORT.md` Part 25.4.
+
+*By section 11:*
+* H1: the efficiency claim is not established; the interval and the cost ratio are reported.
+* H2: it is not established that the gradient knows more than the sunlight formula with 13 bands.
+* H3: "snipping is what makes gradient design possible at 3-6-month horizons".
+* H4: it is not established that finer latitude control helps.
+
 ### Amendment 9, revision 2 — Experiment 3b frozen in full (frozen 2026-10-07, BEFORE any evaluation reference, run or score of Experiment 3b)
 
 **What existed when this was frozen.** Nothing ran on `exp3b_eval` beyond generating its starting

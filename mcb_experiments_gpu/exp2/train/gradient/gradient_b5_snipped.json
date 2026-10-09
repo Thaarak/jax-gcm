@@ -1,0 +1,257 @@
+{
+  "layout": "b5",
+  "mode": "snipped",
+  "k": 5,
+  "smoke": false,
+  "iterations": 4,
+  "snip_days": 14,
+  "design": [
+    0.03043748301837198,
+    0.02211963917681919,
+    0.011438535044852665,
+    0.014844618065063875,
+    0.012096353763172314
+  ],
+  "log": [
+    {
+      "iteration": 0,
+      "point": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "states_used": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "training_objective": 0.030003667576238513,
+      "predicted_objective": 0.009639163464609682,
+      "new_point": [
+        0.035793724214674215,
+        0.048976977328758234,
+        0.0,
+        0.04600279165962115,
+        0.029250409887097293
+      ]
+    },
+    {
+      "iteration": 1,
+      "point": [
+        0.035793724214674215,
+        0.048976977328758234,
+        0.0,
+        0.04600279165962115,
+        0.029250409887097293
+      ],
+      "states_used": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "training_objective": 0.018798904144205153,
+      "predicted_objective": 0.010542691114076724,
+      "new_point": [
+        0.02257224357872172,
+        0.017842072658523615,
+        0.008831613580874175,
+        0.0,
+        0.018475090004329155
+      ]
+    },
+    {
+      "iteration": 2,
+      "point": [
+        0.02257224357872172,
+        0.017842072658523615,
+        0.008831613580874175,
+        0.0,
+        0.018475090004329155
+      ],
+      "states_used": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "training_objective": 0.01573892286978662,
+      "predicted_objective": 0.012650411782374698,
+      "new_point": [
+        0.024199733425453576,
+        0.04216930798564175,
+        0.0,
+        0.033098773291492425,
+        0.019285550517213666
+      ]
+    },
+    {
+      "iteration": 3,
+      "point": [
+        0.024199733425453576,
+        0.04216930798564175,
+        0.0,
+        0.033098773291492425,
+        0.019285550517213666
+      ],
+      "states_used": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "training_objective": 0.009447063785046339,
+      "predicted_objective": 0.00816258998609849,
+      "new_point": [
+        0.03043748301837198,
+        0.02211963917681919,
+        0.011438535044852665,
+        0.014844618065063875,
+        0.012096353763172314
+      ]
+    }
+  ],
+  "final_training_objective": 0.009887285123113543,
+  "jacobian_run_seconds": [
+    70.92,
+    43.4,
+    43.41,
+    43.42,
+    43.42,
+    43.42,
+    43.42,
+    43.42,
+    43.42,
+    43.42,
+    43.41,
+    43.41,
+    43.41,
+    43.42,
+    43.41,
+    43.42,
+    43.42,
+    43.41,
+    43.41,
+    43.42,
+    43.41,
+    43.42,
+    43.41,
+    43.42,
+    43.42,
+    43.42,
+    43.41,
+    43.42,
+    43.41,
+    43.42,
+    43.42,
+    43.42
+  ],
+  "design_seconds": 1416.8,
+  "ics": [
+    {
+      "index": 1,
+      "split": "train",
+      "seed": 12001,
+      "macro_index": 0,
+      "branch": 1,
+      "spinup_days": 30,
+      "carry_file": "ic_m00_b1_train_seed12001_carry.pkl",
+      "baseline_file": "ic_m00_b1_train_seed12001_baseline60d.pkl"
+    },
+    {
+      "index": 201,
+      "split": "train",
+      "seed": 12201,
+      "macro_index": 2,
+      "branch": 1,
+      "spinup_days": 30,
+      "carry_file": "ic_m02_b1_train_seed12201_carry.pkl",
+      "baseline_file": "ic_m02_b1_train_seed12201_baseline60d.pkl"
+    },
+    {
+      "index": 401,
+      "split": "train",
+      "seed": 12401,
+      "macro_index": 4,
+      "branch": 1,
+      "spinup_days": 30,
+      "carry_file": "ic_m04_b1_train_seed12401_carry.pkl",
+      "baseline_file": "ic_m04_b1_train_seed12401_baseline60d.pkl"
+    },
+    {
+      "index": 601,
+      "split": "train",
+      "seed": 12601,
+      "macro_index": 6,
+      "branch": 1,
+      "spinup_days": 30,
+      "carry_file": "ic_m06_b1_train_seed12601_carry.pkl",
+      "baseline_file": "ic_m06_b1_train_seed12601_baseline60d.pkl"
+    },
+    {
+      "index": 801,
+      "split": "train",
+      "seed": 12801,
+      "macro_index": 8,
+      "branch": 1,
+      "spinup_days": 30,
+      "carry_file": "ic_m08_b1_train_seed12801_carry.pkl",
+      "baseline_file": "ic_m08_b1_train_seed12801_baseline60d.pkl"
+    },
+    {
+      "index": 1001,
+      "split": "train",
+      "seed": 13001,
+      "macro_index": 10,
+      "branch": 1,
+      "spinup_days": 30,
+      "carry_file": "ic_m10_b1_train_seed13001_carry.pkl",
+      "baseline_file": "ic_m10_b1_train_seed13001_baseline60d.pkl"
+    },
+    {
+      "index": 1201,
+      "split": "train",
+      "seed": 13201,
+      "macro_index": 12,
+      "branch": 1,
+      "spinup_days": 30,
+      "carry_file": "ic_m12_b1_train_seed13201_carry.pkl",
+      "baseline_file": "ic_m12_b1_train_seed13201_baseline60d.pkl"
+    },
+    {
+      "index": 1401,
+      "split": "train",
+      "seed": 13401,
+      "macro_index": 14,
+      "branch": 1,
+      "spinup_days": 30,
+      "carry_file": "ic_m14_b1_train_seed13401_carry.pkl",
+      "baseline_file": "ic_m14_b1_train_seed13401_baseline60d.pkl"
+    }
+  ],
+  "total_seconds": 1536.6,
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_experiment2.py gradient --ic-dir mcb_experiments_gpu/ics_macro/exp2_train --references-dir mcb_experiments_gpu/exp2/train/refs --layout b5 --mode snipped --output mcb_experiments_gpu/exp2/train/gradient/gradient_b5_snipped.json"
+}

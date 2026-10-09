@@ -1,0 +1,40 @@
+{
+  "stage": "episode",
+  "arm": "bptt5",
+  "layout": "b5",
+  "method": "bptt",
+  "amplitudes": [
+    0.0,
+    0.0,
+    0.0,
+    3.227996754444351e-13,
+    4.926621719088253e-13
+  ],
+  "effort": 1.4038166264969958e-13,
+  "ic": {
+    "index": 901,
+    "split": "heldout",
+    "seed": 12901,
+    "macro_index": 9,
+    "branch": 1,
+    "spinup_days": 30,
+    "carry_file": "ic_m09_b1_heldout_seed12901_carry.pkl",
+    "baseline_file": "ic_m09_b1_heldout_seed12901_baseline60d.pkl"
+  },
+  "members": 5,
+  "member_seeds": [
+    null,
+    180398,
+    180399,
+    180400,
+    180401
+  ],
+  "smoke": false,
+  "designs_sha256": "ddf6234456f7fb90ea29aca657f0b6f10c4fe2e24245f9eebebf1db01d2ecacd",
+  "seconds": 213.1,
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_experiment2.py episode --ic-dir mcb_experiments_gpu/ics_macro/exp2_eval --ic-position 9 --references-dir mcb_experiments_gpu/exp2/eval/refs --designs mcb_experiments_gpu/exp2/designs.json --arm bptt5 --output-dir mcb_experiments_gpu/exp2/eval/runs --allow-eval-roles"
+}

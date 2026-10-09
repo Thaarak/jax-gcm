@@ -1,0 +1,48 @@
+{
+  "stage": "episode",
+  "arm": "grad13",
+  "layout": "b13",
+  "method": "snipped",
+  "amplitudes": [
+    0.13551247119903564,
+    0.0,
+    0.0,
+    0.04087754711508751,
+    0.03411059454083443,
+    0.0,
+    0.0006277482607401907,
+    0.025197826325893402,
+    0.007114925421774387,
+    0.02027871273458004,
+    0.0,
+    0.02010202221572399,
+    0.022177204489707947
+  ],
+  "effort": 0.022760047316736257,
+  "ic": {
+    "index": 301,
+    "split": "heldout",
+    "seed": 12301,
+    "macro_index": 3,
+    "branch": 1,
+    "spinup_days": 30,
+    "carry_file": "ic_m03_b1_heldout_seed12301_carry.pkl",
+    "baseline_file": "ic_m03_b1_heldout_seed12301_baseline60d.pkl"
+  },
+  "members": 5,
+  "member_seeds": [
+    null,
+    122198,
+    122199,
+    122200,
+    122201
+  ],
+  "smoke": false,
+  "designs_sha256": "ddf6234456f7fb90ea29aca657f0b6f10c4fe2e24245f9eebebf1db01d2ecacd",
+  "seconds": 213.0,
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_experiment2.py episode --ic-dir mcb_experiments_gpu/ics_macro/exp2_eval --ic-position 3 --references-dir mcb_experiments_gpu/exp2/eval/refs --designs mcb_experiments_gpu/exp2/designs.json --arm grad13 --output-dir mcb_experiments_gpu/exp2/eval/runs --allow-eval-roles"
+}

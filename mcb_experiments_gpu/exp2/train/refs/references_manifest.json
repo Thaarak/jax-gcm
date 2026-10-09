@@ -1,0 +1,210 @@
+{
+  "stage": "references",
+  "role": "exp2_train",
+  "config": {
+    "smoke": false,
+    "stage": "references",
+    "ic_dir": "mcb_experiments_gpu/ics_macro/exp2_train",
+    "output_dir": "mcb_experiments_gpu/exp2/train/refs",
+    "days": 182,
+    "members": 5,
+    "max_ics": null,
+    "allow_eval_roles": false
+  },
+  "experiment": "Amendment 9 revision 1.1, Part B",
+  "warming": {
+    "step_wm2": 0.0,
+    "ramp_wm2_per_day": 0.03296703296703297
+  },
+  "window": [
+    98,
+    182
+  ],
+  "member_seed0": 93000,
+  "member_amp": 0.001,
+  "smoke": false,
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_experiment2.py references --ic-dir mcb_experiments_gpu/ics_macro/exp2_train --output-dir mcb_experiments_gpu/exp2/train/refs",
+  "ics": [
+    {
+      "entry": {
+        "index": 1,
+        "split": "train",
+        "seed": 12001,
+        "macro_index": 0,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m00_b1_train_seed12001_carry.pkl",
+        "baseline_file": "ic_m00_b1_train_seed12001_baseline60d.pkl"
+      },
+      "file": "ic0001_references.npz",
+      "member_seeds": [
+        null,
+        93098,
+        93099,
+        93100,
+        93101
+      ],
+      "start_sim_time_s": 317952000.0,
+      "seconds": 128.6
+    },
+    {
+      "entry": {
+        "index": 201,
+        "split": "train",
+        "seed": 12201,
+        "macro_index": 2,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m02_b1_train_seed12201_carry.pkl",
+        "baseline_file": "ic_m02_b1_train_seed12201_baseline60d.pkl"
+      },
+      "file": "ic0201_references.npz",
+      "member_seeds": [
+        null,
+        112498,
+        112499,
+        112500,
+        112501
+      ],
+      "start_sim_time_s": 444096000.0,
+      "seconds": 119.7
+    },
+    {
+      "entry": {
+        "index": 401,
+        "split": "train",
+        "seed": 12401,
+        "macro_index": 4,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m04_b1_train_seed12401_carry.pkl",
+        "baseline_file": "ic_m04_b1_train_seed12401_baseline60d.pkl"
+      },
+      "file": "ic0401_references.npz",
+      "member_seeds": [
+        null,
+        131898,
+        131899,
+        131900,
+        131901
+      ],
+      "start_sim_time_s": 570240000.0,
+      "seconds": 119.6
+    },
+    {
+      "entry": {
+        "index": 601,
+        "split": "train",
+        "seed": 12601,
+        "macro_index": 6,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m06_b1_train_seed12601_carry.pkl",
+        "baseline_file": "ic_m06_b1_train_seed12601_baseline60d.pkl"
+      },
+      "file": "ic0601_references.npz",
+      "member_seeds": [
+        null,
+        151298,
+        151299,
+        151300,
+        151301
+      ],
+      "start_sim_time_s": 696384000.0,
+      "seconds": 119.6
+    },
+    {
+      "entry": {
+        "index": 801,
+        "split": "train",
+        "seed": 12801,
+        "macro_index": 8,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m08_b1_train_seed12801_carry.pkl",
+        "baseline_file": "ic_m08_b1_train_seed12801_baseline60d.pkl"
+      },
+      "file": "ic0801_references.npz",
+      "member_seeds": [
+        null,
+        170698,
+        170699,
+        170700,
+        170701
+      ],
+      "start_sim_time_s": 822528000.0,
+      "seconds": 119.6
+    },
+    {
+      "entry": {
+        "index": 1001,
+        "split": "train",
+        "seed": 13001,
+        "macro_index": 10,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m10_b1_train_seed13001_carry.pkl",
+        "baseline_file": "ic_m10_b1_train_seed13001_baseline60d.pkl"
+      },
+      "file": "ic1001_references.npz",
+      "member_seeds": [
+        null,
+        190098,
+        190099,
+        190100,
+        190101
+      ],
+      "start_sim_time_s": 948672000.0,
+      "seconds": 119.6
+    },
+    {
+      "entry": {
+        "index": 1201,
+        "split": "train",
+        "seed": 13201,
+        "macro_index": 12,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m12_b1_train_seed13201_carry.pkl",
+        "baseline_file": "ic_m12_b1_train_seed13201_baseline60d.pkl"
+      },
+      "file": "ic1201_references.npz",
+      "member_seeds": [
+        null,
+        209498,
+        209499,
+        209500,
+        209501
+      ],
+      "start_sim_time_s": 1074816000.0,
+      "seconds": 119.6
+    },
+    {
+      "entry": {
+        "index": 1401,
+        "split": "train",
+        "seed": 13401,
+        "macro_index": 14,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m14_b1_train_seed13401_carry.pkl",
+        "baseline_file": "ic_m14_b1_train_seed13401_baseline60d.pkl"
+      },
+      "file": "ic1401_references.npz",
+      "member_seeds": [
+        null,
+        228898,
+        228899,
+        228900,
+        228901
+      ],
+      "start_sim_time_s": 1200960000.0,
+      "seconds": 119.5
+    }
+  ],
+  "finished_utc": "2026-10-09T05:49:06.936933+00:00"
+}

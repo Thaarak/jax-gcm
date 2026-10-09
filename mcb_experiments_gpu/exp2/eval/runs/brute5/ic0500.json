@@ -1,0 +1,40 @@
+{
+  "stage": "episode",
+  "arm": "brute5",
+  "layout": "b5",
+  "method": "brute",
+  "amplitudes": [
+    0.02622177079319954,
+    0.0235441941767931,
+    0.007509974297136068,
+    0.01931764930486679,
+    0.019775956869125366
+  ],
+  "effort": 0.017299877159427185,
+  "ic": {
+    "index": 500,
+    "split": "heldout",
+    "seed": 12500,
+    "macro_index": 5,
+    "branch": 0,
+    "spinup_days": 30,
+    "carry_file": "ic_m05_b0_heldout_seed12500_carry.pkl",
+    "baseline_file": "ic_m05_b0_heldout_seed12500_baseline60d.pkl"
+  },
+  "members": 5,
+  "member_seeds": [
+    null,
+    141501,
+    141502,
+    141503,
+    141504
+  ],
+  "smoke": false,
+  "designs_sha256": "ddf6234456f7fb90ea29aca657f0b6f10c4fe2e24245f9eebebf1db01d2ecacd",
+  "seconds": 193.1,
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_experiment2.py episode --ic-dir mcb_experiments_gpu/ics_macro/exp2_eval --ic-position 4 --references-dir mcb_experiments_gpu/exp2/eval/refs --designs mcb_experiments_gpu/exp2/designs.json --arm brute5 --output-dir mcb_experiments_gpu/exp2/eval/runs --allow-eval-roles"
+}

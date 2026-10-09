@@ -1,0 +1,386 @@
+{
+  "stage": "references",
+  "role": "exp2_eval",
+  "config": {
+    "smoke": false,
+    "stage": "references",
+    "ic_dir": "mcb_experiments_gpu/ics_macro/exp2_eval",
+    "output_dir": "mcb_experiments_gpu/exp2/eval/refs",
+    "days": 182,
+    "members": 5,
+    "max_ics": null,
+    "allow_eval_roles": true
+  },
+  "experiment": "Amendment 9 revision 1.1, Part B",
+  "warming": {
+    "step_wm2": 0.0,
+    "ramp_wm2_per_day": 0.03296703296703297
+  },
+  "window": [
+    98,
+    182
+  ],
+  "member_seed0": 93000,
+  "member_amp": 0.001,
+  "smoke": false,
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_experiment2.py references --ic-dir mcb_experiments_gpu/ics_macro/exp2_eval --output-dir mcb_experiments_gpu/exp2/eval/refs --allow-eval-roles",
+  "ics": [
+    {
+      "entry": {
+        "index": 100,
+        "split": "heldout",
+        "seed": 12100,
+        "macro_index": 1,
+        "branch": 0,
+        "spinup_days": 30,
+        "carry_file": "ic_m01_b0_heldout_seed12100_carry.pkl",
+        "baseline_file": "ic_m01_b0_heldout_seed12100_baseline60d.pkl"
+      },
+      "file": "ic0100_references.npz",
+      "member_seeds": [
+        null,
+        102701,
+        102702,
+        102703,
+        102704
+      ],
+      "start_sim_time_s": 381024000.0,
+      "seconds": 129.0
+    },
+    {
+      "entry": {
+        "index": 101,
+        "split": "heldout",
+        "seed": 12101,
+        "macro_index": 1,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m01_b1_heldout_seed12101_carry.pkl",
+        "baseline_file": "ic_m01_b1_heldout_seed12101_baseline60d.pkl"
+      },
+      "file": "ic0101_references.npz",
+      "member_seeds": [
+        null,
+        102798,
+        102799,
+        102800,
+        102801
+      ],
+      "start_sim_time_s": 381024000.0,
+      "seconds": 119.2
+    },
+    {
+      "entry": {
+        "index": 300,
+        "split": "heldout",
+        "seed": 12300,
+        "macro_index": 3,
+        "branch": 0,
+        "spinup_days": 30,
+        "carry_file": "ic_m03_b0_heldout_seed12300_carry.pkl",
+        "baseline_file": "ic_m03_b0_heldout_seed12300_baseline60d.pkl"
+      },
+      "file": "ic0300_references.npz",
+      "member_seeds": [
+        null,
+        122101,
+        122102,
+        122103,
+        122104
+      ],
+      "start_sim_time_s": 507168000.0,
+      "seconds": 119.2
+    },
+    {
+      "entry": {
+        "index": 301,
+        "split": "heldout",
+        "seed": 12301,
+        "macro_index": 3,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m03_b1_heldout_seed12301_carry.pkl",
+        "baseline_file": "ic_m03_b1_heldout_seed12301_baseline60d.pkl"
+      },
+      "file": "ic0301_references.npz",
+      "member_seeds": [
+        null,
+        122198,
+        122199,
+        122200,
+        122201
+      ],
+      "start_sim_time_s": 507168000.0,
+      "seconds": 119.1
+    },
+    {
+      "entry": {
+        "index": 500,
+        "split": "heldout",
+        "seed": 12500,
+        "macro_index": 5,
+        "branch": 0,
+        "spinup_days": 30,
+        "carry_file": "ic_m05_b0_heldout_seed12500_carry.pkl",
+        "baseline_file": "ic_m05_b0_heldout_seed12500_baseline60d.pkl"
+      },
+      "file": "ic0500_references.npz",
+      "member_seeds": [
+        null,
+        141501,
+        141502,
+        141503,
+        141504
+      ],
+      "start_sim_time_s": 633312000.0,
+      "seconds": 119.2
+    },
+    {
+      "entry": {
+        "index": 501,
+        "split": "heldout",
+        "seed": 12501,
+        "macro_index": 5,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m05_b1_heldout_seed12501_carry.pkl",
+        "baseline_file": "ic_m05_b1_heldout_seed12501_baseline60d.pkl"
+      },
+      "file": "ic0501_references.npz",
+      "member_seeds": [
+        null,
+        141598,
+        141599,
+        141600,
+        141601
+      ],
+      "start_sim_time_s": 633312000.0,
+      "seconds": 119.1
+    },
+    {
+      "entry": {
+        "index": 700,
+        "split": "heldout",
+        "seed": 12700,
+        "macro_index": 7,
+        "branch": 0,
+        "spinup_days": 30,
+        "carry_file": "ic_m07_b0_heldout_seed12700_carry.pkl",
+        "baseline_file": "ic_m07_b0_heldout_seed12700_baseline60d.pkl"
+      },
+      "file": "ic0700_references.npz",
+      "member_seeds": [
+        null,
+        160901,
+        160902,
+        160903,
+        160904
+      ],
+      "start_sim_time_s": 759456000.0,
+      "seconds": 119.1
+    },
+    {
+      "entry": {
+        "index": 701,
+        "split": "heldout",
+        "seed": 12701,
+        "macro_index": 7,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m07_b1_heldout_seed12701_carry.pkl",
+        "baseline_file": "ic_m07_b1_heldout_seed12701_baseline60d.pkl"
+      },
+      "file": "ic0701_references.npz",
+      "member_seeds": [
+        null,
+        160998,
+        160999,
+        161000,
+        161001
+      ],
+      "start_sim_time_s": 759456000.0,
+      "seconds": 119.1
+    },
+    {
+      "entry": {
+        "index": 900,
+        "split": "heldout",
+        "seed": 12900,
+        "macro_index": 9,
+        "branch": 0,
+        "spinup_days": 30,
+        "carry_file": "ic_m09_b0_heldout_seed12900_carry.pkl",
+        "baseline_file": "ic_m09_b0_heldout_seed12900_baseline60d.pkl"
+      },
+      "file": "ic0900_references.npz",
+      "member_seeds": [
+        null,
+        180301,
+        180302,
+        180303,
+        180304
+      ],
+      "start_sim_time_s": 885600000.0,
+      "seconds": 119.1
+    },
+    {
+      "entry": {
+        "index": 901,
+        "split": "heldout",
+        "seed": 12901,
+        "macro_index": 9,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m09_b1_heldout_seed12901_carry.pkl",
+        "baseline_file": "ic_m09_b1_heldout_seed12901_baseline60d.pkl"
+      },
+      "file": "ic0901_references.npz",
+      "member_seeds": [
+        null,
+        180398,
+        180399,
+        180400,
+        180401
+      ],
+      "start_sim_time_s": 885600000.0,
+      "seconds": 119.3
+    },
+    {
+      "entry": {
+        "index": 1100,
+        "split": "heldout",
+        "seed": 13100,
+        "macro_index": 11,
+        "branch": 0,
+        "spinup_days": 30,
+        "carry_file": "ic_m11_b0_heldout_seed13100_carry.pkl",
+        "baseline_file": "ic_m11_b0_heldout_seed13100_baseline60d.pkl"
+      },
+      "file": "ic1100_references.npz",
+      "member_seeds": [
+        null,
+        199701,
+        199702,
+        199703,
+        199704
+      ],
+      "start_sim_time_s": 1011744000.0,
+      "seconds": 119.3
+    },
+    {
+      "entry": {
+        "index": 1101,
+        "split": "heldout",
+        "seed": 13101,
+        "macro_index": 11,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m11_b1_heldout_seed13101_carry.pkl",
+        "baseline_file": "ic_m11_b1_heldout_seed13101_baseline60d.pkl"
+      },
+      "file": "ic1101_references.npz",
+      "member_seeds": [
+        null,
+        199798,
+        199799,
+        199800,
+        199801
+      ],
+      "start_sim_time_s": 1011744000.0,
+      "seconds": 119.2
+    },
+    {
+      "entry": {
+        "index": 1300,
+        "split": "heldout",
+        "seed": 13300,
+        "macro_index": 13,
+        "branch": 0,
+        "spinup_days": 30,
+        "carry_file": "ic_m13_b0_heldout_seed13300_carry.pkl",
+        "baseline_file": "ic_m13_b0_heldout_seed13300_baseline60d.pkl"
+      },
+      "file": "ic1300_references.npz",
+      "member_seeds": [
+        null,
+        219101,
+        219102,
+        219103,
+        219104
+      ],
+      "start_sim_time_s": 1137888000.0,
+      "seconds": 119.2
+    },
+    {
+      "entry": {
+        "index": 1301,
+        "split": "heldout",
+        "seed": 13301,
+        "macro_index": 13,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m13_b1_heldout_seed13301_carry.pkl",
+        "baseline_file": "ic_m13_b1_heldout_seed13301_baseline60d.pkl"
+      },
+      "file": "ic1301_references.npz",
+      "member_seeds": [
+        null,
+        219198,
+        219199,
+        219200,
+        219201
+      ],
+      "start_sim_time_s": 1137888000.0,
+      "seconds": 119.2
+    },
+    {
+      "entry": {
+        "index": 1500,
+        "split": "heldout",
+        "seed": 13500,
+        "macro_index": 15,
+        "branch": 0,
+        "spinup_days": 30,
+        "carry_file": "ic_m15_b0_heldout_seed13500_carry.pkl",
+        "baseline_file": "ic_m15_b0_heldout_seed13500_baseline60d.pkl"
+      },
+      "file": "ic1500_references.npz",
+      "member_seeds": [
+        null,
+        238501,
+        238502,
+        238503,
+        238504
+      ],
+      "start_sim_time_s": 1264032000.0,
+      "seconds": 119.2
+    },
+    {
+      "entry": {
+        "index": 1501,
+        "split": "heldout",
+        "seed": 13501,
+        "macro_index": 15,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m15_b1_heldout_seed13501_carry.pkl",
+        "baseline_file": "ic_m15_b1_heldout_seed13501_baseline60d.pkl"
+      },
+      "file": "ic1501_references.npz",
+      "member_seeds": [
+        null,
+        238598,
+        238599,
+        238600,
+        238601
+      ],
+      "start_sim_time_s": 1264032000.0,
+      "seconds": 119.2
+    }
+  ],
+  "finished_utc": "2026-10-09T10:41:09.348578+00:00"
+}
