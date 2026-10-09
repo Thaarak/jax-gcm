@@ -2817,3 +2817,96 @@ means both agree. With climatology, the ocean average detects nothing within six
 > **New terms:** *Detection* = telling, at a chosen confidence, that an observed change is not just
 > weather. *Fingerprint* = a pattern-matching test that weighs each latitude by how noisy it is.
 > *Forecast skill* = how well a model predicts the actual weather path, not just its average.
+
+---
+
+# Part 28 — Experiments 3c and 3d: does 3b's result survive realistic information and the land fix? (plan)
+
+*Added 2026-10-09, before any evaluation run of either experiment. The registered version is
+Amendment 9 revision 3, frozen and posted on OSF before any evaluation run of 3c or evaluation
+reference of 3d, as revisions 1 and 2 were.*
+
+**In one sentence:** 3b's learning planner beat the classical controller by 38%, but it knew the
+simulated weather exactly and the model's land had a bug. 3c takes the weather away and 3d fixes the
+land; each asks whether the result survives.
+
+*Analogy:* a chess player who won a tournament. 3c replays the tournament with the board half hidden
+(the player sees their own pieces, the ocean, but not the opponent's, the weather). 3d replays it on
+a board whose wobbly square has been fixed (the land).
+
+## 28.1 Why these two
+
+- **3b's own registration named its biggest idealization** (revision 2 §11): the planners forecast
+  from the exact current state, weather included. A reviewer's first question will be "does it work
+  with realistic information?"
+- **The land-model bug** (Part 26) is in every experiment so far. Comparisons stay fair, because
+  every arm shares it and the scores use only ocean temperatures. But a reviewer will ask whether
+  the result depends on it.
+- **Both are cheap ways to make the paper's headline robust.** 3c reuses almost all of 3b, and 3d
+  reuses all of 3b's machinery.
+
+## 28.2 Experiment 3c: the planner sees the ocean, not the weather
+
+- **What changes.** At each re-plan the planner combines the true ocean with its own guess of the
+  atmosphere and land:
+  - on day 0, the weather of another branch of the same ocean state, the same day but a different
+    weather sample;
+  - after that, wherever its own previous forecast ended.
+
+  It never sees the true weather. This is how a forecast system with ocean observations but no
+  weather data would work. It costs nothing extra.
+- **What stays the same.** 3b's 48 states, hidden strengths, references, 6 members and scoring.
+  - *Reused:* the classical controller, the adaptive law, the fixed plan and no brightening never
+    used the weather, so their 3b runs are reused. 3b's exact-weather planners are the comparison.
+  - *Run again:* only the two planners, with learning and without.
+- **First measurement (smoke test, 2026-10-09).** Without the weather, the planner's two-week
+  forecast of the ocean's latitude profile misses by about 0.05 K. With the exact state it missed by
+  about 0.0007 K, about 60 times less. The strength signal the learner uses is about 0.004 K, so
+  learning will be much slower and noisier. That is the point of the test.
+- **Hypotheses:**
+  - **H1 (primary):** the learner without the weather vs the classical controller.
+  - **H2:** does learning still help (vs the same planner without learning)?
+  - **H3:** what does not seeing the weather cost (vs 3b's learner)?
+- **Pilot:** on 3b's pilot states. It measures the learner's noise level by 3b's rule, and the
+  power at 6 members for the record.
+
+## 28.3 Experiment 3d: 3b's tests with the land fixed
+
+- **The fix.** The land reads its 12 monthly climate entries as months, the same fix the ocean's
+  Q-flux got in September. It is switched on by `JCM_LAND_CLIMATOLOGY=monthly`. The old behaviour
+  stays the default, so every earlier result reproduces exactly.
+  - *Safeguard:* each starting state records which land it was made with, and the runners refuse a
+    mismatch.
+- **Everything rebuilt the registered way:**
+  1. the base climate, by the procedure and pass/fail gate of revisions 0.2–0.3;
+  2. 32 new ocean states, 100–131;
+  3. their hidden strengths;
+  4. the training runs and the fixed design;
+  5. an oracle pilot, for the learner's noise level only.
+- **Same tests as 3b** (H1 learner vs PI, H2 learner vs naive, H3 PI vs fixed), with six arms (no
+  oracle, to save about 5 GPU-hours). Plus a replication check: does 3b's estimate fall inside 3d's
+  95% interval?
+
+## 28.4 Steps and status
+
+| # | Step | Status (2026-10-09) |
+|---|---|---|
+| 1 | Land fix, guards and tests (7 new tests) | Done (5f5abc13) |
+| 2 | 3d base climate: diagnose the Q-flux, settle, gate | Settle 1 failed G2 (−1.29 K, as the original did in September); one Newton correction; settle 2 **passed** (drift +0.009 K per 60 d, bias −0.36 K) |
+| 3 | 3d states, strengths, training side, oracle pilot | Running on the GX10 |
+| 4 | Ocean-only sensing in the planner, with tests | Done (3a79e343); real-model smoke above |
+| 5 | 3c pilot (ocean-only oracle, learner, naive planner) | Running on the GX10 |
+| 6 | Registered analyses (3b's machinery; 3b's output reproduced exactly) and evaluation scripts (3c smoke passed) | Done |
+| 7 | Freeze revision 3, commit and push; **post on OSF after the user's OK**; start both evaluations | After the pilots |
+| 8 | Results, report, memory, explanation | After the evaluations (about 28 GPU-hours) |
+
+**What each outcome would mean:**
+- *3c H1 better:* the headline survives realistic information, which makes the paper much stronger.
+- *3c H1 not better:* 3b's advantage needs knowledge of the weather, or a forecast ensemble. That is
+  an honest and useful limit, and it ties to the detection study (Part 27).
+- *3d H1 better:* the result does not depend on the land bug.
+- *3d H1 not better:* the bug mattered, and the paper must say so.
+
+> **New terms:** *Sensing* = what a controller knows about the current state of the world.
+> *Background* = a forecaster's own best guess of the parts it cannot observe. *Replication* =
+> repeating a test on new data and checking that the answer holds.
