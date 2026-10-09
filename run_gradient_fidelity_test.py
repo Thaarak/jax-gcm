@@ -7,7 +7,9 @@ longer than the rollout must reproduce full BPTT exactly, and the
 same-day-only gradient (W = 1) must keep the direct actuator path alive.
 """
 
+import os
 import unittest
+from unittest import mock
 
 import jax
 import jax.numpy as jnp
@@ -18,9 +20,11 @@ from run_generate_macro_ics import (
     DEFAULT_PLAN,
     EVAL_MACROS,
     EXP3B_PLAN,
+    EXP3D_PLAN,
     TRAIN_MACROS,
     branch_seed,
     check_exp3b_settings,
+    check_registered_settings,
     ic_index,
     macro_diagnostics,
     split_macros,
@@ -190,6 +194,39 @@ class MacroPlanTest(unittest.TestCase):
         # The original plan is unaffected by the check.
         check_exp3b_settings(macro_parse_args(["--base-carry", "x",
                                                "--output-root", "y"]))
+
+    def test_exp3d_plan_is_fresh_interleaved_and_disjoint(self):
+        flat = validate_plan(EXP3D_PLAN, 33, offset=99)
+        counts = {}
+        for role, *_ in flat:
+            counts[role] = counts.get(role, 0) + 1
+        self.assertEqual(counts, {"exp3d_train": 32, "exp3d_eval": 48})
+        train, evaluation = split_macros(flat)
+        self.assertEqual(train, list(range(100, 132, 2)))
+        self.assertEqual(evaluation, list(range(101, 132, 2)))
+        # No index or seed is shared with any earlier state.
+        old = (validate_plan(DEFAULT_PLAN, 16)
+               + validate_plan(EXP3B_PLAN, 33, offset=15))
+        both = flat + old
+        self.assertEqual(len({ic_index(m, b) for _, m, b, *_ in both}),
+                         len(both))
+        self.assertEqual(len({branch_seed(12000, m, b)
+                              for _, m, b, *_ in both}), len(both))
+
+    def test_exp3d_needs_its_settings_and_the_fixed_land(self):
+        base = ["--base-carry", "x", "--output-root", "y", "--plan", "exp3d"]
+        good = ["--macro-offset", "99", "--num-macro", "33",
+                "--spacing-days", "365"]
+        with mock.patch.dict(os.environ, {"JCM_LAND_CLIMATOLOGY": "monthly"}):
+            check_registered_settings(macro_parse_args(base + good))
+            bad = list(good)
+            bad[1] = "15"
+            with self.assertRaises(SystemExit):
+                check_registered_settings(macro_parse_args(base + bad))
+        with mock.patch.dict(os.environ,
+                             {"JCM_LAND_CLIMATOLOGY": "daily_index"}):
+            with self.assertRaises(SystemExit):
+                check_registered_settings(macro_parse_args(base + good))
 
     def test_macro_diagnostics(self):
         w = np.full((4, 3), 1.0 / 12)

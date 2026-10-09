@@ -54,6 +54,10 @@ from jem.components.JCM import make_jem_compatible
 from jem.components.slab.slab_land_model.slab_land_model import SlabLandModel
 from jem.mapping.mapper import BasicMapper
 
+from jcm.mcb.land_climatology import (
+    MonthlyClimatologySlabLandModel,
+    land_climatology_mode,
+)
 from jcm.mcb.qflux import MonthlyQfluxSlabOceanModel
 
 
@@ -259,8 +263,14 @@ def setup_coupled_model(start_datetime, coupling_timestep, realistic_terrain=Fal
     # to climatology — a prerequisite for land-driven precipitation
     # teleconnections. The LAND slab heat flux (hfluxn[..., 0]) drives the land
     # model; its land_surface_temperature is fed back as the atmosphere's stl_am.
+    # JCM_LAND_CLIMATOLOGY=monthly reads the land's monthly climatology as
+    # months (jcm/mcb/land_climatology.py); the default keeps jax-esm's
+    # one-entry-per-day lookup, which every run before revision 3 used.
     if realistic_terrain:
-        lnd_model = SlabLandModel(
+        land_class = (MonthlyClimatologySlabLandModel
+                      if land_climatology_mode() == "monthly"
+                      else SlabLandModel)
+        lnd_model = land_class(
             start_datetime=start_datetime,
             timestep=timestep_seconds,
             mask_file=TERRAIN_NC,

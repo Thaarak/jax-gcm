@@ -62,6 +62,7 @@ from jax import lax
 from jcm.mcb import save_carry
 from jcm.mcb.coupled_controller import create_coupled_step_fn
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
+from jcm.mcb.land_climatology import land_climatology_mode
 from jcm.mcb.qflux import (
     DAYS_PER_YEAR,
     SECONDS_PER_DAY,
@@ -248,6 +249,7 @@ def diagnose(args, m):
         m["ocean"].sum(axis=0), 1)
     summary = {
         "stage": "diagnose", "config": vars(args), "git": git,
+        "land_climatology": land_climatology_mode(),
         "qflux_file": str(qpath),
         "ocean_mean_qflux_by_month_wm2": monthly_mean.tolist(),
         "ocean_mean_qflux_annual_wm2": float(monthly_mean.mean()),
@@ -442,6 +444,7 @@ def settle(args, m):
     fm = m["fmask_ocean"] & m["ocean"]
     summary = {
         "stage": "settle", "config": vars(args), "git": git_provenance(),
+        "land_climatology": land_climatology_mode(),
         "qflux_file": args.qflux,
         "qflux_max_abs_wm2": qflux_magnitude(carry),
         "gate": {"drift_k_per_60d": drift, "drift_max": DRIFT_MAX_K_PER_60D,

@@ -60,6 +60,7 @@ from jcm.mcb.band_basis import gaussian_band_patterns
 from jcm.mcb.coupled_controller import create_coupled_step_fn
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
 from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
+from jcm.mcb.land_climatology import check_land_mode, land_climatology_mode
 from jcm.mcb.planner import (
     OPTIMIZERS,
     PRESETS,
@@ -352,6 +353,8 @@ def stage_references(args):
     m = build_model()
     manifest, ics = load_manifest_ics(args.ic_dir, args.split, args.max_ics,
                                       m["template"])
+    check_land_mode(manifest.get("land_climatology"),
+                    f"the states in {args.ic_dir}")
     ics = select_branches(ics, args.branches)
     role = manifest.get("macro_role") or Path(args.ic_dir).name
     check_role_allowed(role, args.allow_eval_roles)
@@ -366,6 +369,7 @@ def stage_references(args):
     seg = make_segment_fn(m["step_fn"], m["patterns"], args.days)
     config = {k: v for k, v in vars(args).items()}
     meta = {"stage": "references", "role": role, "config": config,
+            "land_climatology": land_climatology_mode(),
             "fields": list(FIELD_NAMES),
             "units": {"sst": "K", "land_temperature": "K",
                       "precipitation": "mm/day", "evaporation": "mm/day"},
@@ -415,6 +419,8 @@ def load_references(args, days_needed: int):
     with open(ref_path.parent / "references_manifest.json") as f:
         ref_meta = json.load(f)
     check_warming_matches(ref_meta["config"], args)
+    check_land_mode(ref_meta.get("land_climatology"),
+                    f"the references in {ref_path.parent}")
     refs = dict(np.load(ref_path, allow_pickle=False))
     if refs["normal_sst"].shape[0] < days_needed:
         raise SystemExit(f"references cover {refs['normal_sst'].shape[0]} "
@@ -427,7 +433,10 @@ def load_references(args, days_needed: int):
 
 def load_ic(m, args, ref_path):
     """Load the IC at ``--ic-position`` and check its references match it."""
-    _, ics = load_manifest_ics(args.ic_dir, "all", None, m["template"])
+    manifest, ics = load_manifest_ics(args.ic_dir, "all", None,
+                                      m["template"])
+    check_land_mode(manifest.get("land_climatology"),
+                    f"the states in {args.ic_dir}")
     entry, carry = ics[args.ic_position]
     expected = f"ic{entry['index']:04d}_references.npz"
     if ref_path.name != expected:
@@ -529,6 +538,7 @@ def write_summary(args, summary, mean_fields, schedules,
                   member_profiles=None):
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
+    summary.setdefault("land_climatology", land_climatology_mode())
     with open(out, "w") as f:
         json.dump(summary, f, indent=2)
     if args.save_fields:

@@ -62,6 +62,10 @@ from jcm.mcb.coupled_controller import (
     run_interval_final_carry,
 )
 from jcm.mcb.coupled_train import ocean_mask_from_coupler
+from jcm.mcb.land_climatology import (
+    LAND_CLIMATOLOGY_ENV,
+    land_climatology_mode,
+)
 from jcm.mcb.qflux import qflux_magnitude
 from jcm.mcb.state_features import compute_area_weights
 from run_coupled_training import (
@@ -124,11 +128,42 @@ EXP3B_PLAN = {
          "split": "heldout", "horizon": 60},
     ],
 }
-PLANS = {"amendment9": DEFAULT_PLAN, "exp3b": EXP3B_PLAN}
+# Experiment 3d (Amendment 9 revision 3; MCB_PROJECT_REPORT.md Part 28): the
+# fixed land model (JCM_LAND_CLIMATOLOGY=monthly) needs its own base climate
+# and its own states. The control run starts from that base carry (state 99)
+# and is saved every 365 days; states 100-131 are interleaved as in 3b.
+EXP3D_BASE_MACRO = 99
+EXP3D_SPACING_DAYS = 365
+EXP3D_TRAIN_MACROS = list(range(100, 132, 2))
+EXP3D_EVAL_MACROS = list(range(101, 132, 2))
+EXP3D_PLAN = {
+    "exp3d_train": [
+        {"macro": EXP3D_TRAIN_MACROS, "branches": [0, 1], "split": "train",
+         "horizon": 60},
+    ],
+    "exp3d_eval": [
+        {"macro": EXP3D_EVAL_MACROS, "branches": [0, 1, 2],
+         "split": "heldout", "horizon": 60},
+    ],
+}
+PLANS = {"amendment9": DEFAULT_PLAN, "exp3b": EXP3B_PLAN, "exp3d": EXP3D_PLAN}
 PREREGISTRATION_NOTE = {
     "amendment9": "PREREGISTRATION.md Amendment 9 (plan: revision 0.4)",
     "exp3b": "PREREGISTRATION.md Amendment 9 revision 2 (Experiment 3b)",
+    "exp3d": ("PREREGISTRATION.md Amendment 9 revision 3 (Experiment 3d, "
+              "the fixed land model)"),
 }
+# The registered settings of the plans that continue a control run.
+REGISTERED_SETTINGS = {
+    "exp3b": {"macro_offset": EXP3B_BASE_MACRO,
+              "spacing_days": EXP3B_SPACING_DAYS,
+              "num_macro": max(EXP3B_EVAL_MACROS) - EXP3B_BASE_MACRO + 1},
+    "exp3d": {"macro_offset": EXP3D_BASE_MACRO,
+              "spacing_days": EXP3D_SPACING_DAYS,
+              "num_macro": max(EXP3D_EVAL_MACROS) - EXP3D_BASE_MACRO + 1},
+}
+# The land model each plan's states must be made with.
+PLAN_LAND_MODE = {"exp3d": "monthly"}
 
 
 def parse_args(argv=None):
@@ -272,22 +307,27 @@ def macro_diagnostics(ssts, weights, train_macros=None, eval_macros=None,
     return out
 
 
-def check_exp3b_settings(args):
-    """Refuse an exp3b run that departs from its registered settings."""
-    if args.plan != "exp3b":
-        return
-    wanted = {"macro_offset": EXP3B_BASE_MACRO,
-              "spacing_days": EXP3B_SPACING_DAYS,
-              "num_macro": max(EXP3B_EVAL_MACROS) - EXP3B_BASE_MACRO + 1}
+def check_registered_settings(args):
+    """Refuse an exp3b or exp3d run that departs from its registered settings."""
+    wanted = REGISTERED_SETTINGS.get(args.plan, {})
     for name, value in wanted.items():
         if getattr(args, name) != value:
-            raise SystemExit(f"--plan exp3b registers --{name.replace('_', '-')}"
-                             f" {value}, got {getattr(args, name)}")
+            raise SystemExit(f"--plan {args.plan} registers "
+                             f"--{name.replace('_', '-')} {value}, got "
+                             f"{getattr(args, name)}")
+    land = PLAN_LAND_MODE.get(args.plan)
+    if land is not None and land_climatology_mode() != land:
+        raise SystemExit(f"--plan {args.plan} needs the {land!r} land model "
+                         f"(set {LAND_CLIMATOLOGY_ENV}={land})")
+
+
+# The old name, kept for the tests and campaign notes that use it.
+check_exp3b_settings = check_registered_settings
 
 
 def main(argv=None):
     args = parse_args(argv)
-    check_exp3b_settings(args)
+    check_registered_settings(args)
     plan = PLANS[args.plan]
     if args.plan_json:
         with open(args.plan_json) as f:
@@ -373,6 +413,7 @@ def main(argv=None):
               f"{bal['eval_minus_train_K']:+.3f} K)")
     with open(root / "macro_bases_manifest.json", "w") as f:
         json.dump({"base_carry": args.base_carry,
+                   "land_climatology": land_climatology_mode(),
                    "base_qflux_max_abs_wm2": q_max,
                    "plan": args.plan,
                    "macro_offset": offset,
@@ -429,6 +470,7 @@ def main(argv=None):
             "realistic_terrain": True,
             "terrain_source": TERRAIN_NC,
             "macro_role": role,
+            "land_climatology": land_climatology_mode(),
             "macro_spacing_days": args.spacing_days,
             "macro_offset": offset,
             "base_carry": args.base_carry,
