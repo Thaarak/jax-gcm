@@ -322,7 +322,7 @@ def reference_ensemble(carry: dict, segment_fn: Callable, num_days: int,
 # --- Step 12: the differentiable look-ahead objective ----------------------
 
 def make_lookahead_sst_fn(step_fn: Callable, patterns,
-                          num_days: int) -> Callable:
+                          num_days: int, return_final: bool = False) -> Callable:
     """Return the look-ahead's time-mean SST map as a function of the bands.
 
     ``f(amplitudes, carry, efficacy, q_base, warming, window,
@@ -333,7 +333,9 @@ def make_lookahead_sst_fn(step_fn: Callable, patterns,
     Experiment 1; ``NO_TRUNCATION_DAYS`` gives ordinary backpropagation.
     Forward values do not depend on ``window``. Forward mode (``jax.jacfwd``)
     gives the whole map's response to each band at once, which is what
-    Gauss-Newton planning uses.
+    Gauss-Newton planning uses. With ``return_final`` it returns
+    ``(mean map, final carry)``: a planner that cannot see the weather keeps
+    the final carry's atmosphere as its next starting guess (Experiment 3c).
     """
     if num_days < 1:
         raise ValueError("num_days must be >= 1")
@@ -352,9 +354,10 @@ def make_lookahead_sst_fn(step_fn: Callable, patterns,
             return c, c["ocn"]["state"].sea_surface_temperature - \
                 MAP_REFERENCE_K
 
-        _, anomalies = lax.scan(jax.checkpoint(body), controlled,
-                                jnp.arange(num_days))
-        return jnp.mean(anomalies, axis=0)
+        final, anomalies = lax.scan(jax.checkpoint(body), controlled,
+                                    jnp.arange(num_days))
+        mean = jnp.mean(anomalies, axis=0)
+        return (mean, final) if return_final else mean
 
     return mean_sst
 

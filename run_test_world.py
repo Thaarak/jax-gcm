@@ -65,6 +65,7 @@ from jcm.mcb.planner import (
     OPTIMIZERS,
     PRESETS,
     REPRESENTATIONS,
+    SENSING,
     LearningPlanner,
     Planner,
     PlannerConfig,
@@ -216,6 +217,12 @@ def parse_args(argv=None):
                          "known; set from the pilot's oracle runs.")
     pl.add_argument("--learn-prior-sd", type=float, default=1.0,
                     help="Prior standard deviation of the strength.")
+    pl.add_argument("--sensing", choices=SENSING, default=None,
+                    help="What the planner knows: the exact state "
+                         "(Experiments 3a-3b), or only the ocean "
+                         "(Experiment 3c), with the weather of another "
+                         "branch of the same macro state on day 0 and of "
+                         "its own forecasts after that.")
     return p.parse_args(argv)
 
 
@@ -431,8 +438,12 @@ def load_references(args, days_needed: int):
     return ref_path, ref_meta, refs
 
 
-def load_ic(m, args, ref_path):
-    """Load the IC at ``--ic-position`` and check its references match it."""
+def load_ics_at(m, args, ref_path):
+    """Load the IC directory; return the IC at ``--ic-position`` and all ICs.
+
+    Checks the land model the states were made with and that the references
+    belong to the chosen IC.
+    """
     manifest, ics = load_manifest_ics(args.ic_dir, "all", None,
                                       m["template"])
     check_land_mode(manifest.get("land_climatology"),
@@ -442,7 +453,31 @@ def load_ic(m, args, ref_path):
     if ref_path.name != expected:
         raise SystemExit(f"IC {entry['index']} needs {expected}, got "
                          f"{ref_path.name}")
+    return entry, carry, ics
+
+
+def load_ic(m, args, ref_path):
+    """Load the IC at ``--ic-position`` and check its references match it."""
+    entry, carry, _ = load_ics_at(m, args, ref_path)
     return entry, carry
+
+
+def background_for(entry, ics):
+    """The state an ocean-only planner takes its day-0 weather from.
+
+    It is the next weather branch of the same macro state (cyclically): the
+    same ocean state and date, but weather the planner has never seen. Only
+    its atmosphere and land are used (Experiment 3c).
+    """
+    same = sorted(((e["branch"], e, c) for e, c in ics
+                   if e.get("macro_index") == entry.get("macro_index")),
+                  key=lambda t: t[0])
+    if len(same) < 2:
+        raise SystemExit(f"IC {entry['index']}: ocean-only sensing needs "
+                         "another weather branch of the same macro state")
+    branches = [b for b, _, _ in same]
+    _, e, c = same[(branches.index(entry["branch"]) + 1) % len(same)]
+    return e, c
 
 
 def run_members(m, args, entry, carry, ref_config, make_policy):
@@ -581,7 +616,7 @@ def planner_config(args) -> PlannerConfig:
     overrides = {"alpha": args.alpha, "beta": args.beta, "mu": args.mu,
                  "lam": args.lam}
     for name in ("lookahead_days", "copies", "optimizer", "iterations",
-                 "learning_rate", "representation"):
+                 "learning_rate", "representation", "sensing"):
         if getattr(args, name) is not None:
             overrides[name] = getattr(args, name)
     if args.window_days is not None:
@@ -597,13 +632,20 @@ def planner_config(args) -> PlannerConfig:
 
 def stage_plan(args):
     cfg = planner_config(args)
+    if cfg.sensing == "ocean" and cfg.lookahead_days != args.segment_days:
+        raise SystemExit("ocean-only sensing needs the look-ahead to equal "
+                         "the segment (each forecast ends where the next "
+                         "re-plan starts)")
     n_days = args.segments * args.segment_days
     last_lookahead_end = (args.segments - 1) * args.segment_days \
         + cfg.lookahead_days
     ref_path, ref_meta, refs = load_references(
         args, max(n_days, last_lookahead_end))
     m = build_model()
-    entry, carry = load_ic(m, args, ref_path)
+    entry, carry, ics = load_ics_at(m, args, ref_path)
+    background_entry, background = ((None, None) if cfg.sensing == "exact"
+                                    else background_for(entry, ics))
+    del ics
     ocean_w = domain_weights(m["lats"], m["ocean"], m["land"])["ocean"]
     learning = args.learn_strength != "off"
     belief = strength_vector(args.efficacy if args.planner_efficacy is None
@@ -616,11 +658,15 @@ def stage_plan(args):
         # nominal at first and then learned from its forecast misses.
         common = (m["step_fn"], m["patterns"], ocean_w, refs["normal_sst"],
                   c["ocn"]["forcing"].q_flux, warming)
+        # With ocean-only sensing it sees the true ocean only; its weather
+        # is another branch's on day 0 and its own forecast's after that.
         if learning:
             return LearningPlanner(*common, estimator_config(args), cfg,
-                                   seed_offset=100 * entry["index"] + member)
+                                   seed_offset=100 * entry["index"] + member,
+                                   background=background)
         return Planner(*common, belief, cfg,
-                       seed_offset=100 * entry["index"] + member)
+                       seed_offset=100 * entry["index"] + member,
+                       background=background)
 
     t0 = time.time()
     mean_fields, schedules, seeds, planners, profiles = run_members(
@@ -633,6 +679,8 @@ def stage_plan(args):
                "planner_efficacy": None if learning else belief.tolist(),
                "true_efficacy": strength_vector(args.efficacy).tolist(),
                "learner": learner, "ic": entry,
+               "background_ic": (None if background_entry is None
+                                 else background_entry["index"]),
                "members": len(seeds), "member_seeds": seeds,
                "reference_members": ref_meta["config"]["members"],
                "schedules": [s.tolist() for s in schedules],

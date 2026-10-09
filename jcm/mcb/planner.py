@@ -47,6 +47,15 @@ response map are projected onto their ocean zonal means before the residuals
 are formed. The step-23 pilot chose the zonal one (MCB_PROJECT_REPORT.md
 Part 22).
 
+What the planner knows (``sensing``):
+
+* ``exact`` (Experiments 3a-3b): it forecasts from the true current state,
+  weather included.
+* ``ocean`` (Experiment 3c): it sees the ocean but not the weather. It
+  forecasts from the true ocean plus its *background*: the atmosphere and
+  land at the end of its own previous forecast, or on day 0 a state it is
+  given. The forecast is otherwise unchanged, so it costs nothing extra.
+
 The comparison planners of step 15 are presets: ``short14`` is a 14-day
 look-ahead with exact backpropagation (Dubey et al.'s setting), and
 ``bptt60`` is 60 days without the snip.
@@ -79,6 +88,8 @@ OPTIMIZERS = ("adam", "gauss_newton")
 # What the objective scores: the ocean map, or its latitude (zonal-mean)
 # profile, which the step-23 pilot chose (MCB_PROJECT_REPORT.md Part 22).
 REPRESENTATIONS = ("map", "zonal")
+# What the planner knows of the current state (Experiment 3c).
+SENSING = ("exact", "ocean")
 _ADAM_BETAS = (0.9, 0.999)
 _ADAM_EPS = 1e-8
 
@@ -111,6 +122,7 @@ class PlannerConfig:
     edge_margin: float = 0.02
     gn_damping: float = 1e-3
     representation: str = "map"
+    sensing: str = "exact"
 
     def validate(self):
         """Raise ValueError on settings the planner cannot use."""
@@ -134,6 +146,9 @@ class PlannerConfig:
              f"representation must be one of {REPRESENTATIONS}"),
             (self.representation == "map" or self.optimizer == "gauss_newton",
              "the zonal representation is implemented for Gauss-Newton"),
+            (self.sensing in SENSING, f"sensing must be one of {SENSING}"),
+            (self.sensing == "exact" or self.optimizer == "gauss_newton",
+             "ocean-only sensing is implemented for Gauss-Newton"),
         ]
         for ok, message in checks:
             if not ok:
@@ -231,6 +246,9 @@ class Planner:
         efficacy: the spraying strength the planner believes in.
         config: a ``PlannerConfig``.
         seed_offset: separates the copy seeds of different episodes.
+        background: with ocean-only sensing, the state whose atmosphere and
+            land the planner assumes on day 0 (every part but the ocean is
+            used).
 
     Every call logs a record in ``self.log``: the start and final settings,
     the objective at each iterate, and the noise-to-signal ratio across the
@@ -242,10 +260,15 @@ class Planner:
                  target_sst_daily, q_base, warming: Warming,
                  efficacy: float = 1.0,
                  config: PlannerConfig = PlannerConfig(),
-                 seed_offset: int = 0):
+                 seed_offset: int = 0, background: Optional[dict] = None):
         """Build the jitted gradient (Adam) or Jacobian (Gauss-Newton)."""
         config.validate()
+        if config.sensing == "ocean" and background is None:
+            raise ValueError("ocean-only sensing needs a background: the "
+                             "atmosphere and land assumed on day 0")
         self.cfg = config
+        self.background = background
+        self._forecast_final = None
         self.k = int(np.shape(patterns)[0])
         self.weights = np.asarray(ocean_weights, np.float64)
         self.target = np.asarray(target_sst_daily, np.float64)
@@ -279,11 +302,16 @@ class Planner:
             evaluate = jax.value_and_grad(objective_of_logits)
             axes = (None, 0, None, None, None)
         else:
+            ocean_only = config.sensing == "ocean"
             mean_sst = make_lookahead_sst_fn(step_fn, patterns,
-                                             config.lookahead_days)
+                                             config.lookahead_days,
+                                             return_final=ocean_only)
 
             def map_twice(a, carry, eff):
                 out = mean_sst(a, carry, eff, q_base, warming, window)
+                if ocean_only:       # also keep where the forecast ends
+                    out, final = out
+                    return out, (out, final)
                 return out, out
 
             # (jacobian (ix, il, K), map (ix, il)) from ONE forward pass.
@@ -332,11 +360,19 @@ class Planner:
         extra = ((jnp.asarray(target_mean), jnp.asarray(previous))
                  if self.cfg.optimizer == "adam" else ())
         eff = jnp.asarray(self.efficacy, jnp.float32)
+        ocean_only = self.cfg.sensing == "ocean"
         if self.cfg.batch_copies:
             first, second = self._evaluate(x, copies, *extra, eff)
+            if ocean_only:
+                second, finals = second
+                self._forecast_final = jax.tree_util.tree_map(
+                    lambda v: v[0], finals)
             return (np.asarray(first, np.float64),
                     np.asarray(second, np.float64))
         outs = [self._evaluate(x, c, *extra, eff) for c in copies]
+        if ocean_only:              # the first copy's forecast is kept
+            self._forecast_final = outs[0][1][1]
+            outs = [(o[0], o[1][0]) for o in outs]
         return (np.stack([np.asarray(o[0], np.float64) for o in outs]),
                 np.stack([np.asarray(o[1], np.float64) for o in outs]))
 
@@ -345,6 +381,26 @@ class Planner:
         mask = (self.weights > 0.0).astype(np.float64)
         counts = np.maximum(mask.sum(axis=0), 1.0)
         return (np.asarray(field, np.float64) * mask).sum(axis=-2) / counts
+
+    def estimate(self, state: EpisodeState) -> dict:
+        """Return the state the planner forecasts from.
+
+        With exact sensing it is the true state. With ocean-only sensing it
+        is the true ocean plus the background's atmosphere and land, which
+        must be at the same time as the true state (the look-ahead must
+        equal the segment).
+        """
+        if self.cfg.sensing == "exact":
+            return state.carry
+        now = float(state.carry["ocn"]["state"].sim_time)
+        guess = float(self.background["ocn"]["state"].sim_time)
+        if abs(now - guess) > 1.0:
+            raise ValueError(f"the background is at {guess:.0f} s but the "
+                             f"state at {now:.0f} s: with ocean-only sensing "
+                             "the look-ahead must equal the segment")
+        carry = dict(self.background)
+        carry["ocn"] = state.carry["ocn"]
+        return carry
 
     def observe(self, state: EpisodeState) -> Optional[dict]:
         """Compare the last re-plan's forecast with what happened.
@@ -384,7 +440,7 @@ class Planner:
         previous = np.asarray(state.previous, np.float32)
         start = (np.full(self.k, cfg.first_guess * cfg.cap, np.float32)
                  if state.segment == 0 else previous)
-        copies = self.prepare_copies(state.carry, state.day)
+        copies = self.prepare_copies(self.estimate(state), state.day)
         target_mean = self.target_mean(state.day)
         if cfg.optimizer == "adam":
             final, record = self._adam(start, copies, target_mean, previous)
@@ -392,6 +448,9 @@ class Planner:
             final, record, last = self._gauss_newton(start, copies,
                                                      target_mean, previous)
             self._remember_forecast(state.day, final, *last)
+            if cfg.sensing == "ocean":
+                # The next re-plan starts from where this forecast ends.
+                self.background = self._forecast_final
         if self.innovation is not None:
             r = self.innovation["observed"] - self.innovation["predicted"]
             record["innovation_ms"] = float(np.sum(self.profile_weights
@@ -506,13 +565,14 @@ class LearningPlanner(Planner):
                  target_sst_daily, q_base, warming: Warming,
                  estimator: EstimatorConfig,
                  config: PlannerConfig = PlannerConfig(),
-                 seed_offset: int = 0):
+                 seed_offset: int = 0, background: Optional[dict] = None):
         """Build the planner at nominal strength and the estimator."""
         if config.optimizer != "gauss_newton":
             raise ValueError("learning needs the Gauss-Newton planner, whose "
                              "Jacobian gives the forecast's sensitivity")
         super().__init__(step_fn, patterns, ocean_weights, target_sst_daily,
-                         q_base, warming, 1.0, config, seed_offset)
+                         q_base, warming, 1.0, config, seed_offset,
+                         background=background)
         self.estimator = StrengthEstimator(self.k, estimator)
         self.efficacy = self.estimator.strength().astype(np.float32)
 

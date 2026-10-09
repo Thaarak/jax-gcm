@@ -7,6 +7,7 @@ import numpy as np
 from jcm.mcb.test_world import BRIGHTENING_CAP
 from jcm.mcb.gradient_truncation import NO_TRUNCATION_DAYS
 from run_test_world import (
+    background_for,
     check_role_allowed,
     check_warming_matches,
     episode_amplitudes,
@@ -172,6 +173,36 @@ class PlanArgsTest(unittest.TestCase):
                       ("--representation", "zonal")):        # Adam: no
             with self.assertRaises(SystemExit, msg=str(extra)):
                 validate_args(self._args(*extra))
+
+
+class OceanSensingArgsTest(unittest.TestCase):
+    def _args(self, *extra):
+        return parse_args(["plan", "--ic-dir", "x", "--references", "r.npz",
+                           "--output", "o.json", "--segments", "3",
+                           "--preset", "short14", "--optimizer",
+                           "gauss_newton", *extra])
+
+    def test_sensing_reaches_the_planner(self):
+        self.assertEqual(planner_config(self._args()).sensing, "exact")
+        self.assertEqual(
+            planner_config(self._args("--sensing", "ocean")).sensing, "ocean")
+        with self.assertRaises(SystemExit):
+            planner_config(parse_args(["plan", "--ic-dir", "x", "--references",
+                                       "r.npz", "--output", "o.json",
+                                       "--sensing", "ocean"]))   # Adam: no
+
+    def test_day_zero_weather_comes_from_the_next_branch(self):
+        ics = [({"index": 100 * m + b, "macro_index": m, "branch": b},
+                f"carry {m}/{b}") for m in (17, 19) for b in (0, 1, 2)]
+        for b, want in ((0, 1), (1, 2), (2, 0)):
+            entry = ics[b][0]
+            e, c = background_for(entry, ics)
+            self.assertEqual((e["macro_index"], e["branch"]), (17, want))
+            self.assertEqual(c, f"carry 17/{want}")
+        two = [i for i in ics if i[0]["macro_index"] == 19][:2]
+        self.assertEqual(background_for(two[1][0], two)[0]["branch"], 0)
+        with self.assertRaises(SystemExit):
+            background_for(ics[0][0], ics[:1])
 
 
 if __name__ == "__main__":

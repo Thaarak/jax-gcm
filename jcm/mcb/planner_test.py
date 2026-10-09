@@ -301,6 +301,116 @@ class StrengthLearningTest(_Toy):
                          n_segments=3)
 
 
+class OceanSensingTest(_Toy):
+    """Experiment 3c: the planner sees the ocean but not the weather."""
+
+    def make(self, sensing="ocean", background=None, **overrides):
+        cfg = dict(lookahead_days=L, window_days=NO_TRUNCATION_DAYS,
+                   copies=1, copy_amp=0.0, cap=5.0, gn_damping=0.0,
+                   optimizer="gauss_newton", iterations=1, sensing=sensing)
+        cfg.update(overrides)
+        return Planner(_toy_step, self.patterns, self.w, self.target,
+                       self.q_base, self.warm, 1.0, PlannerConfig(**cfg),
+                       background=background)
+
+    def weather(self, x):
+        """The toy state with another atmosphere (its weather)."""
+        carry = dict(self.carry)
+        carry["atm"] = {"state": {"x": jnp.full_like(
+            self.carry["atm"]["state"]["x"], x)},
+            "derived": self.carry["atm"]["derived"]}
+        return carry
+
+    def at(self, carry):
+        return EpisodeState(segment=0, day=0, carry=carry,
+                            previous=np.zeros(2, np.float32),
+                            last_fields=None)
+
+    def test_with_the_true_weather_it_plans_as_the_exact_planner(self):
+        np.testing.assert_allclose(
+            self.make(background=self.carry)(self.state()),
+            self.make(sensing="exact")(self.state()), rtol=1e-6)
+
+    def test_it_cannot_see_the_true_weather(self):
+        calm, stormy = self.weather(0.1), self.weather(3.0)
+        exact = self.make(sensing="exact")
+        self.assertFalse(np.allclose(exact(self.at(calm)),
+                                     exact(self.at(stormy)), rtol=1e-3))
+        guess = self.weather(-1.0)
+        np.testing.assert_allclose(
+            self.make(background=guess)(self.at(calm)),
+            self.make(background=guess)(self.at(stormy)), rtol=1e-6)
+
+    def test_it_sees_the_true_ocean(self):
+        warm = dict(self.carry)
+        warm["ocn"] = dict(self.carry["ocn"])
+        warm["ocn"]["state"] = self.carry["ocn"]["state"].copy(
+            {"sea_surface_temperature":
+             self.carry["ocn"]["state"].sea_surface_temperature + 0.5})
+        planner = self.make(background=self.carry)
+        self.assertFalse(np.allclose(planner(self.state()),
+                                     self.make(background=self.carry)(
+                                         self.at(warm)), rtol=1e-3))
+
+    def test_the_next_forecast_starts_where_this_one_ended(self):
+        guess = self.weather(-1.0)
+        planner = self.make(background=guess)
+        planner(self.state())
+        f = make_lookahead_sst_fn(_toy_step, self.patterns, L,
+                                  return_final=True)
+        start = jnp.full(2, 0.5 * 5.0)          # the first guess
+        estimated = dict(guess)
+        estimated["ocn"] = self.carry["ocn"]
+        _, final = f(start, estimated, jnp.ones(2), self.q_base, self.warm,
+                     jnp.asarray(NO_TRUNCATION_DAYS))
+        np.testing.assert_allclose(
+            np.asarray(planner.background["atm"]["state"]["x"]),
+            np.asarray(final["atm"]["state"]["x"]), rtol=1e-6)
+
+    def test_episode_keeps_the_background_in_step(self):
+        seg = make_segment_fn(_toy_step, self.patterns, L,
+                              fields_fn=_toy_fields)
+        planner = self.make(background=self.weather(-1.0))
+        run_episode(self.carry, seg, planner, n_segments=3, segment_days=L,
+                    k_bands=2, warming=self.warm)
+        self.assertEqual(len(planner.log), 3)
+        # A segment shorter than the look-ahead leaves the background behind.
+        seg2 = make_segment_fn(_toy_step, self.patterns, 2,
+                               fields_fn=_toy_fields)
+        with self.assertRaises(ValueError):
+            run_episode(self.carry, seg2, self.make(background=self.carry),
+                        n_segments=2, segment_days=2, k_bands=2,
+                        warming=self.warm)
+
+    def test_learner_with_ocean_sensing_still_learns(self):
+        truth = np.array([0.6, 1.8], np.float32)
+        cfg = PlannerConfig(lookahead_days=L, window_days=NO_TRUNCATION_DAYS,
+                            copies=1, copy_amp=0.0, cap=5.0, gn_damping=0.0,
+                            optimizer="gauss_newton", iterations=1,
+                            sensing="ocean")
+        learner = LearningPlanner(_toy_step, self.patterns, self.w,
+                                  self.target, self.q_base, self.warm,
+                                  EstimatorConfig(noise_k=1e-4, prior_sd=10.0),
+                                  cfg, background=self.weather(-1.0))
+        seg = make_segment_fn(_toy_step, self.patterns, L,
+                              fields_fn=_toy_fields)
+        run_episode(self.carry, seg, learner, n_segments=3, segment_days=L,
+                    k_bands=2, warming=self.warm, efficacy=truth)
+        # The wrong weather costs accuracy, but the belief still moves from
+        # nominal toward the truth in both bands.
+        belief = np.asarray(learner.log[-1]["efficacy_belief"])
+        self.assertTrue(np.all(np.abs(np.log(belief / truth))
+                               < np.abs(np.log(1.0 / truth))))
+
+    def test_needs_gauss_newton_and_a_background(self):
+        with self.assertRaises(ValueError):
+            PlannerConfig(sensing="ocean", optimizer="adam").validate()
+        with self.assertRaises(ValueError):
+            PlannerConfig(sensing="weather").validate()
+        with self.assertRaises(ValueError):
+            self.make(background=None)
+
+
 class HelpersTest(unittest.TestCase):
     def test_transform_round_trip_and_bounds(self):
         a = np.array([0.01, 0.075, 0.14])
