@@ -135,8 +135,13 @@ def find_references(idx, references_dirs):
     raise SystemExit(f"no references for state {idx} in {references_dirs}")
 
 
-def load_runs(runs_dir, references_dirs, arms=ARMS):
-    """Return ``{arm: {index: metrics}}`` for every arm and state with runs."""
+def load_runs(runs_dir, references_dirs, arms=ARMS, uncontrolled_dir=None):
+    """Return ``{arm: {index: metrics}}`` for every arm and state with runs.
+
+    The gains need the matched no-brightening run. It comes from the same
+    folder, or, for arms run without one (Experiment 3c), from
+    ``uncontrolled_dir`` (another experiment's runs on the same states).
+    """
     with np.load(Path(references_dirs[0]) / "grid.npz") as g:
         lats = g["latitudes_rad"]
         ocean = np.asarray(g["ocean_mask"], np.float64)
@@ -172,6 +177,15 @@ def load_runs(runs_dir, references_dirs, arms=ARMS):
             if arm == UNCONTROLLED_ARM:
                 uncontrolled[idx] = fields
             table[arm][idx] = (row, fields, target)
+    if uncontrolled_dir is not None:
+        for rows in table.values():
+            for idx in rows:
+                path = (Path(uncontrolled_dir) / UNCONTROLLED_ARM
+                        / f"ic{idx:04d}.fields.npz")
+                if idx not in uncontrolled and path.exists():
+                    with np.load(path) as f:
+                        uncontrolled[idx] = {k: f[k] for k in (
+                            "sst", "land_temperature", "precipitation")}
     out = {}
     for arm, rows in table.items():
         out[arm] = {}
@@ -183,8 +197,14 @@ def load_runs(runs_dir, references_dirs, arms=ARMS):
     return out
 
 
-def analyze(per_arm, n_boot=N_BOOT):
-    """Apply the registered tests to ``{arm: {index: metrics}}``."""
+def analyze(per_arm, n_boot=N_BOOT, primary=PRIMARY,
+            secondary=SECONDARY_FAMILY, descriptive_pairs=DESCRIPTIVE,
+            learner_arms=("plan_learn",)):
+    """Apply the registered tests to ``{arm: {index: metrics}}``.
+
+    The defaults are revision 2's (Experiment 3b). Revision 3 passes its own
+    hypotheses and learners (Experiments 3c and 3d) to the same machinery.
+    """
     complete = set.intersection(*(set(v) for v in per_arm.values() if v))
     states = sorted(complete)
     macros = [i // 100 for i in states]
@@ -193,22 +213,22 @@ def analyze(per_arm, n_boot=N_BOOT):
         keep = states if subset is None else subset
         return [per_arm[arm][i][key] for i in keep]
 
-    name, a, b, question = PRIMARY
+    name, a, b, question = primary
     r = compare(col(a), col(b), macros, n_boot)
     hyps = {name: {"arm": a, "comparator": b, "question": question, **r,
                    "p_used": r["t_p"], "verdict": verdict(r, r["t_p"]),
                    "wilcoxon_agrees": (r["wilcoxon_p"] < ALPHA_TEST)
                    == (r["t_p"] < ALPHA_TEST)}}
     family = [compare(col(a), col(b), macros, n_boot)
-              for _, a, b, _ in SECONDARY_FAMILY]
+              for _, a, b, _ in secondary]
     adj = holm([x["t_p"] for x in family])
-    for (name, a, b, question), x, p in zip(SECONDARY_FAMILY, family, adj):
+    for (name, a, b, question), x, p in zip(secondary, family, adj):
         hyps[name] = {"arm": a, "comparator": b, "question": question, **x,
                       "p_used": p, "t_p_holm": p, "verdict": verdict(x, p),
                       "wilcoxon_agrees": (x["wilcoxon_p"] < ALPHA_TEST)
                       == (x["t_p"] < ALPHA_TEST)}
     descriptive = {}
-    for a, b in DESCRIPTIVE:
+    for a, b in descriptive_pairs:
         x = compare(col(a), col(b), macros, n_boot)
         descriptive[f"{a}_vs_{b}"] = {**x, "verdict_unadjusted":
                                       verdict(x, x["t_p"])}
@@ -229,10 +249,16 @@ def analyze(per_arm, n_boot=N_BOOT):
                      ("J_zonal", "J_bias_term", "J_pattern_term", "bias_K",
                       "cap_share")}
                for arm in per_arm}} if subset else {"n_states": 0}
-    curves = [per_arm["plan_learn"][i].get("learning_curve") for i in states]
-    curves = [c for c in curves if c]
-    learning = ({"mean_abs_log_error_by_segment":
-                 np.mean(curves, axis=0).tolist()} if curves else None)
+    by_learner = {}
+    for arm in learner_arms:
+        curves = [per_arm[arm][i].get("learning_curve") for i in states]
+        curves = [c for c in curves if c]
+        if curves:
+            by_learner[arm] = np.mean(curves, axis=0).tolist()
+    first = by_learner.get(learner_arms[0])
+    learning = ({"mean_abs_log_error_by_segment": first,
+                 **({"by_arm": by_learner} if len(learner_arms) > 1 else {})}
+                if first is not None else None)
     for arm in per_arm:
         if all("G" in per_arm[arm][i] for i in states):
             for g in per_arm[arm][states[0]]["G"]:
