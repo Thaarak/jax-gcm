@@ -1,0 +1,79 @@
+{
+  "stage": "ladder",
+  "config": {
+    "stage": "ladder",
+    "responses": [
+      "mcb_experiments_gpu/exp3d/train/responses/ic10000_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic10200_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic10400_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic10600_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic10800_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic11000_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic11200_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic11400_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic11600_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic11800_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic12000_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic12200_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic12400_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic12600_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic12800_responses.npz",
+      "mcb_experiments_gpu/exp3d/train/responses/ic13000_responses.npz"
+    ],
+    "references_dir": "mcb_experiments_gpu/test_world_refs_ramp6_3d/exp3d_train_b0",
+    "window": [
+      98,
+      182
+    ],
+    "planner_summaries": [],
+    "alpha": 1.0,
+    "beta": 0.5,
+    "mu": 0.0006325,
+    "cap": 0.15,
+    "representation": "zonal",
+    "output": "mcb_experiments_gpu/exp3d/train/ladder.json"
+  },
+  "training_states": [
+    "mcb_experiments_gpu/exp3d/train/responses/ic10000_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic10200_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic10400_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic10600_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic10800_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic11000_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic11200_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic11400_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic11600_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic11800_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic12000_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic12200_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic12400_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic12600_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic12800_responses.npz",
+    "mcb_experiments_gpu/exp3d/train/responses/ic13000_responses.npz"
+  ],
+  "pooled": {
+    "uniform_cancel": {
+      "amplitudes": [
+        0.018602518931996017,
+        0.018602518931996017,
+        0.018602518931996017,
+        0.018602518931996017,
+        0.018602518931996017
+      ],
+      "uniform": 0.018602518931996017,
+      "clipped": false,
+      "predicted_objective": 0.0027674852988907417
+    },
+    "linear_response": {
+      "amplitudes": [
+        0.02846234776503146,
+        0.020826856700030504,
+        0.012000695523372861,
+        0.015332522558179315,
+        0.020647018505118433
+      ],
+      "predicted_objective": 0.002310252460462393
+    }
+  },
+  "per_planner_run": {}
+}

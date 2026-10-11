@@ -1,0 +1,39 @@
+{
+  "experiment": "3c",
+  "revision": "Amendment 9 revision 3, Part A",
+  "sensing": "ocean",
+  "members": 6,
+  "reference_members": 10,
+  "learner_mode": "bands",
+  "learner_noise_k": 0.04861059,
+  "learner_prior_sd": 1.0,
+  "learner_bounds": [
+    0.2,
+    5.0
+  ],
+  "reused_from_3b": [
+    "pi",
+    "adaptive",
+    "fixed",
+    "uncontrolled",
+    "plan_learn",
+    "plan_naive",
+    "plan_oracle"
+  ],
+  "pilot": {
+    "noise": {
+      "noise_k": 0.04861058789171031,
+      "n": 576,
+      "ms_quartiles": [
+        0.0016997043936707473,
+        0.0023629892551776934,
+        0.003228269391156989
+      ]
+    },
+    "power_at_6_members": {
+      "var_state": 7.639476601254408e-06,
+      "mde": 0.0012532398290500228,
+      "mde_fraction_of_J_pi": 0.19492337634376994
+    }
+  }
+}

@@ -86,6 +86,8 @@ repository; nothing in it has been edited.
 - 2026-10-08/09: Experiment 2 and the snip test ran and were analysed (logged below).
 - 2026-10-09: the land fix, Experiment 3d's base climate, states, training side and oracle pilot,
   and Experiment 3c's pilot ran, on training states only.
+- 2026-10-11: the smoke test of Experiment 3d's evaluation script ran, on one training state;
+  revision 3 was frozen in commit {full[:8]}.
 - {now}: this posting, before any evaluation run of Experiment 3c and any evaluation reference,
   run or score of Experiment 3d.
 
@@ -119,14 +121,37 @@ def call(method, url, body=None, content_type="application/vnd.api+json"):
         sys.exit(1)
 
 
-for path in (out, prereg_out, os.path.join(REPO, "analyze_experiment3c.py"),
-             os.path.join(REPO, "analyze_experiment3d.py"),
-             os.path.join(REPO, "jcm/mcb/land_climatology.py"),
-             os.path.join(REPO, "mcb_experiments_gpu/exp3c/registered_design.json"),
-             os.path.join(REPO, "mcb_experiments_gpu/exp3d/registered_design.json"),
-             os.path.join(REPO, "mcb_experiments_gpu/exp3d/hidden_strength.json")):
+# Upload names are unique in the project's storage: revision 2 already holds
+# Experiment 3b's `registered_design.json` and `hidden_strength.json`, and 3c's
+# and 3d's designs share a file name, so those three get the experiment's prefix.
+UPLOADS = [(out, None), (prereg_out, None),
+           (os.path.join(REPO, "analyze_experiment3c.py"), None),
+           (os.path.join(REPO, "analyze_experiment3d.py"), None),
+           (os.path.join(REPO, "jcm/mcb/land_climatology.py"), None),
+           (os.path.join(REPO, "mcb_experiments_gpu/exp3c/registered_design.json"),
+            "exp3c_registered_design.json"),
+           (os.path.join(REPO, "mcb_experiments_gpu/exp3d/registered_design.json"),
+            "exp3d_registered_design.json"),
+           (os.path.join(REPO, "mcb_experiments_gpu/exp3d/hidden_strength.json"),
+            "exp3d_hidden_strength.json")]
+existing, url = {}, f"https://api.osf.io/v2/nodes/{NODE}/files/osfstorage/?page[size]=100"
+while url:
+    page = call("GET", url)
+    for item in page["data"]:
+        a = item["attributes"]
+        existing[a["name"]] = (a.get("extra", {}).get("hashes", {}).get("sha256"))
+    url = (page.get("links") or {}).get("next")
+plan = []
+for path, name in UPLOADS:
     blob = open(path, "rb").read()
-    name = os.path.basename(path)
+    name = name or os.path.basename(path)
+    if name in existing and existing[name] != sha(blob):
+        sys.exit(f"{name} already exists on OSF with different content; nothing uploaded")
+    plan.append((name, blob, name in existing))
+for name, blob, already in plan:
+    if already:           # an identical copy from an interrupted earlier run
+        print(f"already on OSF, identical: {name}")
+        continue
     url = (f"https://files.osf.io/v1/resources/{NODE}/providers/osfstorage/"
            f"?kind=file&name={urllib.parse.quote(name)}")
     attrs = call("PUT", url, blob, "application/octet-stream")["data"]["attributes"]

@@ -1,0 +1,52 @@
+{
+  "stage": "settle",
+  "config": {
+    "stage": "settle",
+    "qflux": "mcb_experiments_gpu/exp3d/qflux/qflux_monthly_t30_v2.nc",
+    "days": 3650,
+    "eval_days": 1460,
+    "chunk_days": 73,
+    "output_dir": "mcb_experiments_gpu/exp3d/qflux/settle2",
+    "base_carry_out": "mcb_experiments_gpu/exp3d/qflux/settle2/base_carry.pkl"
+  },
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "land_climatology": "monthly",
+  "qflux_file": "mcb_experiments_gpu/exp3d/qflux/qflux_monthly_t30_v2.nc",
+  "qflux_max_abs_wm2": 1287.269287109375,
+  "gate": {
+    "drift_k_per_60d": 0.00874376770422845,
+    "drift_max": 0.02,
+    "bias_k": -0.36077986652287564,
+    "bias_max": 0.5,
+    "G1_drift_pass": true,
+    "G2_bias_pass": true,
+    "pass": true
+  },
+  "eval_window_days": 1460,
+  "ocean_sst_eval_mean_k": 290.03180910851904,
+  "observed_annual_ocean_sst_k": 290.3925889750419,
+  "reported": {
+    "rms_annual_mean_error_k": 1.0152841919015665,
+    "rms_seasonal_cycle_error_k": 0.5743874666730667,
+    "cells_abs_annual_error_gt_2k": 160,
+    "ocean_cells": 3411,
+    "sst_range_k": [
+      237.58636474609375,
+      307.98419189453125
+    ],
+    "land_temperature_range_k": [
+      226.7063446044922,
+      309.4471130371094
+    ],
+    "simple_mean_fmask_ocean_model_k": 284.71386951426854,
+    "simple_mean_fmask_ocean_observed_k": 284.92974628101695
+  },
+  "daily_ocean_sst_first_last_k": [
+    289.9024767267392,
+    289.7189775869675
+  ],
+  "wall_s": 303.55969071388245
+}

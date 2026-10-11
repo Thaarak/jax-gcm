@@ -12,6 +12,9 @@
   * an oracle planner that sees the exact state misses its two-week forecast of the ocean
     latitude profile by about 0.0006–0.0009 K rms;
   * one that sees only the ocean misses by about 0.04–0.06 K.
+* *Smoke tests of both evaluation scripts* (3c on 2026-10-09, 3d on 2026-10-11). Each ran every
+  arm's exact command on one training state (two segments, one member), then the registered analysis
+  in its smoke mode. They check that the commands run end to end; their scores are not used.
 * *Experiment 3d* uses no evaluation data yet. The following exist, all on training states:
   * the land fix (commit 5f5abc13);
   * its base climate (3 below);

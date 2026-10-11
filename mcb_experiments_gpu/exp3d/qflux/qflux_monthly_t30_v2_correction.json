@@ -1,0 +1,35 @@
+{
+  "stage": "correct",
+  "config": {
+    "stage": "correct",
+    "qflux": "mcb_experiments_gpu/exp3d/qflux/qflux_monthly_t30.nc",
+    "settle_dir": "mcb_experiments_gpu/exp3d/qflux/settle1",
+    "fit_start_days": 180,
+    "block_days": 60,
+    "output": "mcb_experiments_gpu/exp3d/qflux/qflux_monthly_t30_v2.nc"
+  },
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "input_qflux": "mcb_experiments_gpu/exp3d/qflux/qflux_monthly_t30.nc",
+  "settle_dir": "mcb_experiments_gpu/exp3d/qflux/settle1",
+  "observed_annual_ocean_sst_k": 290.3925889750419,
+  "effective_heat_capacity_j_m2_k": 195571774.49553925,
+  "fit": {
+    "tau_days": 1184.8228797252104,
+    "t_inf": 289.0288798974877,
+    "amplitude": 0.991317751614021,
+    "sse": 0.5464674099639023,
+    "tau_at_grid_edge": false
+  },
+  "lambda_wm2_per_k": 1.9104646302360888,
+  "equilibrium_bias_k": -1.3637090775542333,
+  "heat_into_ocean_wm2": 2.605317958599246,
+  "heat_into_ocean_by_fit_start_wm2": {
+    "180": 2.605317958599246,
+    "365": 1.0768880390844024,
+    "730": 0.4181037074543661
+  },
+  "output_qflux": "mcb_experiments_gpu/exp3d/qflux/qflux_monthly_t30_v2.nc"
+}

@@ -1,0 +1,54 @@
+{
+  "experiment": "3d",
+  "revision": "Amendment 9 revision 3, Part B",
+  "land_climatology": "monthly",
+  "members": 6,
+  "reference_members": 10,
+  "learner_mode": "bands",
+  "learner_noise_k": 0.00069104,
+  "learner_prior_sd": 1.0,
+  "learner_bounds": [
+    0.2,
+    5.0
+  ],
+  "pi_closed_loop_days": 42.0,
+  "fixed_amplitudes": [
+    0.028462,
+    0.020827,
+    0.012001,
+    0.015333,
+    0.020647
+  ],
+  "base_climate": {
+    "settle1": {
+      "drift_k_per_60d": -0.011536953997088746,
+      "drift_max": 0.02,
+      "bias_k": -1.2892277559554373,
+      "bias_max": 0.5,
+      "G1_drift_pass": true,
+      "G2_bias_pass": false,
+      "pass": false
+    },
+    "settle2": {
+      "drift_k_per_60d": 0.00874376770422845,
+      "drift_max": 0.02,
+      "bias_k": -0.36077986652287564,
+      "bias_max": 0.5,
+      "G1_drift_pass": true,
+      "G2_bias_pass": true,
+      "pass": true
+    }
+  },
+  "base_carry": "exp3d/qflux/settle2/base_carry.pkl",
+  "pilot": {
+    "noise": {
+      "noise_k": 0.0006910417177865678,
+      "n": 576,
+      "ms_quartiles": [
+        3.511463691934249e-07,
+        4.775386557214105e-07,
+        6.429974730508088e-07
+      ]
+    }
+  }
+}
