@@ -45,3 +45,22 @@
   `registered_design.json`.
 - `rev2_tools/`: the freeze helper that filled revision 2 from the pilot's outputs, the draft it
   filled, and the posting script.
+
+# OSF posting of Amendment 9 revision 3 (2026-10-11)
+
+- Files uploaded to https://osf.io/pqabf/ at 16:57 PDT; each upload's SHA-256 matches the local file.
+- Registration: https://osf.io/fyt9r/ (registered 16:57 PDT; pending admin approval, which happens
+  automatically after 48 hours).
+- `REVISION3_OSF.md`: the posted document. A cover note gives the frozen commit b8152e3f and the
+  SHA-256 checksums of the text, the code, both registered designs, 3d's hidden-strength table and
+  3d's fixed design. It is followed verbatim by everything logged after revision 2's posting: the
+  Experiment 2 and snip-test result (revision 1.1), revision 2 itself (already posted as g7y2e),
+  the Experiment 3b result and revision 3 (Experiments 3c and 3d).
+- `PREREGISTRATION_at_b8152e3f.md`: the full pre-registration file at that commit.
+- Also uploaded: `analyze_experiment3c.py` and `analyze_experiment3d.py` (the registered analyses),
+  `land_climatology.py` (the land fix), and, under prefixed names because revision 2 already holds
+  3b's files under the bare names, `exp3c_registered_design.json`, `exp3d_registered_design.json`
+  and `exp3d_hidden_strength.json`.
+- `rev3_tools/`: the freeze helper, the draft it filled, and the posting script.
+- The posting was run by the user from the Claude Code prompt: the session's automatic permission
+  check does not let the assistant upload to a public site itself.
