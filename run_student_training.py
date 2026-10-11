@@ -162,9 +162,14 @@ def imitation_config(args) -> ImitationConfig:
 
 
 def teacher_config(args):
-    """Return the teacher planner's settings (a preset plus overrides)."""
+    """Return the teacher planner's settings (a preset plus overrides).
+
+    Planner settings this command line does not offer (the objective's
+    representation, the sensing) keep the preset's values.
+    """
     from run_test_world import planner_config
-    return planner_config(args)
+    defaults = {"representation": None, "sensing": None}
+    return planner_config(argparse.Namespace(**{**defaults, **vars(args)}))
 
 
 def direct_config(args) -> DirectConfig:
