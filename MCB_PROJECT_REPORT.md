@@ -2898,7 +2898,7 @@ a board whose wobbly square has been fixed (the land).
 | 5 | 3c pilot (ocean-only oracle, learner, naive planner) | Done (2026-10-09 16:15); learner noise level 0.0486 K (28.5) |
 | 6 | Registered analyses (3b's machinery; 3b's output reproduced exactly) and evaluation scripts | Done; both smoke tests passed (3c 10-09, 3d 10-11) |
 | 7 | Freeze revision 3, commit and push; **post on OSF after the user's OK**; start both evaluations | Done: frozen in b8152e3f, posted as https://osf.io/fyt9r/ (16:57 PDT, 2026-10-11), both evaluations started 16:59 |
-| 8 | Results, report, memory, explanation | Evaluations running (about 26 hours; expected the evening of 2026-10-12) |
+| 8 | Results, report, memory, explanation | **3c done** (2026-10-12 12:36; all 96 runs; results in 28.6). 3d running (expected the evening of 2026-10-12) |
 
 **What each outcome would mean:**
 - *3c H1 better:* the headline survives realistic information, which makes the paper much stronger.
@@ -2970,3 +2970,117 @@ a board whose wobbly square has been fixed (the land).
   in 3b. H2 (learning helps) will probably not hold without the weather. H3 (the cost of not
   seeing the weather) will probably be a real loss. These are hints from 16 training states, not
   predictions the analysis depends on; the registered interpretations are in revision 3.
+
+## 28.6 Results: Experiment 3c (2026-10-12)
+
+*The evaluation ran from 2026-10-11 16:59 to 2026-10-12 12:36 PDT on the GX10, sharing it with 3d:
+2 arms × 48 states × 6 members, 96 runs, with 3b's runs of the other seven arms reused. All 96 runs
+finished, none failed and no state was dropped. The registered analysis ran unchanged, and the 225
+frozen code and design files on the GX10 were re-checked against b8152e3f afterwards. Output:
+`mcb_experiments_gpu/exp3c/exp3c_analysis.json`.*
+
+**In one sentence:** without the weather, the planner still beat the classical controller, but by 15%
+instead of 38%. It could no longer learn the strength, because its forecast misses were mostly
+weather, so learning stopped helping. Not seeing the weather cost the learner 37% against 3b's.
+
+*Analogy (the house with wrongly labelled radiators, from 24.7):* this time the smart thermostat
+cannot see the weather outside. It still kept the house closer to the right temperature than the
+standard thermostat, by 15% instead of 38%. But it could no longer correct its notes about the
+radiators. When a room ended up colder than planned, it could not tell whether the radiator was
+stronger than labelled or a cold gust had come through.
+
+**The registered tests** (`J_zonal`, macro-state means, 16 ocean states)
+
+| Hypothesis | Difference | 90% interval | p | Ocean states favouring the first arm | Verdict |
+|---|---|---|---|---|---|
+| **H1 (primary):** `plan_learn_rs` vs `pi` | **−15.0%** | −24.1% to −4.7% | t 0.0033; Wilcoxon 0.0027 | 14 of 16 | **better** |
+| H2: `plan_learn_rs` vs `plan_naive_rs` | −2.1% | −14.0% to +12.0% | Holm 0.73; Wilcoxon 0.82 | 7 of 16 | inconclusive |
+| H3: `plan_learn_rs` vs 3b's `plan_learn` | +37.0% | +15.1% to +63.0% | Holm 0.0066; Wilcoxon 0.0042 | 4 of 16 | **worse** |
+
+The t and Wilcoxon tests agree on all three.
+
+**Every arm** (means over the 48 states, scored on days 98–182; the arms without `_rs` are 3b's runs)
+
+| Arm | `J_zonal` | bias part | pattern part | ocean bias (K) | vs no brightening | cap used |
+|---|---|---|---|---|---|---|
+| `plan_learn` (3b, sees the weather) | 0.00276 | 0.00020 | 0.00256 | −0.006 | −85% | 29% |
+| `plan_oracle` (3b) | 0.00295 | 0.00024 | 0.00271 | −0.006 | −84% | 29% |
+| `plan_naive` (3b) | 0.00341 | 0.00039 | 0.00302 | −0.006 | −82% | 28% |
+| **`plan_learn_rs`** (ocean only) | **0.00378** | 0.00070 | 0.00308 | −0.012 | −80% | 27% |
+| `plan_naive_rs` (ocean only) | 0.00386 | 0.00074 | 0.00312 | −0.012 | −80% | 28% |
+| `adaptive` | 0.00391 | 0.00005 | 0.00386 | +0.001 | −79% | 26% |
+| `pi` | 0.00445 | 0.00040 | 0.00405 | −0.004 | −77% | 31% |
+| `fixed` | 0.01405 | 0.00863 | 0.00542 | −0.026 | −26% | 13% |
+| `uncontrolled` | 0.01900 | 0.01680 | 0.00220 | +0.129 | — | 0% |
+
+Without the weather, both planners cool slightly too much (−0.012 K, against −0.006 K), and their
+latitude pattern of error grows a little. They still remove four-fifths of the warming's effect.
+
+**Descriptive comparisons** (no test claims; p unadjusted):
+- `plan_naive_rs` vs `pi`: −13.2% (90% interval −23.9% to −1.8%; t p 0.049, Wilcoxon 0.08). Even
+  the planner that never learns still edges out PI without the weather.
+- `plan_learn_rs` vs `adaptive`: −3.3% (−18.3% to +14.6%; p 0.70). Without the weather, the
+  learning planner is no better than the adaptive classical law.
+- `plan_naive_rs` vs `plan_naive`: +13.2% (−4.3% to +31.4%; t p 0.11, Wilcoxon 0.03). Not seeing the
+  weather costs the planner that never learns about 13%. The learner loses 37%, because it also
+  loses its learning.
+- `plan_learn_rs` vs `plan_oracle`: +28% (+10% to +49%; p 0.004); `plan_naive_rs` vs
+  `plan_oracle`: +31% (p 0.001).
+
+**By overall strength** (16 states each; `J_zonal`)
+
+| Arm | weak (g = 0.5) | nominal (g = 1) | strong (g = 2) |
+|---|---|---|---|
+| `plan_learn` (3b) | 0.00259 | **0.00230** | **0.00339** |
+| `plan_learn_rs` | 0.00276 | 0.00372 | 0.00485 |
+| `plan_naive_rs` | 0.00281 | 0.00368 | 0.00510 |
+| `adaptive` | 0.00385 | 0.00418 | 0.00369 |
+| `pi` | 0.00388 | 0.00409 | 0.00537 |
+
+- **Most of the lead over PI is at weak strength:** −29% there, but only −9% (nominal) and −10%
+  (strong).
+- **With strong spraying the ocean-only planners cool too much** (−0.041 K, against PI's −0.026 K),
+  because they never learn that the brightening works twice as well as they assume. There the
+  adaptive law beats both of them.
+
+**How fast it learned** (mean |log(estimate/truth)| per band, over 48 states and 5 bands):
+
+| Day | 0 | 28 | 56 | 98 | 168 |
+|---|---|---|---|---|---|
+| ocean-only learner (3c) | 0.59 | 0.59 | 0.59 | 0.57 | 0.51 |
+| 3b's learner (sees the weather) | 0.59 | 0.35 | 0.15 | 0.08 | 0.03 |
+
+After six months the ocean-only learner was still about 1.7-fold off on average, where 3b's was
+within 3%. Its forecast misses are about 70 times larger (28.5), and the strength signal is buried
+in them.
+
+**What it means** (the interpretations fixed in revision 3, A9):
+- *H1 better:* "the learning planner's advantage over classical feedback survives when it cannot see
+  the weather". The advantage shrank from 38% to 15%.
+- *H2 not better:* "two-week forecast misses dominated by weather do not reveal the strength within
+  one episode. This is the one-Earth detection limit of Part 27, seen from inside a controller."
+- *H3 worse:* not seeing the weather costs the learning planner 37%.
+- *Together:* without the weather, what is left of 3b's advantage comes from planning (re-planning
+  every two weeks with the model's gradients), not from learning. Learning is what needs the
+  weather.
+
+**All three pilot hints held.** They were written before any evaluation data (28.5): H1 held, but
+less clearly than in 3b; H2 did not hold; H3 was a real loss.
+
+**Caveats:**
+- *Not seeing the weather at all is the pessimistic end.* Real forecasting systems do observe the
+  atmosphere, though imperfectly. So 3b (the exact weather) and 3c (no weather) bracket reality.
+- *The day-0 guess* is another branch's weather on the same date: a fair stand-in for a guess, but
+  not a real weather analysis.
+- *Everything else is 3b's:* a perfect model apart from the strength, a constant strength, the
+  land-model bug (the same for every arm; 3d tests it), one model, five bands, a cap of 0.15 and an
+  idealized warming ramp.
+
+**For the papers:**
+- Paper 2's headline now comes with a robustness result and an honest limit. A gradient planner
+  beats the GLENS-style controller by 38% when it knows the weather and by 15% when it does not.
+  Learning the strength needs the weather.
+- Natural next steps (not registered): learn from longer averages of the forecast misses, where the
+  weather averages out; forecast from a small ensemble of weather guesses; or give the planner a
+  realistic, imperfect view of the weather.
+- 3d (the land fix) is still running and should finish on the evening of 2026-10-12.

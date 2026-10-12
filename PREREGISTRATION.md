@@ -2183,3 +2183,43 @@ repeated, so there is no new power rule.
 * *Cost:* about 28 GPU-hours on the GX10 (both evaluations together; about the same in wall time, since they share the GPU).
 * *Posting:* this revision is posted to OSF (project pqabf) before any evaluation run of 3c and
   any evaluation reference of 3d.
+
+**Amendment 9, revision 3 — Experiment 3c RESULT (logged 2026-10-12; evaluation 2026-10-11 16:59 to
+2026-10-12 12:36 PDT, sharing the GX10 with 3d; the registered `analyze_experiment3c.py` was applied
+unchanged).**
+All 96 runs (2 arms × 48 states, 6 members each, against 3b's 10-member references) finished. No run
+failed, no state was dropped, and there was no deviation. 3b's runs of the other seven arms were reused
+as registered (A4), and the analysis's checks of sensing and member counts passed. The 225 frozen code
+and design files on the GX10 were re-checked against b8152e3f after the run. Primary endpoint
+`J_zonal`, on the means of the 16 macro states:
+* **H1** `plan_learn_rs` vs `pi`: rel −15.0% (90% CI −24.1% to −4.7%), t p 0.0033, Wilcoxon p
+  0.0027 (14 of 16 macro states favour `plan_learn_rs`) → **better**.
+* **H2** `plan_learn_rs` vs `plan_naive_rs`: rel −2.1% (−14.0% to +12.0%), Holm p 0.73 (Wilcoxon
+  0.82) → **inconclusive**.
+* **H3** `plan_learn_rs` vs 3b's `plan_learn`: rel +37.0% (+15.1% to +63.0%), Holm p 0.0066
+  (Wilcoxon 0.0042) → **worse**.
+
+*Arm means:* `plan_learn` 0.00276, `plan_oracle` 0.00295, `plan_naive` 0.00341, `plan_learn_rs`
+0.00378, `plan_naive_rs` 0.00386, `adaptive` 0.00391, `pi` 0.00445, `fixed` 0.01405, `uncontrolled`
+0.01900 (the arms without the suffix are 3b's runs).
+
+*Descriptive* (unadjusted p):
+* `plan_naive_rs` vs `pi`: −13.2% (−23.9% to −1.8%, t p 0.049; Wilcoxon 0.083).
+* `plan_learn_rs` vs `adaptive`: −3.3% (−18.3% to +14.6%, p 0.70).
+* `plan_naive_rs` vs `plan_naive`: +13.2% (−4.3% to +31.4%, t p 0.11; Wilcoxon 0.025).
+* `plan_learn_rs` vs `plan_oracle`: +28.1% (+10.3% to +48.8%, p 0.0039); `plan_naive_rs` vs
+  `plan_oracle`: +30.8% (+12.9% to +51.8%, p 0.0012).
+* By overall factor 0.5 / 1 / 2: `plan_learn_rs` vs `pi` is −29% / −9% / −10%. At factor 2,
+  `plan_learn_rs` overcools by 0.041 K (`pi` by 0.026 K).
+* Learning curve of `plan_learn_rs` (mean |log(estimate/truth)| per band at days 0, 28, 56, 98 and
+  168): 0.59, 0.59, 0.59, 0.57, 0.51. 3b's `plan_learn`: 0.59, 0.35, 0.15, 0.08, 0.03.
+
+The full output is `mcb_experiments_gpu/exp3c/exp3c_analysis.json` (SHA-256 bd9462e7…7f6d72), and the
+plain-language account is `MCB_PROJECT_REPORT.md` Part 28.6.
+
+*By A9:*
+* H1 supports "the learning planner's advantage over classical feedback survives when it cannot see
+  the weather".
+* H2 is not better: "two-week forecast misses dominated by weather do not reveal the strength within
+  one episode. This is the one-Earth detection limit of Part 27, seen from inside a controller."
+* H3 gives the cost of not seeing the weather: 37% for the learning planner.
