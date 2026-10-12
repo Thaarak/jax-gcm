@@ -1432,7 +1432,40 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 </div>
             </div>
         </div>
-        <p class="note">In a perfect model, a short look-ahead or the field's standard feedback is enough; planning has to earn its place under uncertainty (Experiment 3b, running).</p>
+        <p class="note">In a perfect model, a short look-ahead or the field's standard feedback is enough; planning has to earn its place under uncertainty (Experiment 3b, next slide).</p>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 8b: Experiment 3b results -->
+    <div class="slide upd">
+        <h2>Experiment 3b: Nobody Knows How Strong the Spraying Is</h2>
+        <p class="subtitle">Pre-registered (OSF g7y2e); 48 held-out states; a hidden strength in every band</p>
+        <div class="two-column" style="grid-template-columns: 1.1fr 1fr; align-items: start;">
+            <table class="compact">
+                <tr><th>Arm</th><th>Leftover pattern</th><th>vs nothing</th></tr>
+                <tr><td><strong>Planner that learns the strength</strong></td><td><strong>2.76</strong></td><td>&minus;85%</td></tr>
+                <tr><td>Planner told the true strength</td><td>2.95</td><td>&minus;84%</td></tr>
+                <tr><td>Planner assuming nominal strength</td><td>3.41</td><td>&minus;82%</td></tr>
+                <tr><td>Adaptive law</td><td>3.91</td><td>&minus;79%</td></tr>
+                <tr><td>Classical feedback (GLENS-style)</td><td>4.45</td><td>&minus;77%</td></tr>
+                <tr><td>Best fixed pattern (nominal)</td><td>14.05</td><td>&minus;26%</td></tr>
+                <tr><td>No brightening</td><td>19.00</td><td>&mdash;</td></tr>
+            </table>
+            <div class="column">
+                <div class="card success">
+                    <h4>All three registered tests: better</h4>
+                    <ul>
+                        <li>vs classical feedback: <strong>38% better</strong>, in 16 of 16 ocean states</li>
+                        <li>Learning vs not learning: 19% better</li>
+                        <li>Feedback vs the fixed pattern: 68% better</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>Learning is the point</h4>
+                    <p>Strength known (3a): planning ties with feedback. Unknown (3b): the learner wins, within 16% of the truth after 8 weeks (best case: it sees the weather).</p>
+                </div>
+            </div>
+        </div>
         <div class="slide-number"></div>
     </div>
 
@@ -1459,6 +1492,37 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
             </div>
         </div>
         <p class="note">Every stage passed a real-model smoke test on the laptop; 39 new tests pass.</p>
+        <div class="slide-number"></div>
+    </div>
+
+    <!-- Update 9b: Experiment 2 and the snip test, results -->
+    <div class="slide upd">
+        <h2>Experiment 2 and the Snip Test: Results</h2>
+        <p class="subtitle">Ran 2026-10-08/09 straight after 3b; nothing failed; the registered analyses ran unchanged</p>
+        <div class="three-column" style="flex: 0;">
+            <div class="stat-box">
+                <div class="number">20%</div>
+                <div class="label">120-day undercount with a 30-day snip, down from 31% (still useful)</div>
+            </div>
+            <div class="stat-box">
+                <div class="number">2&times;</div>
+                <div class="label">Brute force needed twice the gradient's model time for an equally good 5-band design</div>
+            </div>
+            <div class="stat-box">
+                <div class="number warning">0</div>
+                <div class="label">Plain backpropagation never moved: its gradient said no brightening helps</div>
+            </div>
+        </div>
+        <div class="two-column" style="margin-top: 30px; align-items: start;">
+            <div class="card success">
+                <h4>Solid</h4>
+                <p>Snipping makes gradient design possible at 3&ndash;6 months: 78% better than plain backpropagation.</p>
+            </div>
+            <div class="card warning">
+                <h4>Not shown</h4>
+                <p>Three tests inconclusive. No fixed design beat one uniform setting: for a fixed pattern, how much matters far more than where.</p>
+            </div>
+        </div>
         <div class="slide-number"></div>
     </div>
 
@@ -1520,6 +1584,32 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
         <div class="slide-number"></div>
     </div>
 
+    <!-- Update 12: Experiments 3c and 3d, registered and running -->
+    <div class="slide upd">
+        <h2>Experiments 3c and 3d: Does 3b Survive?</h2>
+        <p class="subtitle">Frozen and posted before any evaluation data (OSF fyt9r, 2026-10-11); both running on the GX10, about 26 hours</p>
+        <div class="two-column" style="align-items: start;">
+            <div class="card">
+                <h4>3c: the planner cannot see the weather</h4>
+                <ul>
+                    <li>Sees the true ocean; guesses the atmosphere and land from its own last forecast</li>
+                    <li>Same 48 states as 3b; the classical arms are reused</li>
+                    <li>Pilot: forecast misses about 70&times; larger, learning almost stalls (0.58 &rarr; 0.50), yet still about 25% better than classical feedback</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h4>3d: the land bug fixed</h4>
+                <ul>
+                    <li>The land reads its months as months (the same fix as the ocean's Q-flux)</li>
+                    <li>A new base climate (passed its gate after the one allowed correction) and 48 new states</li>
+                    <li>3b's three tests repeated, plus a check that 3b's estimates fall inside 3d's intervals</li>
+                </ul>
+            </div>
+        </div>
+        <p class="note">3c asks whether the headline needs perfect knowledge of the weather; 3d, whether it depends on the land bug.</p>
+        <div class="slide-number"></div>
+    </div>
+
     <!-- Update 11: what's next -->
     <div class="slide upd">
         <h2>What Happens Next</h2>
@@ -1536,13 +1626,17 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 <div class="dot">&#10003;</div>
                 <div class="label">Experiment 3a<br><span class="checkmark">Done</span></div>
             </div>
-            <div class="timeline-item current">
-                <div class="dot">3b</div>
-                <div class="label">Hidden strength<br><span class="pending-mark">Running</span></div>
+            <div class="timeline-item completed">
+                <div class="dot">&#10003;</div>
+                <div class="label">3b: hidden<br>strength<br><span class="checkmark">Done</span></div>
             </div>
-            <div class="timeline-item pending">
-                <div class="dot">E2</div>
-                <div class="label">Experiment 2 and<br>snip test<br>(registered)</div>
+            <div class="timeline-item completed">
+                <div class="dot">&#10003;</div>
+                <div class="label">Experiment 2 and<br>snip test<br><span class="checkmark">Done</span></div>
+            </div>
+            <div class="timeline-item current">
+                <div class="dot">3c/d</div>
+                <div class="label">No weather;<br>land fixed<br><span class="pending-mark">Running</span></div>
             </div>
             <div class="timeline-item pending">
                 <div class="dot">&#9998;</div>
@@ -1553,7 +1647,7 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
             <div class="card">
                 <h4>Decisions waiting</h4>
                 <ul>
-                    <li>Fix the land-model bug before new experiments? Keep 3b in the current model so it compares with 3a?</li>
+                    <li>The paper's story after 3b: a planner that learns the strength beats classical feedback (wait for 3c and 3d?)</li>
                     <li>Who tells jax-esm's developers, and how (the advisor is one of them)</li>
                     <li>Author list and AI disclosure, before the Zenodo archive is published</li>
                 </ul>
@@ -1562,8 +1656,8 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 <h4>Ready to use</h4>
                 <ul>
                     <li>Zenodo archive v1 built and verified: 7.1 GB, 97 states, all exact</li>
-                    <li>Methods write-up updated with Experiment 3a (new section, figure, table)</li>
-                    <li>Experiment 2 and the snip test ready to run after 3b</li>
+                    <li>Methods write-up updated with 3b (new section, figure, table) and Experiment 2</li>
+                    <li>Email to the advisor drafted (to send once 3c and 3d are in)</li>
                 </ul>
             </div>
         </div>
