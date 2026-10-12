@@ -2889,16 +2889,16 @@ a board whose wobbly square has been fixed (the land).
 
 ## 28.4 Steps and status
 
-| # | Step | Status (2026-10-09) |
+| # | Step | Status (2026-10-11) |
 |---|---|---|
 | 1 | Land fix, guards and tests (7 new tests) | Done (5f5abc13) |
 | 2 | 3d base climate: diagnose the Q-flux, settle, gate | Settle 1 failed G2 (−1.29 K, as the original did in September); one Newton correction; settle 2 **passed** (drift +0.009 K per 60 d, bias −0.36 K) |
-| 3 | 3d states, strengths, training side, oracle pilot | Running on the GX10 |
+| 3 | 3d states, strengths, training side, oracle pilot | Done (2026-10-09 19:03); learner noise level 0.00069 K |
 | 4 | Ocean-only sensing in the planner, with tests | Done (3a79e343); real-model smoke above |
-| 5 | 3c pilot (ocean-only oracle, learner, naive planner) | Running on the GX10 |
-| 6 | Registered analyses (3b's machinery; 3b's output reproduced exactly) and evaluation scripts (3c smoke passed) | Done |
-| 7 | Freeze revision 3, commit and push; **post on OSF after the user's OK**; start both evaluations | After the pilots |
-| 8 | Results, report, memory, explanation | After the evaluations (about 28 GPU-hours) |
+| 5 | 3c pilot (ocean-only oracle, learner, naive planner) | Done (2026-10-09 16:15); learner noise level 0.0486 K (28.5) |
+| 6 | Registered analyses (3b's machinery; 3b's output reproduced exactly) and evaluation scripts | Done; both smoke tests passed (3c 10-09, 3d 10-11) |
+| 7 | Freeze revision 3, commit and push; **post on OSF after the user's OK**; start both evaluations | Done: frozen in b8152e3f, posted as https://osf.io/fyt9r/ (16:57 PDT, 2026-10-11), both evaluations started 16:59 |
+| 8 | Results, report, memory, explanation | Evaluations running (about 26 hours; expected the evening of 2026-10-12) |
 
 **What each outcome would mean:**
 - *3c H1 better:* the headline survives realistic information, which makes the paper much stronger.
@@ -2910,3 +2910,63 @@ a board whose wobbly square has been fixed (the land).
 > **New terms:** *Sensing* = what a controller knows about the current state of the world.
 > *Background* = a forecaster's own best guess of the parts it cannot observe. *Replication* =
 > repeating a test on new data and checking that the answer holds.
+
+## 28.5 The pilots and the freeze (2026-10-11)
+
+- **3c pilot.** 3b's 16 pilot states, 3 members each. The arms without `_rs` are 3b's own pilot
+  runs, reused. Mean `J_zonal`:
+
+| Arm | `J_zonal` |
+|---|---|
+| `plan_learn` (3b, sees the weather) | 0.00370 |
+| `plan_naive` (3b) | 0.00397 |
+| `plan_naive_rs` (ocean only) | 0.00459 |
+| `plan_oracle` (3b) | 0.00471 |
+| `plan_learn_rs` (ocean only) | 0.00484 |
+| `plan_oracle_rs` (ocean only) | 0.00499 |
+| `pi` | 0.00643 |
+| `adaptive` | 0.00675 |
+| `fixed` | 0.01348 |
+| `uncontrolled` | 0.02027 |
+
+- **What the 3c pilot showed** (training states, so descriptive only):
+  - *Planning still pays without the weather.* The ocean-only learner was 25% better than PI
+    (t p 0.07, Wilcoxon p 0.03), and the ocean-only naive planner 29% better (p 0.03).
+  - *Learning stalls.* Without the weather, the two-week forecast misses are about 70 times larger
+    (learner noise level 0.0486 K, against 3b's 0.00067 K, by the same registered rule). The
+    learner's error in the strength barely moved over the episode (0.58 → 0.50, against
+    0.58 → 0.03 when it saw the weather), and learning did not beat the naive planner (+5%, p 0.7).
+  - *The cost of not seeing the weather:* the ocean-only learner was 31% worse than 3b's learner
+    (p 0.09).
+  - *Power* at the fixed 6 members: the smallest detectable H1 effect is 19% of PI's score.
+- **3d preparation.**
+  - *Base climate:* settle 1 failed the bias gate (−1.29 K), as the original did in September. The
+    one registered Newton correction followed, and settle 2 passed (drift +0.009 K per 60 days,
+    bias −0.36 K).
+  - *States:* 32 macro states, mean SST 288.99–289.92 K (3b's: 289.08–289.93 K).
+  - *A slow cooling:* unlike 3b's states (+0.08 ± 0.04 K per decade, no clear trend), 3d's cool
+    slowly across the 32 years between them: −0.24 ± 0.02 K per decade, about 0.75 K in all. That
+    is well inside the drift gate (about −0.004 K per 60 days, against 0.02). It does not bias the
+    comparison: every state is scored against its own references, and the interleaved split keeps
+    evaluation and training states within 0.02 K of each other. It is recorded in revision 3 and
+    is a caveat to report.
+  - *Learner noise level:* 0.00069 K (3b: 0.00067 K). So with the land fixed, the learner sees the
+    strength as clearly as in 3b.
+  - *Fixed design:* [0.0285, 0.0208, 0.0120, 0.0153, 0.0206] (3b: [0.0245, 0.0303, 0.0125, 0.0132,
+    0.0165]): somewhat more in the first and last bands, less in the second. It is a fit on 16
+    training states, so this is a description, not a finding.
+- **Checks before the freeze.**
+  - Both evaluation scripts' smoke tests passed: every arm's exact command on one training state,
+    then the registered analysis.
+  - The full fast test suite passed after one repair: the student-training script had been broken
+    since 2026-10-06 by a new planner setting (2031423f; unrelated to 3c and 3d).
+- **Frozen** as Amendment 9 revision 3 (commit b8152e3f).
+  - *Posted* on OSF (https://osf.io/fyt9r/) at 16:57 PDT on 2026-10-11, before any evaluation run.
+    The session's automatic permission check does not let the assistant upload to a public site,
+    so the user ran the posting command.
+  - *Started:* both evaluations at 16:59, 3 runs at a time each. A failed run is re-run once, per
+    the registered rule.
+- **What the pilot hints, written before any evaluation data:** H1 may hold, but less clearly than
+  in 3b. H2 (learning helps) will probably not hold without the weather. H3 (the cost of not
+  seeing the weather) will probably be a real loss. These are hints from 16 training states, not
+  predictions the analysis depends on; the registered interpretations are in revision 3.
