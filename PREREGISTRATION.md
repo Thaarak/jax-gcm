@@ -2223,3 +2223,92 @@ plain-language account is `MCB_PROJECT_REPORT.md` Part 28.6.
 * H2 is not better: "two-week forecast misses dominated by weather do not reveal the strength within
   one episode. This is the one-Earth detection limit of Part 27, seen from inside a controller."
 * H3 gives the cost of not seeing the weather: 37% for the learning planner.
+
+**Amendment 9, revision 3 — Experiment 3d RESULT (logged 2026-10-12; evaluation references 2026-10-11
+17:03 to 2026-10-12 00:47, runs to 2026-10-12 22:46 PDT, sharing the GX10 with 3c until 12:36; the
+registered `analyze_experiment3d.py` was applied unchanged).**
+All 288 runs (6 arms × 48 states, 6 members each, against 10-member references made with the fixed
+land) finished, and no state was dropped. 170 runs failed once because of an operating-system update
+and were re-run once, as §10 provides (conduct note below). The analysis's land-model checks passed,
+and the 225 frozen code and design files on the GX10 were re-checked against b8152e3f after the run.
+Primary endpoint `J_zonal`, on the means of the 16 macro states:
+* **H1** `plan_learn` vs `pi`: rel −42.3% (90% CI −51.4% to −30.4%), t p 4.6×10⁻⁵, Wilcoxon p
+  3.1×10⁻⁴ (15 of 16 macro states favour `plan_learn`) → **better**.
+* **H2** `plan_learn` vs `plan_naive`: rel −10.9% (−21.9% to +2.7%), Holm p 0.12 (Wilcoxon 0.058;
+  12 of 16) → **inconclusive**.
+* **H3** `pi` vs `fixed`: rel −67.3% (−74.0% to −58.7%), Holm p 5.3×10⁻⁷ (Wilcoxon 3.1×10⁻⁵; 16 of
+  16) → **better**.
+
+*Replication (B7):* 3b's estimates (−38.0%, −19.1%, −68.3%) point the same way as 3d's, and each lies
+inside 3d's 95% interval (H1 −52.9% to −27.9%; H2 −23.7% to +5.6%; H3 −75.2% to −56.8%). The verdicts
+go from 3b to 3d as follows: H1 better → better, H2 better → inconclusive, H3 better → better.
+
+*Arm means:* `plan_learn` 0.00284, `plan_naive` 0.00319, `adaptive` 0.00388, `pi` 0.00492, `fixed`
+0.01506, `uncontrolled` 0.01836.
+
+*Descriptive* (unadjusted p):
+* `plan_naive` vs `pi`: −35.2% (−42.6% to −26.2%, t p 1.1×10⁻⁵).
+* `adaptive` vs `pi`: −21.2% (−34.3% to −5.9%, t p 0.0043).
+* `plan_learn` vs `adaptive`: −26.8% (−38.1% to −12.0%, t p 0.0060).
+* By overall factor 0.5 / 1 / 2:
+  * `plan_learn` vs `pi`: −36% / −12% / −57%;
+  * `plan_learn` vs `plan_naive`: −14% / +8% / −20%;
+  * `fixed` scores 0.0062 / 0.0045 / 0.035.
+* Learning curve (mean |log(estimate/truth)| per band at days 0, 28, 56, 98 and 168): 0.59, 0.35,
+  0.15, 0.08, 0.04.
+* Gains G (no brightening over controlled; > 1 is better), with the land now physical:
+  * land temperature: `plan_learn` 1.09, `plan_naive` 0.96, `pi` 1.02, `adaptive` 1.14, `fixed`
+    0.97;
+  * land precipitation: 0.92–0.99;
+  * global precipitation: 0.87–0.99.
+
+The full output is `mcb_experiments_gpu/exp3d/exp3d_analysis.json` (SHA-256 af614aef…40606f), and the
+plain-language account is `MCB_PROJECT_REPORT.md` Part 28.7.
+
+*Conduct note: the outage and the re-run.*
+* *The update.* At 17:05 PDT on 2026-10-12, the GX10's system updater was run at the machine's own
+  screen, not by the campaign. It upgraded about 500 packages:
+  * it removed the running kernel's NVIDIA module and installed kernel 7.0.0-1019-nvidia;
+  * it updated the driver from 580.159.03 to 580.178.04;
+  * it updated the system Python's patch build (3.12.3, Ubuntu build 0.15 → 0.17).
+
+  The machine restarted at 17:09 and 17:29. The project's Python packages (JAX and jaxlib 0.10.2,
+  with their CUDA 12.9 wheels) did not change.
+* *The failures.* From 17:07:25, every new run failed at start ("No visible GPU devices"): 170 runs
+  (`pi` 26; `adaptive`, `fixed` and `uncontrolled` 48 each).
+  * The 118 runs finished before (`plan_learn` 48, `plan_naive` 48, `pi` 22) were kept.
+  * The wrapper's automatic re-run stopped at its land-model check for the same reason, so no run was
+    re-run.
+  * The analysis refused, printing only "arms with no runs: ['uncontrolled', 'adaptive', 'fixed']".
+    No result existed or was seen.
+* *The re-run.* At 18:42:19, one pass of the frozen `run_campaign_exp3d_eval.sh` (which skips finished
+  runs) was started by hand, with `REVISION3_COMMIT` = b8152e3f. This is §10's single re-run of each
+  failed run. All 170 finished, so no state was dropped and §10 was followed.
+* *Reproducibility.* GX10 GPU runs are not repeatable bit for bit. The same run, repeated, diverges
+  after its first control step into another weather sample, because nothing forces deterministic GPU
+  arithmetic.
+  * `pi` on state 11300, made before the update, was repeated twice after it.
+  * The runner's zonal pattern error was 0.0081 before, and 0.0070 and 0.0061 after (ocean bias
+    −0.022, −0.034 and −0.026 K).
+  * The two post-update repeats differ from each other as much as from the original. So the update's
+    effect cannot be told from ordinary run-to-run variation, which is weather-sized and unbiased.
+
+  Reproducibility of these experiments is statistical, not bitwise.
+* *Exploratory check (not registered).* The macro states were split by whether `pi` ran before
+  (101–113) or after (117–131) the update.
+  * H1 is −51% and −41% in the two halves.
+  * Between the same halves, `plan_learn` vs `plan_naive` (both run entirely before the update)
+    moves similarly: −20% and −12%.
+  * `adaptive` vs `pi` (`adaptive` always ran after) does not move: −20% and −23%.
+
+*By B9 and §9:*
+* H1 supports "3b's main result does not depend on the land-model defect".
+* H2 is not better. Its registered reading is "the planner's state feedback already absorbs the
+  hidden strength".
+  * The verdict is inconclusive, not equivalent, so 3d establishes neither reading.
+  * 3b's estimate lies inside 3d's interval.
+  * Pooling 3b's and 3d's 32 macro states (exploratory, not registered): −15.2% (90% CI −23.8% to
+    −5.4%).
+* H3 says again that, without feedback, a design made at nominal strength fails under realistic
+  strength uncertainty.
+* The learning curve is again a lower bound on how fast one Earth reveals the strength (§11).

@@ -8,7 +8,17 @@
 
 ## The one-paragraph version
 
-> **Latest status (2026-10-09):** Experiment 2 and the snip test (**Part 25.4**, registered at
+> **Latest status (2026-10-12):** Experiments 3c and 3d (**Parts 28.6 and 28.7**, registered at
+> https://osf.io/fyt9r/) finished.
+> - *3d, with the land bug fixed:* 3b's result replicated. The learning planner beat the classical
+>   controller by **42%** (3b: 38%; 15 of 16 ocean states), and feedback beat the fixed plan by 67%.
+>   Learning helped by 11%, which is not certain on its own (3b: 19%).
+> - *3c, where the planner cannot see the weather:* it still beat the classical controller, by
+>   **15%**, but it could no longer learn the strength.
+> - A system update took the GX10's GPU away during 3d. The registered single re-run completed every
+>   run, and no result was seen before it.
+>
+> *Earlier (2026-10-09):* Experiment 2 and the snip test (**Part 25.4**, registered at
 > https://osf.io/pvwx9/) finished.
 > - A 30-day snip cuts the long-range gradient's undercount from 31% to 20%.
 > - Snipping is essential: plain backpropagation could not design anything (H3 **better**).
@@ -2889,7 +2899,7 @@ a board whose wobbly square has been fixed (the land).
 
 ## 28.4 Steps and status
 
-| # | Step | Status (2026-10-11) |
+| # | Step | Status (2026-10-12) |
 |---|---|---|
 | 1 | Land fix, guards and tests (7 new tests) | Done (5f5abc13) |
 | 2 | 3d base climate: diagnose the Q-flux, settle, gate | Settle 1 failed G2 (−1.29 K, as the original did in September); one Newton correction; settle 2 **passed** (drift +0.009 K per 60 d, bias −0.36 K) |
@@ -2898,7 +2908,7 @@ a board whose wobbly square has been fixed (the land).
 | 5 | 3c pilot (ocean-only oracle, learner, naive planner) | Done (2026-10-09 16:15); learner noise level 0.0486 K (28.5) |
 | 6 | Registered analyses (3b's machinery; 3b's output reproduced exactly) and evaluation scripts | Done; both smoke tests passed (3c 10-09, 3d 10-11) |
 | 7 | Freeze revision 3, commit and push; **post on OSF after the user's OK**; start both evaluations | Done: frozen in b8152e3f, posted as https://osf.io/fyt9r/ (16:57 PDT, 2026-10-11), both evaluations started 16:59 |
-| 8 | Results, report, memory, explanation | **3c done** (2026-10-12 12:36; all 96 runs; results in 28.6). 3d running (expected the evening of 2026-10-12) |
+| 8 | Results, report, memory, explanation | **Done.** 3c: 2026-10-12 12:36, all 96 runs (28.6). 3d: 2026-10-12 22:46, all 288 runs, after a system update and the registered single re-run (28.7) |
 
 **What each outcome would mean:**
 - *3c H1 better:* the headline survives realistic information, which makes the paper much stronger.
@@ -3083,4 +3093,190 @@ less clearly than in 3b; H2 did not hold; H3 was a real loss.
 - Natural next steps (not registered): learn from longer averages of the forecast misses, where the
   weather averages out; forecast from a small ensemble of weather guesses; or give the planner a
   realistic, imperfect view of the weather.
-- 3d (the land fix) is still running and should finish on the evening of 2026-10-12.
+- 3d's result (the land fix) is in 28.7.
+
+## 28.7 Results: Experiment 3d (2026-10-12)
+
+*The evaluation ran on the GX10, first sharing it with 3c. The 10-member references of the 48
+evaluation states took 2026-10-11 17:03 to 2026-10-12 00:47 PDT. Then came 6 arms × 48 states × 6
+members, 288 runs, until 22:46. A system update stopped the work for an hour and a half (the conduct
+note below). All 288 runs finished and no state was dropped. The registered analysis ran unchanged,
+and the 225 frozen code and design files on the GX10 were re-checked against b8152e3f afterwards.
+Output: `mcb_experiments_gpu/exp3d/exp3d_analysis.json`.*
+
+**In one sentence:** with the land fixed, 3b's main result came back almost exactly. The learning
+planner beat the classical controller by 42% (3b: 38%), and feedback beat the fixed plan by 67% (3b:
+68%). The gain from learning was smaller this time, and not certain on its own: 11%, against 3b's
+19%.
+
+*Analogy (the house with wrongly labelled radiators, from 24.7):* the same smart thermostat, tested
+again after the garden was fixed. Before, the garden's seasons went round every 12 days (the land
+bug), which sent odd draughts through the house. With the garden fixed, the smart thermostat beat the
+standard one by about the same margin as before. So the odd draughts were not why it won.
+
+**The registered tests** (`J_zonal`, macro-state means, 16 ocean states)
+
+| Hypothesis | Difference | 90% interval | p | Ocean states favouring the first arm | Verdict |
+|---|---|---|---|---|---|
+| **H1 (primary):** `plan_learn` vs `pi` | **−42.3%** | −51.4% to −30.4% | t 4.6×10⁻⁵; Wilcoxon 3.1×10⁻⁴ | 15 of 16 | **better** |
+| H2: `plan_learn` vs `plan_naive` | −10.9% | −21.9% to +2.7% | Holm 0.12; Wilcoxon 0.058 | 12 of 16 | inconclusive |
+| H3: `pi` vs `fixed` | −67.3% | −74.0% to −58.7% | Holm 5.3×10⁻⁷; Wilcoxon 3.1×10⁻⁵ | 16 of 16 | **better** |
+
+The t and Wilcoxon tests agree on all three.
+
+**The replication check** (registered in revision 3, B7: does 3b's estimate lie inside 3d's 95%
+interval?)
+
+| Hypothesis | 3b | 3d | 3d's 95% interval | Same direction | 3b inside | Verdicts, 3b → 3d |
+|---|---|---|---|---|---|---|
+| H1 | −38.0% | −42.3% | −52.9% to −27.9% | yes | yes | better → better |
+| H2 | −19.1% | −10.9% | −23.7% to +5.6% | yes | yes | better → inconclusive |
+| H3 | −68.3% | −67.3% | −75.2% to −56.8% | yes | yes | better → better |
+
+All three replicate in the registered sense. H2's estimate is smaller in 3d, and its interval now
+crosses zero.
+
+**Every arm** (means over the 48 states, scored on days 98–182; 3b's means in brackets)
+
+| Arm | `J_zonal` | bias part | pattern part | ocean bias (K) | vs no brightening | cap used |
+|---|---|---|---|---|---|---|
+| **`plan_learn`** | **0.00284** (0.00276) | 0.00019 | 0.00265 | −0.005 | −85% | 30% |
+| `plan_naive` | 0.00319 (0.00341) | 0.00034 | 0.00284 | −0.005 | −83% | 28% |
+| `adaptive` | 0.00388 (0.00391) | 0.00005 | 0.00383 | +0.003 | −79% | 28% |
+| `pi` | 0.00492 (0.00445) | 0.00046 | 0.00446 | 0.000 | −73% | 31% |
+| `fixed` | 0.01506 (0.01405) | 0.00894 | 0.00612 | −0.032 | −18% | 13% |
+| `uncontrolled` | 0.01836 (0.01900) | 0.01658 | 0.00178 | +0.128 | — | 0% |
+
+The arms come in 3b's order, and every mean is within 11% of 3b's.
+
+**Descriptive comparisons** (no test claims; p unadjusted; 3b in brackets):
+- `plan_naive` vs `pi`: −35.2% (90% interval −42.6% to −26.2%; t p 1.1×10⁻⁵; 16 of 16) [3b: −23%].
+  Even the planner that never learns beats PI clearly.
+- `adaptive` vs `pi`: −21.2% (−34.3% to −5.9%; p 0.004; 13 of 16) [3b: −12%].
+- `plan_learn` vs `adaptive`: −26.8% (−38.1% to −12.0%; p 0.006; 13 of 16) [3b: −29%].
+
+**By overall strength** (16 states each; `J_zonal`)
+
+| Arm | weak (g = 0.5) | nominal (g = 1) | strong (g = 2) |
+|---|---|---|---|
+| `plan_learn` | **0.00238** | 0.00280 | **0.00334** |
+| `plan_naive` | 0.00276 | **0.00260** | 0.00420 |
+| `adaptive` | 0.00367 | 0.00403 | 0.00395 |
+| `pi` | 0.00372 | 0.00318 | 0.00786 |
+| `fixed` | 0.00616 | 0.00451 | 0.03452 |
+
+- **The learner's lead over PI holds at every strength:** −36%, −12% and −57% (3b: −33%, −44%,
+  −37%). With strong spraying, PI's latitude pattern of error more than doubles.
+- **Learning helps when the strength is off on the whole:** −14% (weak) and −20% (strong), but not at
+  nominal strength (+8%), where the naive planner's assumption is right on average. In 3b the
+  pattern was −20%, −31% and −8%. That it moves so much between 3b and 3d shows how noisy 16 states
+  per strength are.
+- **The fixed plan** warms too little where the spraying is weak (+0.060 K) and overcools where it is
+  strong (−0.148 K), as in 3b.
+
+**How fast it learned** (mean |log(estimate/truth)| per band, over 48 states and 5 bands):
+
+| Day | 0 | 28 | 56 | 98 | 168 |
+|---|---|---|---|---|---|
+| 3d's learner | 0.59 | 0.35 | 0.15 | 0.08 | 0.04 |
+| 3b's learner | 0.59 | 0.35 | 0.15 | 0.08 | 0.03 |
+
+It learned just as fast as in 3b, because its forecast misses are just as small (learner noise level
+0.00069 K, against 0.00067 K). This was the pilot's one hint (28.5), and it held.
+
+**Side effects, with the land readable for the first time** (gains G: the squared error against the
+normal climate with no brightening, divided by the same with brightening; G > 1 is better; days
+98–182)
+
+| Arm | ocean temperature | land temperature | land rainfall | global rainfall |
+|---|---|---|---|---|
+| `plan_learn` | 1.25 | 1.09 | 0.99 | 0.98 |
+| `plan_naive` | 1.20 | 0.96 | 0.96 | 0.99 |
+| `adaptive` | 1.21 | 1.14 | 0.99 | 0.98 |
+| `pi` | 1.06 | 1.02 | 0.96 | 0.94 |
+| `fixed` | 1.05 | 0.97 | 0.92 | 0.87 |
+
+- With the land fixed, land temperature and land rainfall mean something for the first time.
+- No arm does clear harm over land. Land temperatures end about as close to normal as with no
+  brightening, or a little closer (G 0.96–1.14). Land rainfall ends about the same, or a little
+  further from normal (0.92–0.99).
+- These are maps dominated by weather. Each value is uncertain by about ±0.05 to ±0.1 (90%), so they
+  are descriptions, not findings.
+- Global rainfall ends slightly further from normal under every arm, as in 3b (0.87–0.99).
+
+**Conduct note: the outage and the re-run.**
+- *What happened.* At 17:05 PDT on 2026-10-12, someone at the GX10's own screen installed the system
+  updates (about 500 packages). The update:
+  - replaced the kernel (6.17 → 7.0);
+  - removed the running kernel's GPU module;
+  - updated the NVIDIA driver (580.159.03 → 580.178.04);
+  - updated the system Python's patch build.
+
+  The machine restarted at 17:09 and 17:29. The project's own Python packages (JAX 0.10.2 and its
+  CUDA libraries) did not change.
+- *What failed.* From 17:07, every new run stopped at start because it found no GPU: 170 runs (26 of
+  PI's, and all 48 of the adaptive law's, the fixed plan's and no brightening's).
+  - The 118 runs already finished (both planners and 22 of PI's) were kept.
+  - The wrapper's automatic re-run stopped at its first check for the same reason, so nothing was
+    re-run.
+  - The analysis refused the incomplete arms and printed only their names. **No result existed or
+    was seen.**
+- *The re-run.* At 18:42, one pass of the frozen campaign script was started by hand. It skips
+  finished runs, so this is the registered single re-run of each failed run (revision 2 §10). All
+  170 finished, so no state was dropped and the registered rule was followed.
+- *Does the update change the results?* Runs on the GX10's GPU are not repeatable bit for bit. The
+  same run, repeated, turns into another equally valid weather sample after its first control step.
+  - One run made before the update (PI, state 11300) was repeated twice after it.
+  - Its zonal pattern error was 0.0081 before, and 0.0070 and 0.0061 after. Its ocean bias was
+    −0.022, −0.034 and −0.026 K.
+  - The two repeats differ from each other about as much as from the original. So the update's
+    effect cannot be told apart from ordinary run-to-run variation, which is weather-sized and has
+    no direction.
+- *Exploratory check:* the ocean states were split by whether PI ran before the update (macro states
+  101–113) or after it (117–131).
+
+  | Comparison | Before-update half | After-update half |
+  |---|---|---|
+  | H1, learner vs PI | −51% | −41% |
+  | learner vs naive planner (both ran before the update) | −20% | −12% |
+  | adaptive (always after) vs PI | −20% | −23% |
+
+  The halves differ in H1 by about as much as the learner-vs-naive comparison does, which the update
+  cannot have touched. Nothing points to the update.
+
+**What it means** (the interpretations fixed in revision 3, B9, and revision 2 §9):
+- *H1 better:* "3b's main result does not depend on the land-model defect". The advantage is 42%
+  here and 38% in 3b.
+- *H2 inconclusive.* By §9 this counts as "not better", whose registered reading is "the planner's
+  state feedback already absorbs the hidden strength". But the verdict is inconclusive, not
+  equivalent (the 90% interval runs from −22% to +3%), so 3d does not establish that reading either.
+  3b's estimate (−19%) lies inside 3d's 95% interval. Pooling the two experiments' 32 ocean states
+  (exploratory, not registered), learning helps the planner by 15% (90% interval −24% to −5%).
+- *H3 better:* again, without feedback, a design made at nominal strength fails under realistic
+  strength uncertainty.
+
+**Caveats:**
+- *Everything else is 3b's:*
+  - the planners see the exact weather (3c removes that);
+  - a perfect model apart from the strength, and a constant strength;
+  - one model, five bands, a cap of 0.15 and an idealized warming ramp.
+- *A new base climate.* 3d's states come from a new base climate, made with the fixed land, which
+  cools slowly across its 32 years (−0.24 K per decade; 28.5). Every state is scored against its own
+  references, so this does not bias the comparisons.
+- *Repeatable on average, not bit for bit.* This was checked here. It is probably true of the earlier
+  GPU experiments too, since nothing in them forces deterministic GPU arithmetic.
+- *3d tests only 3b's comparisons.* It supports, but does not prove, that the land bug did not shape
+  the other experiments' comparisons either.
+
+**For the papers:**
+- Paper 2's headline now rests on three experiments. A gradient planner that learns the strength
+  beats the GLENS-style controller:
+  - by 38% when it sees the weather (3b);
+  - by 42% with the land fixed (3d);
+  - by 15% when it cannot see the weather (3c).
+- Learning the strength helps by roughly 10–20% when the planner sees the weather (3b 19%; 3d 11%,
+  not significant on its own). It stalls without the weather (3c).
+- Feedback is essential when the strength is unknown. A fixed plan loses by about two-thirds, in both
+  3b and 3d.
+- The land bug did not shape 3b's result. The land side effects can now be reported, and none is
+  clearly harmful.

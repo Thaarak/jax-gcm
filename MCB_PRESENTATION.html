@@ -1584,29 +1584,33 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
         <div class="slide-number"></div>
     </div>
 
-    <!-- Update 12: Experiments 3c and 3d, registered and running -->
+    <!-- Update 12: Experiments 3c and 3d, results -->
     <div class="slide upd">
-        <h2>Experiments 3c and 3d: Does 3b Survive?</h2>
-        <p class="subtitle">Frozen and posted before any evaluation data (OSF fyt9r, 2026-10-11); both running on the GX10, about 26 hours</p>
-        <div class="two-column" style="align-items: start;">
-            <div class="card">
-                <h4>3c: the planner cannot see the weather</h4>
-                <ul>
-                    <li>Sees the true ocean; guesses the atmosphere and land from its own last forecast</li>
-                    <li>Same 48 states as 3b; the classical arms are reused</li>
-                    <li>Pilot: forecast misses about 70&times; larger, learning almost stalls (0.58 &rarr; 0.50), yet still about 25% better than classical feedback</li>
-                </ul>
-            </div>
-            <div class="card">
-                <h4>3d: the land bug fixed</h4>
-                <ul>
-                    <li>The land reads its months as months (the same fix as the ocean's Q-flux)</li>
-                    <li>A new base climate (passed its gate after the one allowed correction) and 48 new states</li>
-                    <li>3b's three tests repeated, plus a check that 3b's estimates fall inside 3d's intervals</li>
-                </ul>
+        <h2>Experiments 3c and 3d: 3b Survives</h2>
+        <p class="subtitle">Pre-registered (OSF fyt9r): 3c without the weather; 3d with the land bug fixed</p>
+        <div class="two-column" style="grid-template-columns: 1.1fr 1fr; align-items: start;">
+            <table class="compact">
+                <tr><th>Learner vs classical feedback</th><th>Change</th><th>Verdict</th></tr>
+                <tr><td>3b: sees the weather</td><td>&minus;38%</td><td>better (16 of 16 states)</td></tr>
+                <tr><td><strong>3d: land bug fixed</strong></td><td><strong>&minus;42%</strong></td><td><strong>better</strong> (15 of 16)</td></tr>
+                <tr><td><strong>3c: cannot see the weather</strong></td><td><strong>&minus;15%</strong></td><td><strong>better</strong> (14 of 16)</td></tr>
+                <tr><th>Learning vs not learning</th><th></th><th></th></tr>
+                <tr><td>3b</td><td>&minus;19%</td><td>better</td></tr>
+                <tr><td>3d</td><td>&minus;11%</td><td>inconclusive</td></tr>
+                <tr><td>3c</td><td>&minus;2%</td><td>inconclusive</td></tr>
+            </table>
+            <div class="column">
+                <div class="card success">
+                    <h4>3d: replicated</h4>
+                    <p>3b's estimates all fall inside 3d's intervals. The land bug was not why the planner won.</p>
+                </div>
+                <div class="card warning">
+                    <h4>3c: learning needs the weather</h4>
+                    <p>Misses are 70&times; larger and learning stalls; re-planning alone still beats feedback by 15%.</p>
+                </div>
             </div>
         </div>
-        <p class="note">3c asks whether the headline needs perfect knowledge of the weather; 3d, whether it depends on the land bug.</p>
+        <p class="note">A system update stopped 3d partway; the one registered re-run finished every run before any result existed.</p>
         <div class="slide-number"></div>
     </div>
 
@@ -1634,20 +1638,20 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 <div class="dot">&#10003;</div>
                 <div class="label">Experiment 2 and<br>snip test<br><span class="checkmark">Done</span></div>
             </div>
-            <div class="timeline-item current">
-                <div class="dot">3c/d</div>
-                <div class="label">No weather;<br>land fixed<br><span class="pending-mark">Running</span></div>
+            <div class="timeline-item completed">
+                <div class="dot">&#10003;</div>
+                <div class="label">3c/d: no weather;<br>land fixed<br><span class="checkmark">Done</span></div>
             </div>
-            <div class="timeline-item pending">
+            <div class="timeline-item current">
                 <div class="dot">&#9998;</div>
-                <div class="label">Papers, archive,<br>advisor Oct 20</div>
+                <div class="label">Papers, archive,<br>advisor Oct 20<br><span class="pending-mark">Next</span></div>
             </div>
         </div>
         <div class="two-column" style="margin-top: 10px; align-items: start;">
             <div class="card">
                 <h4>Decisions waiting</h4>
                 <ul>
-                    <li>The paper's story after 3b: a planner that learns the strength beats classical feedback (wait for 3c and 3d?)</li>
+                    <li>The paper's story: a learning planner beats classical feedback (38&ndash;42%; 15% without the weather)</li>
                     <li>Who tells jax-esm's developers, and how (the advisor is one of them)</li>
                     <li>Author list and AI disclosure, before the Zenodo archive is published</li>
                 </ul>
@@ -1656,8 +1660,8 @@ loss = jax.nn.softplus(-precip_change * 100) / 100
                 <h4>Ready to use</h4>
                 <ul>
                     <li>Zenodo archive v1 built and verified: 7.1 GB, 97 states, all exact</li>
-                    <li>Methods write-up updated with 3b (new section, figure, table) and Experiment 2</li>
-                    <li>Email to the advisor drafted (to send once 3c and 3d are in)</li>
+                    <li>Methods write-up updated with 3b, 3c and 3d (new sections, figures, tables) and Experiment 2</li>
+                    <li>Email to the advisor drafted, with 3c and 3d (ready to send)</li>
                 </ul>
             </div>
         </div>
