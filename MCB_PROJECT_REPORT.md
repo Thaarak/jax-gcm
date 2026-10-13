@@ -3231,7 +3231,7 @@ normal climate with no brightening, divided by the same with brightening; G > 1 
     −0.022, −0.034 and −0.026 K.
   - The two repeats differ from each other about as much as from the original. So the update's
     effect cannot be told apart from ordinary run-to-run variation, which is weather-sized and has
-    no direction.
+    no direction. The repeats are kept in `mcb_experiments_gpu/exp3d/repro/`, outside the analysis.
 - *Exploratory check:* the ocean states were split by whether PI ran before the update (macro states
   101–113) or after it (117–131).
 

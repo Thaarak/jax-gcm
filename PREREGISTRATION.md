@@ -2293,7 +2293,8 @@ plain-language account is `MCB_PROJECT_REPORT.md` Part 28.7.
   * The two post-update repeats differ from each other as much as from the original. So the update's
     effect cannot be told from ordinary run-to-run variation, which is weather-sized and unbiased.
 
-  Reproducibility of these experiments is statistical, not bitwise.
+  Reproducibility of these experiments is statistical, not bitwise. The repeats' run summaries (not
+  used by the analysis) are `mcb_experiments_gpu/exp3d/repro/after_update_{1,2}/pi/ic11300.json`.
 * *Exploratory check (not registered).* The macro states were split by whether `pi` ran before
   (101–113) or after (117–131) the update.
   * H1 is −51% and −41% in the two halves.
