@@ -21,6 +21,8 @@ from jcm.mcb.planner import (
     LearningPlanner,
     Planner,
     PlannerConfig,
+    analysis_carry,
+    background_error,
     gauss_newton_residuals,
     noise_to_signal,
     to_amplitudes,
@@ -299,6 +301,123 @@ class StrengthLearningTest(_Toy):
         with self.assertRaises(ValueError):
             self.episode(self.learner(), self.TRUTH, segment_days=2,
                          n_segments=3)
+
+
+class AnalysisSensingTest(_Toy):
+    """Experiment 3e: the planner corrects its forecast toward the true weather."""
+
+    def make(self, error, background, sensing="analysis", **overrides):
+        cfg = dict(lookahead_days=L, window_days=NO_TRUNCATION_DAYS,
+                   copies=1, copy_amp=0.0, cap=5.0, gn_damping=0.0,
+                   optimizer="gauss_newton", iterations=1, sensing=sensing,
+                   analysis_error=error)
+        cfg.update(overrides)
+        return Planner(_toy_step, self.patterns, self.w, self.target,
+                       self.q_base, self.warm, 1.0, PlannerConfig(**cfg),
+                       background=background)
+
+    def guess(self, x=-1.0, land=275.0):
+        """Return the toy state with other weather and another land temperature."""
+        carry = dict(self.carry)
+        carry["atm"] = {"state": {"x": jnp.full_like(
+            self.carry["atm"]["state"]["x"], x)},
+            "derived": dict(self.carry["atm"]["derived"],
+                            total_heat_flux=self.carry["atm"]["derived"][
+                                "total_heat_flux"] + 1.0)}
+        carry["lnd"] = {"state": type(self.carry["lnd"]["state"])(
+            self.carry["lnd"]["state"].land_surface_temperature * 0 + land)}
+        return carry
+
+    def episode(self, planner, n=3):
+        seg = make_segment_fn(_toy_step, self.patterns, L,
+                              fields_fn=_toy_fields)
+        return run_episode(self.carry, seg, planner, n_segments=n,
+                           segment_days=L, k_bands=2, warming=self.warm)
+
+    def test_the_two_ends_are_exactly_the_old_planners_states(self):
+        guess = self.guess()
+        self.assertIs(analysis_carry(self.carry, guess, 0.0), self.carry)
+        one = analysis_carry(self.carry, guess, 1.0)
+        self.assertIs(one["atm"], guess["atm"])
+        self.assertIs(one["lnd"], guess["lnd"])
+        self.assertIs(one["ocn"], self.carry["ocn"])
+
+    def test_it_mixes_the_weather_and_keeps_the_true_ocean(self):
+        guess = self.guess(x=-1.0, land=275.0)
+        mixed = analysis_carry(self.carry, guess, 0.25)
+        np.testing.assert_allclose(
+            np.asarray(mixed["atm"]["state"]["x"]),
+            0.75 * 0.1 + 0.25 * -1.0, rtol=1e-6)
+        np.testing.assert_allclose(
+            np.asarray(mixed["lnd"]["state"].land_surface_temperature),
+            0.75 * 280.0 + 0.25 * 275.0, rtol=1e-6)
+        self.assertIs(mixed["ocn"], self.carry["ocn"])
+        # Values the two states share are kept exactly.
+        np.testing.assert_array_equal(
+            np.asarray(mixed["atm"]["derived"]["mcb_perturbation"]),
+            np.asarray(self.carry["atm"]["derived"]["mcb_perturbation"]))
+
+    def test_error_zero_plans_as_the_exact_planner(self):
+        np.testing.assert_allclose(
+            self.make(0.0, self.guess())(self.state()),
+            self.make(None, None, sensing="exact",
+                      analysis_error=1.0)(self.state()), rtol=1e-6)
+
+    def test_error_one_runs_as_the_ocean_only_planner(self):
+        a = self.make(1.0, self.guess())
+        b = self.make(1.0, self.guess(), sensing="ocean")
+        self.episode(a)
+        self.episode(b)
+        np.testing.assert_allclose([r["final"] for r in a.log],
+                                   [r["final"] for r in b.log], rtol=1e-6)
+        np.testing.assert_allclose(
+            np.asarray(a.background["atm"]["state"]["x"]),
+            np.asarray(b.background["atm"]["state"]["x"]), rtol=1e-6)
+
+    def test_the_plan_moves_linearly_between_the_ends(self):
+        # The toy is linear, so the planned settings are affine in the
+        # starting weather, and so in the analysis error.
+        guess = self.guess(x=2.0)
+        ends = [self.make(f, guess)(self.state()) for f in (0.0, 1.0)]
+        mid = self.make(0.3, guess)(self.state())
+        self.assertFalse(np.allclose(ends[0], ends[1], rtol=1e-3))
+        np.testing.assert_allclose(mid, 0.7 * ends[0] + 0.3 * ends[1],
+                                   rtol=1e-4, atol=1e-6)
+
+    def test_it_logs_how_far_its_background_had_drifted(self):
+        planner = self.make(0.1, self.guess(x=-1.0))
+        planner(self.state())
+        drift = planner.log[0]["background_error"]
+        self.assertAlmostEqual(drift["atm['x']"], 1.1, places=5)
+        self.assertAlmostEqual(drift["lnd.land_surface_temperature"]
+                               if "lnd.land_surface_temperature" in drift
+                               else max(v for k, v in drift.items()
+                                        if k.startswith("lnd")), 5.0,
+                               places=4)
+        same = background_error(self.carry, self.carry)
+        self.assertTrue(all(v == 0.0 for v in same.values()))
+
+    def test_every_forecast_miss_is_kept(self):
+        planner = self.make(0.1, self.guess())
+        self.episode(planner, n=3)
+        self.assertEqual([r["day"] for r in planner.innovation_log], [L, 2 * L])
+        r = planner.innovation_log[0]
+        il = LATS.size
+        self.assertEqual(r["observed"].shape, (il,))
+        self.assertEqual(r["predicted"].shape, (il,))
+        self.assertEqual(r["sensitivity"].shape, (il, 2))
+        self.assertEqual(r["belief"].shape, (2,))
+
+    def test_rejects_bad_settings(self):
+        for bad in (-0.1, 1.5):
+            with self.assertRaises(ValueError):
+                PlannerConfig(sensing="analysis", optimizer="gauss_newton",
+                              analysis_error=bad).validate()
+        with self.assertRaises(ValueError):
+            PlannerConfig(sensing="analysis", optimizer="adam",
+                          analysis_error=0.1).validate()
+        with self.assertRaises(ValueError):
+            self.make(0.1, None)
 
 
 class OceanSensingTest(_Toy):

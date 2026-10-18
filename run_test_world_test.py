@@ -191,6 +191,17 @@ class OceanSensingArgsTest(unittest.TestCase):
                                        "r.npz", "--output", "o.json",
                                        "--sensing", "ocean"]))   # Adam: no
 
+    def test_analysis_sensing_needs_its_error_and_only_then(self):
+        cfg = planner_config(self._args("--sensing", "analysis",
+                                        "--analysis-error", "0.1"))
+        self.assertEqual((cfg.sensing, cfg.analysis_error), ("analysis", 0.1))
+        for extra in (("--sensing", "analysis"),
+                      ("--analysis-error", "0.1"),
+                      ("--sensing", "ocean", "--analysis-error", "0.1"),
+                      ("--sensing", "analysis", "--analysis-error", "1.2")):
+            with self.assertRaises(SystemExit, msg=str(extra)):
+                planner_config(self._args(*extra))
+
     def test_day_zero_weather_comes_from_the_next_branch(self):
         ics = [({"index": 100 * m + b, "macro_index": m, "branch": b},
                 f"carry {m}/{b}") for m in (17, 19) for b in (0, 1, 2)]

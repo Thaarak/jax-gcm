@@ -55,6 +55,13 @@ What the planner knows (``sensing``):
   forecasts from the true ocean plus its *background*: the atmosphere and
   land at the end of its own previous forecast, or on day 0 a state it is
   given. The forecast is otherwise unchanged, so it costs nothing extra.
+* ``analysis`` (Experiment 3e): it corrects its background toward the true
+  weather before every forecast, as a weather centre's analysis does. It
+  starts from the true ocean and, for the atmosphere and land,
+  ``(1 - f) * truth + f * background``, where ``f`` (``analysis_error``) is
+  the share of its own forecast's error left after the correction. ``f = 0``
+  is the exact planner and ``f = 1`` the ocean-only one, exactly. The
+  background then moves on to where this forecast ends, as with ``ocean``.
 
 The comparison planners of step 15 are presets: ``short14`` is a 14-day
 look-ahead with exact backpropagation (Dubey et al.'s setting), and
@@ -88,8 +95,10 @@ OPTIMIZERS = ("adam", "gauss_newton")
 # What the objective scores: the ocean map, or its latitude (zonal-mean)
 # profile, which the step-23 pilot chose (MCB_PROJECT_REPORT.md Part 22).
 REPRESENTATIONS = ("map", "zonal")
-# What the planner knows of the current state (Experiment 3c).
-SENSING = ("exact", "ocean")
+# What the planner knows of the current state (Experiments 3c and 3e).
+SENSING = ("exact", "ocean", "analysis")
+# The sensing modes that keep a background (their own last forecast's end).
+TRACKED = ("ocean", "analysis")
 _ADAM_BETAS = (0.9, 0.999)
 _ADAM_EPS = 1e-8
 
@@ -101,7 +110,9 @@ class PlannerConfig:
     The pilot (step 23) fixes the final values: the look-ahead, the
     optimizer, its iterations and step size, the number of copies, and the
     penalty weights ``mu`` and ``lam`` (in albedo units, so Dubey et al.'s
-    kelvin-based weights do not carry over).
+    kelvin-based weights do not carry over). ``sensing`` and
+    ``analysis_error`` set what it knows of the current state (see the
+    module docstring).
     """
 
     lookahead_days: int = 60
@@ -123,6 +134,7 @@ class PlannerConfig:
     gn_damping: float = 1e-3
     representation: str = "map"
     sensing: str = "exact"
+    analysis_error: float = 1.0
 
     def validate(self):
         """Raise ValueError on settings the planner cannot use."""
@@ -148,7 +160,10 @@ class PlannerConfig:
              "the zonal representation is implemented for Gauss-Newton"),
             (self.sensing in SENSING, f"sensing must be one of {SENSING}"),
             (self.sensing == "exact" or self.optimizer == "gauss_newton",
-             "ocean-only sensing is implemented for Gauss-Newton"),
+             "ocean-only and analysis sensing are implemented for "
+             "Gauss-Newton"),
+            (0.0 <= self.analysis_error <= 1.0,
+             "analysis_error must lie in [0, 1]"),
         ]
         for ok, message in checks:
             if not ok:
@@ -230,6 +245,59 @@ def gauss_newton_residuals(error, jacobian, weights, amplitudes, previous,
     return r, big_r
 
 
+def analysis_carry(truth: dict, background: dict, error: float) -> dict:
+    """Return the state an analysis-sensing planner forecasts from (Experiment 3e).
+
+    The true ocean, and for every other part of the state ``(1 - error) *
+    truth + error * background``. Leaves that are not floating point
+    (counters) and values the two states share exactly (the date, constant
+    fields) come from the truth unchanged. ``error`` 0 returns the truth and
+    1 the background with the true ocean: exactly what the exact and the
+    ocean-only planners forecast from.
+    """
+    if error == 0.0:
+        return truth
+    if error == 1.0:
+        carry = dict(background)
+        carry["ocn"] = truth["ocn"]
+        return carry
+    w = jnp.float32(error)
+
+    def mix(t, b):
+        t, b = jnp.asarray(t), jnp.asarray(b)
+        if not jnp.issubdtype(t.dtype, jnp.inexact):
+            return t
+        mixed = ((1.0 - w) * t + w * b).astype(t.dtype)
+        return jnp.where(t == b, t, mixed)
+
+    return {k: truth[k] if k == "ocn" else
+            jax.tree_util.tree_map(mix, truth[k], background[k])
+            for k in truth}
+
+
+def background_error(truth: dict, background: dict) -> Dict[str, float]:
+    """Return the root-mean-square of ``background - truth`` for each state array.
+
+    One value per non-scalar floating-point array of the atmosphere's and
+    the land's state: how far the planner's own forecast has drifted from
+    the true weather when it corrects it.
+    """
+    out = {}
+    for part in ("atm", "lnd"):
+        if part not in truth:
+            continue
+        paths = jax.tree_util.tree_flatten_with_path(truth[part]["state"])[0]
+        others = jax.tree_util.tree_leaves(background[part]["state"])
+        for (path, t), b in zip(paths, others):
+            t = np.asarray(t)
+            if t.ndim == 0 or not np.issubdtype(t.dtype, np.inexact):
+                continue
+            d = np.asarray(b, np.float64) - t.astype(np.float64)
+            out[part + jax.tree_util.keystr(path)] = float(
+                np.sqrt(np.mean(d * d)))
+    return out
+
+
 class Planner:
     """A receding-horizon planner, usable as a ``run_episode`` policy.
 
@@ -263,12 +331,18 @@ class Planner:
                  seed_offset: int = 0, background: Optional[dict] = None):
         """Build the jitted gradient (Adam) or Jacobian (Gauss-Newton)."""
         config.validate()
-        if config.sensing == "ocean" and background is None:
-            raise ValueError("ocean-only sensing needs a background: the "
-                             "atmosphere and land assumed on day 0")
+        if config.sensing in TRACKED and background is None:
+            raise ValueError("ocean-only and analysis sensing need a "
+                             "background: the atmosphere and land assumed "
+                             "on day 0")
         self.cfg = config
         self.background = background
         self._forecast_final = None
+        # Every re-plan's comparison of forecast and observation (for the
+        # detection analysis) and, with analysis sensing, how far the
+        # background had drifted from the true weather.
+        self.innovation_log: List[dict] = []
+        self._background_error: Optional[Dict[str, float]] = None
         self.k = int(np.shape(patterns)[0])
         self.weights = np.asarray(ocean_weights, np.float64)
         self.target = np.asarray(target_sst_daily, np.float64)
@@ -302,7 +376,7 @@ class Planner:
             evaluate = jax.value_and_grad(objective_of_logits)
             axes = (None, 0, None, None, None)
         else:
-            ocean_only = config.sensing == "ocean"
+            ocean_only = config.sensing in TRACKED
             mean_sst = make_lookahead_sst_fn(step_fn, patterns,
                                              config.lookahead_days,
                                              return_final=ocean_only)
@@ -360,7 +434,7 @@ class Planner:
         extra = ((jnp.asarray(target_mean), jnp.asarray(previous))
                  if self.cfg.optimizer == "adam" else ())
         eff = jnp.asarray(self.efficacy, jnp.float32)
-        ocean_only = self.cfg.sensing == "ocean"
+        ocean_only = self.cfg.sensing in TRACKED
         if self.cfg.batch_copies:
             first, second = self._evaluate(x, copies, *extra, eff)
             if ocean_only:
@@ -388,7 +462,9 @@ class Planner:
         With exact sensing it is the true state. With ocean-only sensing it
         is the true ocean plus the background's atmosphere and land, which
         must be at the same time as the true state (the look-ahead must
-        equal the segment).
+        equal the segment). With analysis sensing it is the true ocean and
+        the background corrected toward the true weather
+        (``analysis_carry``).
         """
         if self.cfg.sensing == "exact":
             return state.carry
@@ -396,8 +472,14 @@ class Planner:
         guess = float(self.background["ocn"]["state"].sim_time)
         if abs(now - guess) > 1.0:
             raise ValueError(f"the background is at {guess:.0f} s but the "
-                             f"state at {now:.0f} s: with ocean-only sensing "
-                             "the look-ahead must equal the segment")
+                             f"state at {now:.0f} s: with ocean-only or "
+                             "analysis sensing the look-ahead must equal "
+                             "the segment")
+        if self.cfg.sensing == "analysis":
+            self._background_error = background_error(state.carry,
+                                                      self.background)
+            return analysis_carry(state.carry, self.background,
+                                  self.cfg.analysis_error)
         carry = dict(self.background)
         carry["ocn"] = state.carry["ocn"]
         return carry
@@ -448,13 +530,20 @@ class Planner:
             final, record, last = self._gauss_newton(start, copies,
                                                      target_mean, previous)
             self._remember_forecast(state.day, final, *last)
-            if cfg.sensing == "ocean":
+            if cfg.sensing in TRACKED:
                 # The next re-plan starts from where this forecast ends.
                 self.background = self._forecast_final
         if self.innovation is not None:
             r = self.innovation["observed"] - self.innovation["predicted"]
             record["innovation_ms"] = float(np.sum(self.profile_weights
                                                    * r ** 2))
+            self.innovation_log.append(
+                {"day": int(self.innovation["day"]),
+                 **{k: np.asarray(self.innovation[k], np.float32).copy()
+                    for k in ("observed", "predicted", "sensitivity",
+                              "belief")}})
+        if cfg.sensing == "analysis":
+            record["background_error"] = self._background_error
         record.update(segment=state.segment, day=state.day,
                       optimizer=cfg.optimizer, start=start.tolist(),
                       final=final.tolist(),

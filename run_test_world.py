@@ -222,7 +222,13 @@ def parse_args(argv=None):
                          "(Experiments 3a-3b), or only the ocean "
                          "(Experiment 3c), with the weather of another "
                          "branch of the same macro state on day 0 and of "
-                         "its own forecasts after that.")
+                         "its own forecasts after that, or that weather "
+                         "corrected toward the true weather before every "
+                         "forecast (analysis; Experiment 3e).")
+    pl.add_argument("--analysis-error", type=float, default=None,
+                    help="With --sensing analysis: the share of its own "
+                         "forecast's error the planner keeps after the "
+                         "correction (0: the true weather; 1: ocean only).")
     return p.parse_args(argv)
 
 
@@ -616,9 +622,14 @@ def planner_config(args) -> PlannerConfig:
     overrides = {"alpha": args.alpha, "beta": args.beta, "mu": args.mu,
                  "lam": args.lam}
     for name in ("lookahead_days", "copies", "optimizer", "iterations",
-                 "learning_rate", "representation", "sensing"):
+                 "learning_rate", "representation", "sensing",
+                 "analysis_error"):
         if getattr(args, name) is not None:
             overrides[name] = getattr(args, name)
+    if (args.analysis_error is None) != (overrides.get("sensing")
+                                         != "analysis"):
+        raise SystemExit("--sensing analysis and --analysis-error go "
+                         "together")
     if args.window_days is not None:
         overrides["window_days"] = (NO_TRUNCATION_DAYS if args.window_days == 0
                                     else args.window_days)
@@ -632,10 +643,10 @@ def planner_config(args) -> PlannerConfig:
 
 def stage_plan(args):
     cfg = planner_config(args)
-    if cfg.sensing == "ocean" and cfg.lookahead_days != args.segment_days:
-        raise SystemExit("ocean-only sensing needs the look-ahead to equal "
-                         "the segment (each forecast ends where the next "
-                         "re-plan starts)")
+    if cfg.sensing != "exact" and cfg.lookahead_days != args.segment_days:
+        raise SystemExit("ocean-only and analysis sensing need the "
+                         "look-ahead to equal the segment (each forecast "
+                         "ends where the next re-plan starts)")
     n_days = args.segments * args.segment_days
     last_lookahead_end = (args.segments - 1) * args.segment_days \
         + cfg.lookahead_days
@@ -690,6 +701,27 @@ def stage_plan(args):
                "command": " ".join(sys.argv),
                "seconds": round(time.time() - t0, 1)}
     write_summary(args, summary, mean_fields, schedules, profiles)
+    write_innovations(args, planners)
+
+
+def write_innovations(args, planners):
+    """Save every re-plan's forecast miss next to the summary (Experiment 3e).
+
+    ``<output>.innovations.npz`` holds, per member and re-plan after the
+    first: the observed and forecast latitude profiles ``(members, n, il)``,
+    the forecast's sensitivity to each band's strength ``(members, n, il,
+    K)``, the strength it assumed ``(members, n, K)``, and the re-plan days.
+    Small, and enough to learn or to test detection again without new runs.
+    """
+    logs = [p.innovation_log for p in planners]
+    if not logs or not logs[0] or len({len(g) for g in logs}) != 1:
+        return
+    arrays = {k: np.stack([np.stack([r[k] for r in g]) for g in logs])
+              for k in ("observed", "predicted", "sensitivity", "belief")}
+    np.savez_compressed(Path(args.output).with_suffix(".innovations.npz"),
+                        day=np.asarray([r["day"] for r in logs[0]]),
+                        true_efficacy=strength_vector(args.efficacy),
+                        **arrays)
 
 
 def main(argv=None):
