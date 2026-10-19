@@ -1,0 +1,112 @@
+{
+  "levels": {
+    "a10": {
+      "analysis_error": 0.1,
+      "noise_k": 0.005692595500375529,
+      "n": 576,
+      "ms_quartiles": [
+        2.1561468657226524e-05,
+        3.240564353089572e-05,
+        4.725013279420514e-05
+      ],
+      "kappa": 0.0015842388899244201,
+      "kappa_n": 571,
+      "z_null_sd": 0.977957576441532,
+      "runs": 16,
+      "drift_day0": {
+        "atm[<flat index 0>]": 1.4023512933503982e-06,
+        "atm[<flat index 1>]": 2.6330524840960265e-07,
+        "atm[<flat index 2>]": 0.20095009656606794,
+        "atm[<flat index 3>]": 0.0004903954728594619,
+        "atm[<flat index 4>]['specific_humidity']": 4.976110836356279e-05,
+        "lnd[<flat index 1>]": 0.7392241130366881,
+        "lnd[<flat index 2>]": 0.0,
+        "lnd[<flat index 3>]": 0.0
+      },
+      "drift_later": {
+        "atm[<flat index 0>]": 1.2338358565300766e-06,
+        "atm[<flat index 1>]": 2.2469825405785946e-07,
+        "atm[<flat index 2>]": 0.15975995651899522,
+        "atm[<flat index 3>]": 0.00040812470459746967,
+        "atm[<flat index 4>]['specific_humidity']": 4.2038350931299204e-05,
+        "lnd[<flat index 1>]": 0.5718323798549959,
+        "lnd[<flat index 2>]": 0.0,
+        "lnd[<flat index 3>]": 0.0
+      },
+      "oracle_zonal_pattern_mean": 0.0038275653787422925
+    },
+    "a100": {
+      "analysis_error": 1.0,
+      "noise_k": 0.047034077594549424,
+      "n": 576,
+      "ms_quartiles": [
+        0.0015933088506056114,
+        0.0022122044551700962,
+        0.0029070431021581853
+      ],
+      "kappa": 0.014542619059860628,
+      "kappa_n": 531,
+      "z_null_sd": 0.8802465329413659,
+      "runs": 16,
+      "drift_day0": {
+        "atm[<flat index 0>]": 1.4023512933503982e-06,
+        "atm[<flat index 1>]": 2.6330524840960265e-07,
+        "atm[<flat index 2>]": 0.20095009656606794,
+        "atm[<flat index 3>]": 0.0004903954728594619,
+        "atm[<flat index 4>]['specific_humidity']": 4.976110836356279e-05,
+        "lnd[<flat index 1>]": 0.7392241130366881,
+        "lnd[<flat index 2>]": 0.0,
+        "lnd[<flat index 3>]": 0.0
+      },
+      "drift_later": {
+        "atm[<flat index 0>]": 1.822117620285081e-06,
+        "atm[<flat index 1>]": 3.261069856038886e-07,
+        "atm[<flat index 2>]": 0.2946541272699509,
+        "atm[<flat index 3>]": 0.0006867710097669417,
+        "atm[<flat index 4>]['specific_humidity']": 6.557867509464729e-05,
+        "lnd[<flat index 1>]": 1.7099603977536662,
+        "lnd[<flat index 2>]": 0.0,
+        "lnd[<flat index 3>]": 0.0
+      },
+      "oracle_zonal_pattern_mean": 0.004978608551027719
+    },
+    "a30": {
+      "analysis_error": 0.3,
+      "noise_k": 0.02028099017834107,
+      "n": 576,
+      "ms_quartiles": [
+        0.000311841460041103,
+        0.00041131856261396695,
+        0.0005669714503404353
+      ],
+      "kappa": 0.007819034517995522,
+      "kappa_n": 567,
+      "z_null_sd": 0.7154675012095993,
+      "runs": 16,
+      "drift_day0": {
+        "atm[<flat index 0>]": 1.4023512933503982e-06,
+        "atm[<flat index 1>]": 2.6330524840960265e-07,
+        "atm[<flat index 2>]": 0.20095009656606794,
+        "atm[<flat index 3>]": 0.0004903954728594619,
+        "atm[<flat index 4>]['specific_humidity']": 4.976110836356279e-05,
+        "lnd[<flat index 1>]": 0.7392241130366881,
+        "lnd[<flat index 2>]": 0.0,
+        "lnd[<flat index 3>]": 0.0
+      },
+      "drift_later": {
+        "atm[<flat index 0>]": 1.7044903642688755e-06,
+        "atm[<flat index 1>]": 3.0467494847593076e-07,
+        "atm[<flat index 2>]": 0.2544330169677781,
+        "atm[<flat index 3>]": 0.0006297636020982496,
+        "atm[<flat index 4>]['specific_humidity']": 5.991072370782237e-05,
+        "lnd[<flat index 1>]": 1.201868797586798,
+        "lnd[<flat index 2>]": 0.0,
+        "lnd[<flat index 3>]": 0.0
+      },
+      "oracle_zonal_pattern_mean": 0.0038948951769270934
+    }
+  },
+  "exact_noise_k": 0.00069104,
+  "chi2_1_median": 0.4549364231195724,
+  "created_utc": "2026-10-19T20:22:14.518530+00:00"
+}

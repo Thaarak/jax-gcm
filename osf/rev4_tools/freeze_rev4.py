@@ -122,17 +122,17 @@ lines = []
 for lv, f in LEVELS.items():
     r, nz = pilot[lv], noise[lv]
     lines.append(
-        f"f = {f}: noise level {nz['noise_k']:.5f} K ({nz['noise_k'] / exact_k:.1f} times "
+        f"f = {f:g}: noise level {nz['noise_k']:.5f} K ({nz['noise_k'] / exact_k:.1f} times "
         f"exact sensing) from {nz['n']} forecast misses; kappa {r['kappa']:.5f} K from "
-        f"{r['kappa_n']} forecasts with brightening; null spread {r['z_null_sd']:.2f}; oracle "
-        f"`zonal_pattern` {r['oracle_zonal_pattern_mean']:.5f}, against 3d's exact-sensing "
+        f"{r['kappa_n']} forecasts with brightening; null spread {r['z_null_sd']:.2f}; the "
+        f"oracle's latitude-pattern score {r['oracle_zonal_pattern_mean']:.5f}, against 3d's exact-sensing "
         f"oracle on the same states {oracle[lv][0]:+.3f} in mean log ratio (t {oracle[lv][1]:+.1f}); "
         f"background temperature drift at the later corrections {r['drift_later'][temp]:.2f} K; "
         f"sd of one shared strength factor by day 98 {shared_factor_sd(lv, nz['noise_k']):.2f}")
 pilot_text = (
-    "Pilot (2026-10-19, 10:33-13:03 PDT; `run_campaign_exp3e_pilot.sh`): the oracle planner, "
-    "told the true strength, with analysis sensing at each level, on 3d's 16 branch-1 training "
-    "states with 3 members and 13 segments, in the fixed-land model with 3d's planner settings, "
+    "The oracle planner, told the true strength, ran with analysis sensing at each level "
+    "(2026-10-19, 10:33-13:03 PDT; `run_campaign_exp3e_pilot.sh`) on 3d's 16 branch-1 training "
+    "states, with 3 members and 13 segments, in the fixed-land model with 3d's planner settings, "
     "warming and hidden strengths. All 48 runs finished. Per level:\n"
     + "\n".join(f"  * {x};" for x in lines)
     + f"\n  * for comparison: exact sensing (3d's pilot) {exact_k:.5f} K, with a shared-factor sd "

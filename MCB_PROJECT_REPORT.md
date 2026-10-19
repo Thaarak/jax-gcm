@@ -8,7 +8,17 @@
 
 ## The one-paragraph version
 
-> **Latest status (2026-10-12):** Experiments 3c and 3d (**Parts 28.6 and 28.7**, registered at
+> **Latest status (2026-10-19):** Experiment 3e (**Part 29**) is frozen as revision 4 and waits to
+> run.
+> - *The question:* how well must the planner know the weather? It gets a realistic weather
+>   "analysis": before each forecast, it corrects its own forecast toward the true weather and keeps a
+>   share f of the error (f = 0 is 3d's perfect knowledge, f = 1 is 3c's none).
+> - *The pilot,* on training states, set the learner's noise levels: 0.0057 K at f = 0.1 (8 times
+>   exact), 0.020 K at 0.3, and 0.047 K at 1, which matches 3c. With the strength known, a 10–30%
+>   weather error costs the planner nothing.
+> - *Next:* the OSF posting, then 192 evaluation runs (about 20 GPU-hours).
+>
+> *Earlier (2026-10-12):* Experiments 3c and 3d (**Parts 28.6 and 28.7**, registered at
 > https://osf.io/fyt9r/) finished.
 > - *3d, with the land bug fixed:* 3b's result replicated. The learning planner beat the classical
 >   controller by **42%** (3b: 38%; 15 of 16 ocean states), and feedback beat the fixed plan by 67%.
@@ -3280,3 +3290,173 @@ normal climate with no brightening, divided by the same with brightening; G > 1 
   3b and 3d.
 - The land bug did not shape 3b's result. The land side effects can now be reported, and none is
   clearly harmful.
+
+
+---
+
+# Part 29 — Experiment 3e: how well must the planner know the weather? (plan)
+
+*Added 2026-10-19, before any evaluation run of Experiment 3e. The registered version is Amendment 9
+revision 4, frozen and posted on OSF before any evaluation run, as revisions 1–3 were.*
+
+**In one sentence:** 3d's planner knew the weather exactly and 3c's not at all. 3e gives it a
+realistic weather "analysis": its own forecast corrected toward the true weather, keeping a share f
+of the error. It then asks whether the planner still beats the classical controller and, unlike 3c,
+learns the strength.
+
+*Analogy:* every morning a weather centre takes yesterday's forecast and nudges it toward the new
+satellite and balloon readings. The result is today's best guess, the "analysis", and the next
+forecast starts from it. The dial f says how much of yesterday's error survives the nudge:
+* at 0 the planner sees the weather perfectly (3d);
+* at 1 it sees nothing but the ocean (3c);
+* at 0.1 a tenth of the error survives, roughly like a good modern analysis.
+
+## 29.1 Why this experiment, and what the saved runs said first
+
+- **3c's lesson.** Without the weather, the planner still beat the classical controller (−15%), but
+  it stopped learning the strength. Its two-week forecast misses were about 70 times noisier, so
+  each miss said almost nothing about how strongly brightening works.
+- **Cheaper fixes were checked first** (2026-10-18, read-only, on existing reference runs, with no
+  new simulations):
+
+| Candidate change | Extra information for the learner | Verdict |
+|---|---|---|
+| Fixed land (3d's model) | forecast noise 0.055 K against 0.058 K, about 6% less | not why 3c stalled; used anyway |
+| A learner that weights latitudes by their noise | 1.2–1.5× | small |
+| Learning from 30-day instead of 14-day windows | at most about 1.4× per day | small |
+| Averaging several blind weather guesses | at most 2×, at that many times the cost | small and expensive |
+| **Knowing the current weather (an analysis)** | **roughly 4–100×** | **the real lever** |
+
+- **Why weather knowledge is the lever.** A forecast that starts from almost the true weather misses
+  by 0.0007 K over two weeks, which matches 3d's measured noise. The miss grows to about 0.05 K when
+  the start is about 40 days out of date. The ocean adds up the weather like a random walk, so
+  longer windows give more signal, but nearly as much more noise. Blind guesses only remove the
+  planner's own guessing error; the real world's weather stays unknown.
+- **Disclosure.** These checks read the no-brightening reference runs of 3b's and 3d's evaluation
+  states. They contain no planner run and no score, and nothing of 3e's evaluation. Revision 4 says
+  so.
+
+## 29.2 The analysis step
+
+- **The formula.** Before each forecast:
+  **starting weather = (1 − f) × true weather + f × the planner's own forecast**,
+  for every atmosphere and land variable. The ocean is the truth's, as before.
+  - *The planner's own forecast:* where its previous two-week forecast ended. On day 0 it is
+    another weather sample of the same ocean state (as in 3c).
+  - *Its errors are the model's own forecast errors,* not invented noise. If anything, this makes
+    the analysis slightly pessimistic.
+- **Built and tested** (commit 8f4af5cd):
+  - at f = 0 the planner is exactly 3d's, and at f = 1 exactly 3c's;
+  - in the toy model the plan moves smoothly between the two;
+  - the learner learns better from a better analysis. Its error after three toy segments grows
+    0 → 0.04 → 0.12 → 0.41 as f goes 0 → 0.1 → 0.3 → 1 (test added in 33c736a2).
+- **Every forecast miss is now saved** with each run. The detection paper (Paper B) can then
+  measure how soon one Earth tells that brightening works, from real forecasts instead of Part 27's
+  idealized estimate.
+
+## 29.3 The pilot (2026-10-19)
+
+*The oracle planner (told the true strength) at each level, on 3d's 16 branch-1 training states with
+3 members and 13 segments: 48 runs, from 10:33 to 13:03 PDT. All finished. Training states only, so
+nothing here touches the evaluation states.*
+
+| Weather error kept (f) | Learner's noise level | × exact | Planner's score when it knows the strength, vs exact | How precisely one shared strength factor is known by day 98 |
+|---|---|---|---|---|
+| 0 (3d's pilot) | 0.00069 K | 1 | baseline | ±0.03 |
+| **0.1** | **0.0057 K** | **8.2** | **the same** (−0.002 in log ratio) | **±0.22** |
+| 0.3 | 0.0203 K | 29 | the same (+0.001) | ±0.71 |
+| 1 (3c's information) | 0.0470 K | 68 | about 24% worse (t 1.7) | ±1.6 |
+
+- **The noise level climbs steeply with f.** Information goes as 1/noise², so at f = 0.1 each
+  forecast miss carries about 67 times less information than with the exact weather, but about 68
+  times more than with none.
+- **Built-in check:** f = 1 is 3c's setup, and its noise level (0.047 K) matches 3c's registered
+  0.049 K.
+- **With the strength known, a 10–30% weather error costs nothing.** The oracle controls as well as
+  with the exact weather, state by state. Without the weather it is about 24% worse, though not yet
+  certain.
+- **What it means for learning.** For scale, the log of the hidden strengths varies by about 0.74
+  across states and bands. So:
+  - f = 0.1 should still learn (±0.22 by day 98);
+  - f = 0.3 barely (±0.71);
+  - f = 1 cannot (±1.6), which is what 3c found.
+
+  The three levels give a clean "learns → barely learns → can't learn" ladder.
+- **The detection statistic's scale (κ)** is 0.0016, 0.0078 and 0.0145 K. Its null check on the
+  pilot's own misses gives 0.98, 0.72 and 0.88; about 1 is calibrated, and below 1 is cautious.
+- **One bug, fixed before the freeze.** At first κ came out blank. In some two-week stretches the
+  planner did not brighten at all (5, 9 and 45 of 576 forecasts at the three levels), so the
+  formula hit 0/0. Those forecasts say nothing about the strength, so they are now left out
+  (commit c6b9e76f). The noise levels were never affected.
+
+## 29.4 The design (revision 4)
+
+- **Same world as 3d:** the fixed land, its 48 evaluation states, hidden strengths, 10-member
+  references, 6 members, and scoring on days 98–182.
+- **New runs (4 arms × 48 states = 192 runs):**
+
+| Arm | Analysis error f | Learns the strength? |
+|---|---|---|
+| `plan_learn_a10` (primary) | 0.1 | yes (noise level 0.0057 K) |
+| `plan_naive_a10` | 0.1 | no, assumes nominal strength |
+| `plan_learn_a30` | 0.3 | yes (0.0203 K) |
+| `plan_learn_a100` | 1 (3c in the fixed land) | yes (0.0470 K) |
+
+- **Reused from 3d** (what they know is unchanged): PI, the adaptive law, the fixed design, no
+  brightening, and 3d's two planners as the f = 0 end.
+- **Hypotheses:**
+  - **H1 (primary):** the learner at f = 0.1 vs PI. Does the advantage hold with a realistic
+    analysis?
+  - **H2–H4 (Holm over three):**
+    - *H2:* learner vs naive planner at f = 0.1. Does learning help?
+    - *H3:* f = 0.1 vs 3d's exact learner. What does a realistic analysis cost?
+    - *H4:* f = 0.1 vs f = 1, on how wrong the strength estimate still is on day 98. Does the
+      analysis bring learning back? This is far better powered than score differences.
+  - **Described, not tested:** the score and the learning against f, from 0 to 1; 3c redone in the
+    fixed-land model; the size of the forecast errors; and how soon one Earth would detect
+    brightening at each level.
+- **What each outcome would mean:**
+  - *H1 better:* the headline survives a realistic weather analysis. This answers a reviewer's first
+    question about 3b and 3d.
+  - *H4 better:* knowing the weather, even imperfectly, is what lets one Earth reveal the strength.
+    This ties Paper A (control) to Paper B (detection).
+  - *H3 equivalent:* a realistic analysis is as good as perfect knowledge.
+  - *H2 not better while H4 is better:* the strength is learned, but the planner's feedback already
+    absorbs most of its effect, as in 3d.
+- **Failures:** as before, a failed run is re-run once, and a state that still fails is dropped. The
+  script now counts each run's attempts and re-runs only while the GPU is visible, a lesson from
+  3d's outage.
+- **Cost:** about 20 GPU-hours, 5 runs at a time.
+  - *Why 5:* a memory probe (one 6-member run on a training state, 2026-10-19) used about 5.3 GB. With
+    about 40 GB free when the GPU is idle, 5 runs leave about 13 GB spare, where 6 would leave about
+    8 GB. Past about 5 runs the GPU is already busy, so more would not finish sooner.
+
+> **New terms:** *Analysis* = a forecast system's best estimate of the current weather, made by
+> correcting its own forecast toward observations. *Background* = the forecast being corrected.
+> *Dose-response* = how an outcome changes as one setting (here f) is turned up step by step.
+> *Detection statistic* = a running total of the evidence that brightening is working, scaled so
+> that it rarely exceeds 1.645 when brightening does nothing.
+
+## 29.5 Steps and status
+
+| # | Step | Status (2026-10-19) |
+|---|---|---|
+| 1 | Analysis sensing and saving every miss, with tests | Done (8f4af5cd) |
+| 2 | Pilot script and rules, smoke test, then the pilot on training states | Done (88be5787; κ repaired in c6b9e76f): 48 runs, 10:33–13:03 |
+| 3 | Registered analysis, evaluation script and revision-4 tools | Done (33c736a2): 83 tests pass on the laptop and 52 on the GX10 |
+| 4 | Memory probe and the evaluation script's smoke test (one training state) | Done (2026-10-19): about 5.3 GB per 6-member run, so 5 runs at a time. The smoke test ran every new arm's exact command, and the registered analysis loaded all ten arms and passed its checks |
+| 5 | Freeze revision 4, commit and push; **post on OSF after the user's OK** | Frozen in the commit that adds this part; the posting waits for the user |
+| 6 | Evaluation: 192 runs, about 20 GPU-hours | Waits for the user's go-ahead |
+| 7 | Results, report, memory and explanation | — |
+
+**What the pilot hints, written before any evaluation data.** These are hints from 16 training
+states, not predictions the analysis depends on. The registered interpretations are in revision 4.
+- *H1 will probably hold.* At f = 0.1 the oracle controls as well as with the exact weather, and
+  3d's learner beat PI by 42%.
+- *H4 will very probably hold.* By day 98 one shared strength factor is known to about ±0.22 at
+  f = 0.1, against ±1.6 at f = 1.
+- *H3's cost should be modest.* A 10% analysis costs nothing when the strength is known, so the cost
+  comes only from slower learning (±0.22 instead of ±0.03 by day 98). In 3d, learning was worth
+  about 11%.
+- *H2 is uncertain,* as it was in 3d.
+
