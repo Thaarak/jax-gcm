@@ -8,15 +8,16 @@
 
 ## The one-paragraph version
 
-> **Latest status (2026-10-19):** Experiment 3e (**Part 29**) is frozen as revision 4 and waits to
-> run.
+> **Latest status (2026-10-19):** Experiment 3e (**Part 29**) is frozen as revision 4, posted on OSF
+> (https://osf.io/94euq/), and running on the GX10.
 > - *The question:* how well must the planner know the weather? It gets a realistic weather
 >   "analysis": before each forecast, it corrects its own forecast toward the true weather and keeps a
 >   share f of the error (f = 0 is 3d's perfect knowledge, f = 1 is 3c's none).
 > - *The pilot,* on training states, set the learner's noise levels: 0.0057 K at f = 0.1 (8 times
 >   exact), 0.020 K at 0.3, and 0.047 K at 1, which matches 3c. With the strength known, a 10–30%
 >   weather error costs the planner nothing.
-> - *Next:* the OSF posting, then 192 evaluation runs (about 20 GPU-hours).
+> - *Now:* the 192 evaluation runs started at 15:52 PDT (about 20 GPU-hours, so they should end
+>   around midday on 2026-10-20). The registered analysis runs by itself at the end.
 >
 > *Earlier (2026-10-12):* Experiments 3c and 3d (**Parts 28.6 and 28.7**, registered at
 > https://osf.io/fyt9r/) finished.
@@ -3445,9 +3446,31 @@ nothing here touches the evaluation states.*
 | 2 | Pilot script and rules, smoke test, then the pilot on training states | Done (88be5787; κ repaired in c6b9e76f): 48 runs, 10:33–13:03 |
 | 3 | Registered analysis, evaluation script and revision-4 tools | Done (33c736a2): 83 tests pass on the laptop and 52 on the GX10 |
 | 4 | Memory probe and the evaluation script's smoke test (one training state) | Done (2026-10-19): about 5.3 GB per 6-member run, so 5 runs at a time. The smoke test ran every new arm's exact command, and the registered analysis loaded all ten arms and passed its checks |
-| 5 | Freeze revision 4, commit and push; **post on OSF after the user's OK** | Frozen in the commit that adds this part; the posting waits for the user |
-| 6 | Evaluation: 192 runs, about 20 GPU-hours | Waits for the user's go-ahead |
+| 5 | Freeze revision 4, commit and push; **post on OSF after the user's OK** | Done: frozen in 79d9494f; the user posted it as https://osf.io/94euq/ at 15:41 PDT (recorded in 504e1341) |
+| 6 | Evaluation: 192 runs, about 20 GPU-hours | Running since 15:52:51 PDT (tmux `exp3eeval` on the GX10, 5 at a time), after the launch checks below |
 | 7 | Results, report, memory and explanation | — |
+
+**Launch checks (2026-10-19, 15:45–15:52, before the first evaluation run).** None of them read
+any of 3e's evaluation data.
+- *The analysis, on real files:*
+  - Its run checks passed on all 288 of 3d's reused runs.
+  - Its day-98 strength error (H4's endpoint) reproduced 3d's registered values exactly on all 48
+    states (largest difference 6 × 10⁻¹⁷).
+  - 3c's analysis file has every key the 3c comparison reads.
+  - At the end the analysis holds the fields of at most 288 runs at once, as 3d's analysis did on
+    the GX10.
+- *The GX10:*
+  - All 81 frozen files matched 79d9494f.
+  - Every input was present: the 48 starting states (each matching its index, as in 3d), 16
+    references per branch, and 3d's six reused arms (48 runs each, with their fields).
+  - There was no earlier 3e output, and no other campaign was running.
+- *Update risk:* the GX10 installs no updates by itself, but 47 were waiting (2 for the NVIDIA
+  driver). On 2026-10-12, installing updates from its own screen stopped 3d's evaluation, so nobody
+  should install updates or restart it until this evaluation ends.
+- *The start:*
+  - The log shows the registered values (6 members; f = 0.1 / 0.3 / 1; noise levels 0.0056926 /
+    0.02028099 / 0.04703408 K) and the frozen commit.
+  - The first five runs started with these settings.
 
 **What the pilot hints, written before any evaluation data.** These are hints from 16 training
 states, not predictions the analysis depends on. The registered interpretations are in revision 4.
