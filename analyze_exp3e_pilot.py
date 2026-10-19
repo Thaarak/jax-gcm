@@ -20,6 +20,9 @@ Its rules were written before it ran:
     Then, over a run's re-plans, ``Z = sum(g'Wz) / (kappa sqrt(sum(g'Wg)))``
     with ``z = miss + G belief`` is about standard normal when brightening
     does nothing. ``z_null_sd`` checks this on the pilot's own misses.
+    A forecast with no brightening in it does not depend on the strength
+    (``g = 0``): its ratio is 0/0, so it is left out of ``kappa``, and it adds
+    nothing to ``Z``, which is 0 until the first forecast that does.
 
 Also recorded (descriptive): how far each level's background had drifted from
 the true weather when it was corrected (the median root-mean-square
@@ -67,14 +70,17 @@ def kappa(paths):
     ratios = []
     for p in paths:
         _, v, n = detection_terms(p)
-        ratios.append((n * n / v).ravel())
+        informative = v > 0                          # g = 0 gives 0/0
+        ratios.append(n[informative] ** 2 / v[informative])
     ratios = np.concatenate(ratios)
     return float(np.sqrt(np.median(ratios) / CHI2_1_MEDIAN)), int(ratios.size)
 
 
 def detection_z(u, v, scale):
     """Return the cumulative detection statistic over re-plans (the last axis)."""
-    return np.cumsum(u, axis=-1) / (scale * np.sqrt(np.cumsum(v, axis=-1)))
+    su, sv = np.cumsum(u, axis=-1), np.cumsum(v, axis=-1)
+    return np.divide(su, scale * np.sqrt(sv), out=np.zeros_like(su),
+                     where=sv > 0)
 
 
 def z_null_sd(paths, scale):

@@ -18,12 +18,17 @@ from analyze_exp3e_pilot import (
 IL, K, N_REPLANS, MEMBERS = 12, 5, 12, 3
 
 
-def write_run(folder, idx, rng, noise_sd, signal=0.0):
-    """One synthetic oracle run: a summary and its innovations file."""
+def write_run(folder, idx, rng, noise_sd, signal=0.0, idle=()):
+    """One synthetic oracle run: a summary and its innovations file.
+
+    ``idle`` lists re-plans whose forecast has no brightening in it, so it
+    does not depend on the strength (all sensitivities exactly zero).
+    """
     folder.mkdir(parents=True, exist_ok=True)
     w = rng.uniform(0.5, 1.5, IL)
     w /= w.sum()
     sens = rng.uniform(0.0, 0.02, (MEMBERS, N_REPLANS, IL, K))
+    sens[:, list(idle)] = 0.0
     belief = np.ones((MEMBERS, N_REPLANS, K))
     noise = noise_sd * rng.standard_normal((MEMBERS, N_REPLANS, IL))
     predicted = rng.standard_normal((MEMBERS, N_REPLANS, IL))
@@ -86,6 +91,26 @@ class PilotRulesTest(unittest.TestCase):
         z = detection_z(u, v, scale)
         self.assertEqual(z.shape, (MEMBERS, N_REPLANS))
         self.assertTrue(np.all(z[:, -1] > 5.0))
+
+    def test_forecasts_without_brightening_are_left_out(self):
+        # The real pilot had these (5 to 45 of 576 forecasts per level): the
+        # ratio is 0/0, which made kappa NaN before they were left out.
+        folder = self.root / "a10" / "plan_oracle"
+        for i in range(10):
+            write_run(folder, 100 + i, self.rng, noise_sd=0.01, idle=(0, 1, 5))
+        paths = sorted(folder.glob("ic*.innovations.npz"))
+        with np.errstate(all="raise"):
+            scale, n = kappa(paths)
+            u, v, _ = detection_terms(paths[0])
+            z = detection_z(u, v, scale)
+            spread = z_null_sd(paths, scale)
+        self.assertEqual(n, 10 * MEMBERS * (N_REPLANS - 3))
+        self.assertTrue(np.isfinite(scale) and np.isfinite(spread))
+        # No evidence before the first forecast that depends on the strength.
+        np.testing.assert_array_equal(z[:, :2], 0.0)
+        self.assertTrue(np.all(z[:, 2] != 0.0))
+        # An idle forecast later on leaves the statistic where it was.
+        np.testing.assert_array_equal(z[:, 5], z[:, 4])
 
     def test_summary_applies_every_rule_per_level(self):
         self.level("a10", noise_sd=0.01, n_runs=4)
