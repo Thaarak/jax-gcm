@@ -397,6 +397,36 @@ class AnalysisSensingTest(_Toy):
         same = background_error(self.carry, self.carry)
         self.assertTrue(all(v == 0.0 for v in same.values()))
 
+    def test_the_learner_learns_better_from_a_better_analysis(self):
+        # Experiment 3e's learning arms: the learner with analysis sensing.
+        truth = np.array([0.6, 1.8], np.float32)
+        errors = {}
+        for error in (0.1, 1.0):
+            cfg = PlannerConfig(lookahead_days=L,
+                                window_days=NO_TRUNCATION_DAYS, copies=1,
+                                copy_amp=0.0, cap=5.0, gn_damping=0.0,
+                                optimizer="gauss_newton", iterations=1,
+                                sensing="analysis", analysis_error=error)
+            learner = LearningPlanner(_toy_step, self.patterns, self.w,
+                                      self.target, self.q_base, self.warm,
+                                      EstimatorConfig(noise_k=1e-4,
+                                                      prior_sd=10.0),
+                                      cfg, background=self.guess(x=-1.0))
+            seg = make_segment_fn(_toy_step, self.patterns, L,
+                                  fields_fn=_toy_fields)
+            run_episode(self.carry, seg, learner, n_segments=3,
+                        segment_days=L, k_bands=2, warming=self.warm,
+                        efficacy=truth)
+            belief = np.asarray(learner.log[-1]["efficacy_belief"])
+            errors[error] = np.abs(np.log(belief / truth))
+            # Every miss is kept, with the strength its forecast assumed.
+            self.assertEqual([r["day"] for r in learner.innovation_log],
+                             [L, 2 * L])
+            np.testing.assert_allclose(learner.innovation_log[0]["belief"],
+                                       1.0)
+        self.assertTrue(np.all(errors[0.1] < np.abs(np.log(1.0 / truth))))
+        self.assertLessEqual(errors[0.1].mean(), errors[1.0].mean())
+
     def test_every_forecast_miss_is_kept(self):
         planner = self.make(0.1, self.guess())
         self.episode(planner, n=3)
