@@ -710,7 +710,8 @@ def write_innovations(args, planners):
     ``<output>.innovations.npz`` holds, per member and re-plan after the
     first: the observed and forecast latitude profiles ``(members, n, il)``,
     the forecast's sensitivity to each band's strength ``(members, n, il,
-    K)``, the strength it assumed ``(members, n, K)``, and the re-plan days.
+    K)``, the strength it assumed ``(members, n, K)``, the re-plan days, and
+    the latitude weights the planner compares profiles with ``(il,)``.
     Small, and enough to learn or to test detection again without new runs.
     """
     logs = [p.innovation_log for p in planners]
@@ -721,6 +722,8 @@ def write_innovations(args, planners):
     np.savez_compressed(Path(args.output).with_suffix(".innovations.npz"),
                         day=np.asarray([r["day"] for r in logs[0]]),
                         true_efficacy=strength_vector(args.efficacy),
+                        profile_weights=np.asarray(planners[0].profile_weights,
+                                                   np.float64),
                         **arrays)
 
 
