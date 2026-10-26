@@ -2518,3 +2518,81 @@ is visible. Otherwise it stops, and the re-run is made by starting it again by h
     design, strength table and references are revision 3's.
 * *Cost:* about 20 GPU-hours on the GX10 (192 runs of 6 members; about the same in wall time, since 5 runs at a time keep the GPU busy).
 * *Posting:* this revision is posted to OSF (project pqabf) before any evaluation run of 3e.
+
+**Amendment 9, revision 4 — Experiment 3e RESULT (logged 2026-10-26; evaluation 2026-10-19 15:52 to
+2026-10-20 11:27 PDT, after revision 4's posting at 15:41; the registered `analyze_experiment3e.py` was
+applied unchanged).**
+All 192 runs (4 arms × 48 states, 6 members each, against 3d's 10-member references) finished at the
+first attempt: no run failed or was re-run, no state was dropped, and there was no deviation. 3d's runs
+of the six reused arms were reused as registered (E4), and the analysis's checks of land model,
+sensing, analysis error, learner noise level and member count passed. The 81 frozen code and design
+files on the GX10 were re-checked against 79d9494f after the run. The analysis ran on 2026-10-20, and
+the runs and its output were committed on 2026-10-23 (80ade71c); this entry was written on
+2026-10-26, before revision 5 was frozen. Primary endpoint `J_zonal`, on the means of the 16 macro
+states:
+* **H1** `plan_learn_a10` vs `pi`: rel −43.5% (90% CI −52.4% to −33.3%), t p 8.4×10⁻⁶, Wilcoxon p
+  6.1×10⁻⁵ (15 of 16 macro states favour `plan_learn_a10`) → **better**.
+* **H2** `plan_learn_a10` vs `plan_naive_a10`: rel −4.9% (−15.7% to +7.1%), Holm p 0.74 (Wilcoxon
+  0.43; 9 of 16) → **inconclusive**.
+* **H3** `plan_learn_a10` vs 3d's `plan_learn`: rel −2.1% (−15.5% to +12.5%), Holm p 0.78 (Wilcoxon
+  0.90; 8 of 16) → **inconclusive**. The interval reaches beyond ±10%, so equivalence is not shown.
+* **H4** strength error on day 98, `plan_learn_a10` vs `plan_learn_a100`: 0.299 against 0.559, rel
+  −46.4% (−49.5% to −43.4%), Holm p 1.2×10⁻¹¹ (Wilcoxon 3.1×10⁻⁵; 16 of 16) → **better**.
+
+*Arm means:* `plan_learn_a10` 0.00278, `plan_learn` 0.00284, `plan_naive_a10` 0.00292, `plan_naive`
+0.00319, `plan_learn_a30` 0.00338, `plan_learn_a100` 0.00378, `adaptive` 0.00388, `pi` 0.00492,
+`fixed` 0.01506, `uncontrolled` 0.01836 (the arms without an `_a` suffix are 3d's runs).
+
+*The dose-response* (each learner vs `pi`, with its 90% CI, then its strength error on day 98):
+* f = 0 (3d's `plan_learn`): −42.3% (−51.4% to −30.4%); 0.075;
+* f = 0.1: −43.5% (−52.4% to −33.3%); 0.299;
+* f = 0.3: −31.3% (−40.3% to −20.9%); 0.499;
+* f = 1: −23.2% (−34.8% to −8.9%); 0.559.
+
+All four 95% intervals lie below zero.
+
+*Descriptive* (unadjusted p):
+* `plan_naive_a10` vs `pi`: −40.6% (−49.4% to −29.9%, t p 4.8×10⁻⁵).
+* `plan_learn_a10` vs `adaptive`: −28.3% (−38.9% to −14.7%, t p 0.0026).
+* `plan_naive_a10` vs 3d's `plan_naive`: −8.3% (−19.5% to +4.4%, t p 0.21).
+* `plan_learn_a30` vs `plan_learn_a10`: +21.5% (+5.1% to +39.6%, t p 0.0044); `plan_learn_a100` vs
+  `plan_learn_a10`: +35.9% (+17.0% to +58.0%, t p 5.8×10⁻⁴).
+* *3c in the fixed-land model:* `plan_learn_a100` vs `pi` is −23.2% (95% CI −36.6% to −5.9%), against
+  3c's −15.0%. They point the same way, and 3c's estimate lies inside 3e's 95% interval. The strength
+  error on day 98 is 0.559, against 3c's 0.568.
+* By overall factor 0.5 / 1 / 2: `plan_learn_a10` vs `pi` is −36% / −18% / −58%; vs `plan_naive_a10`
+  +1% / +3% / −14%; vs 3d's `plan_learn` +1% / −6% / −1%.
+* Learning curves (mean |log(estimate/truth)| per band at days 0, 28, 56, 98 and 168):
+  * f = 0.1: 0.59, 0.57, 0.44, 0.30, 0.18;
+  * f = 0.3: 0.59, 0.58, 0.56, 0.50, 0.42;
+  * f = 1: 0.59, 0.58, 0.58, 0.56, 0.51;
+  * 3d's exact sensing: 0.59, 0.35, 0.15, 0.08, 0.04.
+* *The forecast errors' size* on the evaluation states, against the registered noise levels: f = 0.1
+  0.00586 K (`plan_naive_a10` 0.00584; registered 0.00569), f = 0.3 0.02025 K (0.02028), f = 1
+  0.04565 K (0.04703).
+* *Detection* (the share of (state, member) pairs with Z ≥ 1.645, on days 28 / 56 / 98 / 168):
+  * f = 0.1: 93% / 100% / 100% / 100% (`plan_naive_a10`: 91% / 100% / 100% / 100%);
+  * f = 0.3: 75% / 96% / 99.7% / 100%;
+  * f = 1: 48% / 83% / 93% / 98%. On day 28 it is 34% / 35% / 75% at overall factor 0.5 / 1 / 2.
+* Gains G (no brightening over controlled; > 1 is better) of `plan_learn_a10`: land temperature 1.07,
+  land precipitation 0.96, global precipitation 1.05 (`pi`: 1.02, 0.96, 0.94).
+
+The full output is `mcb_experiments_gpu/exp3e/exp3e_analysis.json` (SHA-256 73d7b4d6…daecf0).
+
+*By E9:*
+* H1 supports "the learning planner's advantage over classical feedback holds when it knows the
+  weather only through a realistic analysis".
+* H2 is not better and H4 is better, so the registered reading is revision 2's: "the strength is
+  learned but the planner's state feedback absorbs most of its effect". As in 3d, the verdict is
+  inconclusive, not equivalent: the interval does not exclude a modest benefit of learning.
+* H3 has no registered reading for an inconclusive verdict, so it is reported as found: no cost of
+  the realistic analysis against exact knowledge of the weather was detected (−2.1%), but the 90%
+  interval (−15.5% to +12.5%) is wider than the ±10% that equivalence needs.
+* H4 supports "a realistic analysis restores learning: knowing the weather even with a 10% error lets
+  one Earth reveal the strength within the first 98 days, which 3c could not". By day 98 the error is
+  about half of f = 1's, and four times exact sensing's.
+* *The dose-response and detection:* the advantage over `pi` is kept at f = 0.1, shrinks at f = 0.3,
+  and is smallest, but still present, at f = 1. Learning is fastest with exact knowledge of the
+  weather, slower at f = 0.1, slow at f = 0.3 and nearly absent at f = 1. How soon one Earth would
+  tell that brightening works falls the same way: by day 28, in 93%, 75% and 48% of (state, member)
+  pairs.
