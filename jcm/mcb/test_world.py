@@ -362,6 +362,50 @@ def make_lookahead_sst_fn(step_fn: Callable, patterns,
     return mean_sst
 
 
+def make_schedule_sst_fn(step_fn: Callable, patterns, n_blocks: int,
+                         block_days: int, cap: float = None) -> Callable:
+    """Return each block's time-mean SST map for a planned schedule (Experiment 3f).
+
+    ``f(level, trend, carry, efficacy, q_base, warming, window)`` runs
+    ``n_blocks`` blocks of ``block_days`` warmed coupled days. Block ``j``
+    holds the settings ``clip(level + trend * j, 0, cap)``, put in the
+    actuator slot at its start exactly as the simulated world does at a
+    segment's start (``make_segment_fn``). It returns the block-mean SST in
+    kelvin relative to ``MAP_REFERENCE_K``, shape ``(n_blocks, ix, il)``. The
+    atmosphere's derivatives are cut every ``window`` days counted from the
+    look-ahead's start, as in ``make_lookahead_sst_fn``; forward values do not
+    depend on ``window``. With ``trend = 0`` the mean over blocks is
+    ``make_lookahead_sst_fn``'s look-ahead mean for ``n_blocks * block_days``
+    days. Block 0 depends on ``level`` only, so it is also the forecast of the
+    segment the planner is about to apply.
+    """
+    if n_blocks < 1 or block_days < 1:
+        raise ValueError("n_blocks and block_days must be >= 1")
+    cap = BRIGHTENING_CAP if cap is None else cap
+
+    def block_means(level, trend, carry, efficacy, q_base, warming, window):
+        stepper = wrap_step_fn_with_warming(step_fn, q_base, warming)
+        stepper = wrap_step_fn_with_atm_truncation(
+            stepper, window, t0_seconds=carry["ocn"]["state"].sim_time)
+
+        def day(c, step_idx):
+            c, _ = stepper(c, step_idx)
+            return c, c["ocn"]["state"].sea_surface_temperature - \
+                MAP_REFERENCE_K
+
+        def block(c, j):
+            a = jnp.clip(level + trend * j.astype(level.dtype), 0.0, cap)
+            c = apply_band_control(c, efficacy * a, patterns)
+            c, anomalies = lax.scan(jax.checkpoint(day), c,
+                                    j * block_days + jnp.arange(block_days))
+            return c, jnp.mean(anomalies, axis=0)
+
+        _, means = lax.scan(block, carry, jnp.arange(n_blocks))
+        return means
+
+    return block_means
+
+
 def make_lookahead_objective(step_fn: Callable, patterns, weights,
                              num_days: int, alpha: float = PATTERN_ALPHA,
                              beta: float = PATTERN_BETA, mu: float = 0.0,

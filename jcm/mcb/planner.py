@@ -86,6 +86,7 @@ from jcm.mcb.test_world import (
     Warming,
     make_lookahead_objective,
     make_lookahead_sst_fn,
+    make_schedule_sst_fn,
     perturb_member,
 )
 
@@ -97,6 +98,13 @@ OPTIMIZERS = ("adam", "gauss_newton")
 REPRESENTATIONS = ("map", "zonal")
 # What the planner knows of the current state (Experiments 3c and 3e).
 SENSING = ("exact", "ocean", "analysis")
+# How the planner treats a look-ahead longer than the segment (Experiment 3f):
+# ``none`` is the original planner (one setting held for the whole look-ahead,
+# scored on the look-ahead mean); ``hold`` is the same objective computed from
+# 14-day blocks, so it can also learn; ``linear`` plans a per-band level and
+# trend over the blocks, scores every block and applies only the first block's
+# settings (model predictive control).
+SCHEDULES = ("none", "hold", "linear")
 # The sensing modes that keep a background (their own last forecast's end).
 TRACKED = ("ocean", "analysis")
 _ADAM_BETAS = (0.9, 0.999)
@@ -135,6 +143,8 @@ class PlannerConfig:
     representation: str = "map"
     sensing: str = "exact"
     analysis_error: float = 1.0
+    schedule: str = "none"
+    block_days: int = 14
 
     def validate(self):
         """Raise ValueError on settings the planner cannot use."""
@@ -164,6 +174,16 @@ class PlannerConfig:
              "Gauss-Newton"),
             (0.0 <= self.analysis_error <= 1.0,
              "analysis_error must lie in [0, 1]"),
+            (self.schedule in SCHEDULES,
+             f"schedule must be one of {SCHEDULES}"),
+            (self.schedule == "none" or self.optimizer == "gauss_newton",
+             "block schedules are implemented for Gauss-Newton"),
+            (self.schedule == "none" or self.sensing == "exact",
+             "block schedules are implemented for exact sensing"),
+            (self.block_days >= 1, "block_days must be >= 1"),
+            (self.schedule == "none"
+             or self.lookahead_days % self.block_days == 0,
+             "with a block schedule the look-ahead must be whole blocks"),
         ]
         for ok, message in checks:
             if not ok:
@@ -363,6 +383,26 @@ class Planner:
         self.prediction: Optional[dict] = None
         self.innovation: Optional[dict] = None
         window = jnp.asarray(config.window_days)
+        self.trend = np.zeros(self.k, np.float64)
+        if config.schedule != "none":
+            n_blocks = config.lookahead_days // config.block_days
+            self.n_blocks = n_blocks
+            blocks = make_schedule_sst_fn(step_fn, patterns, n_blocks,
+                                          config.block_days, config.cap)
+            k = self.k
+            linear = config.schedule == "linear"
+
+            def block_maps(x, carry, eff):
+                level = x[:k]
+                trend = x[k:] if linear else jnp.zeros_like(level)
+                out = blocks(level, trend, carry, eff, q_base, warming,
+                             window)
+                return out, out
+
+            # (jacobian (n, ix, il, P), maps (n, ix, il)) from ONE pass,
+            # P = K (hold) or 2K (linear: level, then trend).
+            self._evaluate = jax.jit(jax.jacfwd(block_maps, has_aux=True))
+            return
         if config.optimizer == "adam":
             objective = make_lookahead_objective(
                 step_fn, patterns, ocean_weights, config.lookahead_days,
@@ -403,6 +443,22 @@ class Planner:
             raise ValueError(f"the look-ahead [{day}, {end}) runs past the "
                              f"{self.target.shape[0]} target days")
         return self.target[day:end].mean(axis=0).astype(np.float32)
+
+    def target_blocks(self, day: int) -> np.ndarray:
+        """Return the normal climate's mean SST over each look-ahead block from ``day``."""
+        end = day + self.cfg.lookahead_days
+        if day < 0 or end > self.target.shape[0]:
+            raise ValueError(f"the look-ahead [{day}, {end}) runs past the "
+                             f"{self.target.shape[0]} target days")
+        bd = self.cfg.block_days
+        t = self.target[day:end]
+        return t.reshape((self.n_blocks, bd) + t.shape[1:]).mean(
+            axis=1).astype(np.float32)
+
+    def forecast_days(self) -> int:
+        """Return how many days each re-plan's checked forecast covers."""
+        return (self.cfg.block_days if self.cfg.schedule != "none"
+                else self.cfg.lookahead_days)
 
     def copies_of(self, carry: dict, day: int) -> List[dict]:
         """Return the nudged copies of the current state (seeds unique per day)."""
@@ -500,7 +556,7 @@ class Planner:
         pred = self.prediction
         if pred is None or state.last_fields is None:
             return None
-        if state.day - pred["day"] != self.cfg.lookahead_days:
+        if state.day - pred["day"] != self.forecast_days():
             return None
         sst = np.asarray(state.last_fields["sst"], np.float64).mean(axis=0)
         self.innovation = {
@@ -523,12 +579,18 @@ class Planner:
         start = (np.full(self.k, cfg.first_guess * cfg.cap, np.float32)
                  if state.segment == 0 else previous)
         copies = self.prepare_copies(self.estimate(state), state.day)
-        target_mean = self.target_mean(state.day)
-        if cfg.optimizer == "adam":
-            final, record = self._adam(start, copies, target_mean, previous)
+        if cfg.schedule != "none":
+            if state.segment == 0:
+                self.trend = np.zeros(self.k, np.float64)
+            final, record, last = self._gauss_newton_schedule(
+                start, copies, self.target_blocks(state.day), previous)
+            self._remember_forecast(state.day, final, *last)
+        elif cfg.optimizer == "adam":
+            final, record = self._adam(start, copies,
+                                       self.target_mean(state.day), previous)
         else:
-            final, record, last = self._gauss_newton(start, copies,
-                                                     target_mean, previous)
+            final, record, last = self._gauss_newton(
+                start, copies, self.target_mean(state.day), previous)
             self._remember_forecast(state.day, final, *last)
             if cfg.sensing in TRACKED:
                 # The next re-plan starts from where this forecast ends.
@@ -634,6 +696,98 @@ class Planner:
                                       "noise_to_signal": nts}, last
 
 
+    def _gauss_newton_schedule(self, start, copies, target_blocks, previous):
+        """Gauss-Newton over a block schedule (Experiment 3f).
+
+        ``hold`` scores the look-ahead-mean error of one held setting, the
+        original planner's objective, computed from the blocks. ``linear``
+        plans ``a_j = level + trend * j`` for blocks ``j = 0..n-1`` and scores
+        every block's error with weight ``1/n``. Its amplitude penalty is the
+        mean of ``mu |a_j|^2`` over the blocks, and its movement penalty is
+        ``lam |level - previous|^2`` plus ``lam (n-1)/n |trend|^2``, the
+        planned changes between blocks. Only ``level`` is applied. Returns
+        the applied settings, the log record, and block 0's forecast and
+        Jacobian with respect to ``level``, which is what the learner checks.
+        """
+        cfg = self.cfg
+        k, n = self.k, self.n_blocks
+        linear = cfg.schedule == "linear"
+        level = np.clip(np.asarray(start, np.float64), 0.0, cfg.cap)
+        trend = self.trend.copy() if linear else np.zeros(k)
+        target_anomaly = (np.asarray(target_blocks, np.float64)
+                          - MAP_REFERENCE_K)
+        steps = np.arange(n, dtype=np.float64)
+        values, nts = [], None
+        for it in range(cfg.iterations):
+            level_eval = level.copy()
+            x = np.concatenate([level, trend]) if linear else level
+            outs = [self._evaluate(jnp.asarray(x, jnp.float32), c,
+                                   jnp.asarray(self.efficacy, jnp.float32))
+                    for c in copies]
+            jacs = np.stack([np.asarray(o[0], np.float64) for o in outs])
+            maps = np.stack([np.asarray(o[1], np.float64) for o in outs])
+            p = jacs.shape[-1]
+            normal = np.zeros((p, p))
+            rhs = np.zeros(p)
+            total, grads = 0.0, []
+            for jac, block_map in zip(jacs, maps):
+                errors = block_map - target_anomaly           # (n, ix, il)
+                if not linear:      # the look-ahead mean, as the planner had
+                    errors, jac = errors.mean(axis=0)[None], \
+                        jac.mean(axis=0)[None]
+                rows, big_rows = [], []
+                weight = 1.0 / errors.shape[0]
+                for e, je in zip(errors, jac):
+                    if cfg.representation == "zonal":
+                        e, je = self._zonal(e), np.moveaxis(
+                            self._zonal(np.moveaxis(je, -1, 0)), 0, -1)
+                    r, big_r = gauss_newton_residuals(
+                        e, je, self.weights, np.zeros(p), np.zeros(p),
+                        cfg.alpha * weight, cfg.beta * weight, 0.0, 0.0)
+                    rows.append(r[:r.size - 2 * p])
+                    big_rows.append(big_r[:big_r.shape[0] - 2 * p])
+                if linear:
+                    for j in steps:
+                        a_j = level + trend * j
+                        rows.append(np.sqrt(cfg.mu / n) * a_j)
+                        big_rows.append(np.sqrt(cfg.mu / n)
+                                        * np.hstack([np.eye(k), j * np.eye(k)]))
+                    rows.append(np.sqrt(cfg.lam) * (level - previous))
+                    big_rows.append(np.sqrt(cfg.lam)
+                                    * np.hstack([np.eye(k), np.zeros((k, k))]))
+                    s_tr = np.sqrt(cfg.lam * (n - 1) / n)
+                    rows.append(s_tr * trend)
+                    big_rows.append(s_tr * np.hstack([np.zeros((k, k)),
+                                                      np.eye(k)]))
+                else:
+                    rows += [np.sqrt(cfg.mu) * level,
+                             np.sqrt(cfg.lam) * (level - previous)]
+                    big_rows += [np.sqrt(cfg.mu) * np.eye(k),
+                                 np.sqrt(cfg.lam) * np.eye(k)]
+                r, big_r = np.concatenate(rows), np.vstack(big_rows)
+                normal += big_r.T @ big_r
+                rhs += big_r.T @ r
+                total += float(r @ r)
+                grads.append(2.0 * big_r.T @ r)
+            c = len(grads)
+            normal, rhs = normal / c, rhs / c
+            if it == 0:
+                nts = noise_to_signal(grads)
+            values.append(total / c)
+            damping = cfg.gn_damping * np.trace(normal) / p
+            delta = np.linalg.solve(normal + damping * np.eye(p), -rhs)
+            level = np.clip(level + delta[:k], 0.0, cfg.cap)
+            if linear:
+                bound = cfg.cap / max(n - 1, 1)
+                trend = np.clip(trend + delta[k:], -bound, bound)
+        self.trend = trend
+        last = (level_eval, jacs.mean(axis=0)[0][..., :k],
+                maps.mean(axis=0)[0])
+        return level.astype(np.float32), {
+            "objective": values, "noise_to_signal": nts,
+            "trend": trend.tolist(), "schedule": cfg.schedule}, last
+
+
 class LearningPlanner(Planner):
     """A Gauss-Newton planner that learns how strongly each band works.
 
@@ -668,9 +822,9 @@ class LearningPlanner(Planner):
     def __call__(self, state: EpisodeState) -> np.ndarray:
         if self.prediction is not None and state.last_fields is not None \
                 and state.day - self.prediction["day"] != \
-                self.cfg.lookahead_days:
-            raise ValueError("the learning planner's look-ahead must equal "
-                             "the segment length")
+                self.forecast_days():
+            raise ValueError("the learning planner's checked forecast must "
+                             "cover exactly one segment")
         innovation = self.observe(state)
         if innovation is not None:
             self.efficacy = self.estimator.update(

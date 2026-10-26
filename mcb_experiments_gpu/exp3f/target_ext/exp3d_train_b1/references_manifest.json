@@ -1,0 +1,382 @@
+{
+  "stage": "references",
+  "role": "exp3d_train",
+  "config": {
+    "stage": "references",
+    "ic_dir": "mcb_experiments_gpu/ics_macro3d/exp3d_train",
+    "output_dir": "mcb_experiments_gpu/exp3f/target_ext/exp3d_train_b1",
+    "split": "all",
+    "max_ics": null,
+    "branches": [
+      1
+    ],
+    "days": 280,
+    "members": 5,
+    "member_seed0": 93000,
+    "member_amp": 0.001,
+    "member_block_days": 0,
+    "warmed": false,
+    "allow_eval_roles": false,
+    "warming_step_wm2": 0.0,
+    "warming_ramp_wm2_per_day": 0.03296703296703297
+  },
+  "land_climatology": "monthly",
+  "fields": [
+    "sst",
+    "land_temperature",
+    "precipitation",
+    "evaporation"
+  ],
+  "units": {
+    "sst": "K",
+    "land_temperature": "K",
+    "precipitation": "mm/day",
+    "evaporation": "mm/day"
+  },
+  "note": "Part 18 steps 10-11: normal climate (no warming, no brightening) and uncontrolled warmed run, each the mean of the members; member 0 is the IC itself",
+  "git": {
+    "commit": null,
+    "dirty": null
+  },
+  "command": "run_test_world.py references --ic-dir mcb_experiments_gpu/ics_macro3d/exp3d_train --branches 1 --days 280 --members 5 --member-block-days 0 --member-seed0 93000 --no-warmed --warming-step-wm2 0.0 --warming-ramp-wm2-per-day 0.03296703296703297 --output-dir mcb_experiments_gpu/exp3f/target_ext/exp3d_train_b1",
+  "started_utc": "2026-10-23T08:05:46.861463+00:00",
+  "ics": [
+    {
+      "entry": {
+        "index": 10001,
+        "split": "train",
+        "seed": 22001,
+        "macro_index": 100,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m100_b1_train_seed22001_carry.pkl",
+        "baseline_file": "ic_m100_b1_train_seed22001_baseline60d.pkl"
+      },
+      "file": "ic10001_references.npz",
+      "member_seeds": [
+        null,
+        1063098,
+        1063099,
+        1063100,
+        1063101
+      ],
+      "seconds": 100.1
+    },
+    {
+      "entry": {
+        "index": 10201,
+        "split": "train",
+        "seed": 22201,
+        "macro_index": 102,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m102_b1_train_seed22201_carry.pkl",
+        "baseline_file": "ic_m102_b1_train_seed22201_baseline60d.pkl"
+      },
+      "file": "ic10201_references.npz",
+      "member_seeds": [
+        null,
+        1082498,
+        1082499,
+        1082500,
+        1082501
+      ],
+      "seconds": 90.6
+    },
+    {
+      "entry": {
+        "index": 10401,
+        "split": "train",
+        "seed": 22401,
+        "macro_index": 104,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m104_b1_train_seed22401_carry.pkl",
+        "baseline_file": "ic_m104_b1_train_seed22401_baseline60d.pkl"
+      },
+      "file": "ic10401_references.npz",
+      "member_seeds": [
+        null,
+        1101898,
+        1101899,
+        1101900,
+        1101901
+      ],
+      "seconds": 90.3
+    },
+    {
+      "entry": {
+        "index": 10601,
+        "split": "train",
+        "seed": 22601,
+        "macro_index": 106,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m106_b1_train_seed22601_carry.pkl",
+        "baseline_file": "ic_m106_b1_train_seed22601_baseline60d.pkl"
+      },
+      "file": "ic10601_references.npz",
+      "member_seeds": [
+        null,
+        1121298,
+        1121299,
+        1121300,
+        1121301
+      ],
+      "seconds": 90.1
+    },
+    {
+      "entry": {
+        "index": 10801,
+        "split": "train",
+        "seed": 22801,
+        "macro_index": 108,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m108_b1_train_seed22801_carry.pkl",
+        "baseline_file": "ic_m108_b1_train_seed22801_baseline60d.pkl"
+      },
+      "file": "ic10801_references.npz",
+      "member_seeds": [
+        null,
+        1140698,
+        1140699,
+        1140700,
+        1140701
+      ],
+      "seconds": 90.0
+    },
+    {
+      "entry": {
+        "index": 11001,
+        "split": "train",
+        "seed": 23001,
+        "macro_index": 110,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m110_b1_train_seed23001_carry.pkl",
+        "baseline_file": "ic_m110_b1_train_seed23001_baseline60d.pkl"
+      },
+      "file": "ic11001_references.npz",
+      "member_seeds": [
+        null,
+        1160098,
+        1160099,
+        1160100,
+        1160101
+      ],
+      "seconds": 90.0
+    },
+    {
+      "entry": {
+        "index": 11201,
+        "split": "train",
+        "seed": 23201,
+        "macro_index": 112,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m112_b1_train_seed23201_carry.pkl",
+        "baseline_file": "ic_m112_b1_train_seed23201_baseline60d.pkl"
+      },
+      "file": "ic11201_references.npz",
+      "member_seeds": [
+        null,
+        1179498,
+        1179499,
+        1179500,
+        1179501
+      ],
+      "seconds": 90.0
+    },
+    {
+      "entry": {
+        "index": 11401,
+        "split": "train",
+        "seed": 23401,
+        "macro_index": 114,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m114_b1_train_seed23401_carry.pkl",
+        "baseline_file": "ic_m114_b1_train_seed23401_baseline60d.pkl"
+      },
+      "file": "ic11401_references.npz",
+      "member_seeds": [
+        null,
+        1198898,
+        1198899,
+        1198900,
+        1198901
+      ],
+      "seconds": 89.9
+    },
+    {
+      "entry": {
+        "index": 11601,
+        "split": "train",
+        "seed": 23601,
+        "macro_index": 116,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m116_b1_train_seed23601_carry.pkl",
+        "baseline_file": "ic_m116_b1_train_seed23601_baseline60d.pkl"
+      },
+      "file": "ic11601_references.npz",
+      "member_seeds": [
+        null,
+        1218298,
+        1218299,
+        1218300,
+        1218301
+      ],
+      "seconds": 90.0
+    },
+    {
+      "entry": {
+        "index": 11801,
+        "split": "train",
+        "seed": 23801,
+        "macro_index": 118,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m118_b1_train_seed23801_carry.pkl",
+        "baseline_file": "ic_m118_b1_train_seed23801_baseline60d.pkl"
+      },
+      "file": "ic11801_references.npz",
+      "member_seeds": [
+        null,
+        1237698,
+        1237699,
+        1237700,
+        1237701
+      ],
+      "seconds": 90.0
+    },
+    {
+      "entry": {
+        "index": 12001,
+        "split": "train",
+        "seed": 24001,
+        "macro_index": 120,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m120_b1_train_seed24001_carry.pkl",
+        "baseline_file": "ic_m120_b1_train_seed24001_baseline60d.pkl"
+      },
+      "file": "ic12001_references.npz",
+      "member_seeds": [
+        null,
+        1257098,
+        1257099,
+        1257100,
+        1257101
+      ],
+      "seconds": 89.9
+    },
+    {
+      "entry": {
+        "index": 12201,
+        "split": "train",
+        "seed": 24201,
+        "macro_index": 122,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m122_b1_train_seed24201_carry.pkl",
+        "baseline_file": "ic_m122_b1_train_seed24201_baseline60d.pkl"
+      },
+      "file": "ic12201_references.npz",
+      "member_seeds": [
+        null,
+        1276498,
+        1276499,
+        1276500,
+        1276501
+      ],
+      "seconds": 89.9
+    },
+    {
+      "entry": {
+        "index": 12401,
+        "split": "train",
+        "seed": 24401,
+        "macro_index": 124,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m124_b1_train_seed24401_carry.pkl",
+        "baseline_file": "ic_m124_b1_train_seed24401_baseline60d.pkl"
+      },
+      "file": "ic12401_references.npz",
+      "member_seeds": [
+        null,
+        1295898,
+        1295899,
+        1295900,
+        1295901
+      ],
+      "seconds": 89.9
+    },
+    {
+      "entry": {
+        "index": 12601,
+        "split": "train",
+        "seed": 24601,
+        "macro_index": 126,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m126_b1_train_seed24601_carry.pkl",
+        "baseline_file": "ic_m126_b1_train_seed24601_baseline60d.pkl"
+      },
+      "file": "ic12601_references.npz",
+      "member_seeds": [
+        null,
+        1315298,
+        1315299,
+        1315300,
+        1315301
+      ],
+      "seconds": 89.9
+    },
+    {
+      "entry": {
+        "index": 12801,
+        "split": "train",
+        "seed": 24801,
+        "macro_index": 128,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m128_b1_train_seed24801_carry.pkl",
+        "baseline_file": "ic_m128_b1_train_seed24801_baseline60d.pkl"
+      },
+      "file": "ic12801_references.npz",
+      "member_seeds": [
+        null,
+        1334698,
+        1334699,
+        1334700,
+        1334701
+      ],
+      "seconds": 89.9
+    },
+    {
+      "entry": {
+        "index": 13001,
+        "split": "train",
+        "seed": 25001,
+        "macro_index": 130,
+        "branch": 1,
+        "spinup_days": 30,
+        "carry_file": "ic_m130_b1_train_seed25001_carry.pkl",
+        "baseline_file": "ic_m130_b1_train_seed25001_baseline60d.pkl"
+      },
+      "file": "ic13001_references.npz",
+      "member_seeds": [
+        null,
+        1354098,
+        1354099,
+        1354100,
+        1354101
+      ],
+      "seconds": 90.2
+    }
+  ],
+  "finished_utc": "2026-10-23T08:29:57.465582+00:00"
+}

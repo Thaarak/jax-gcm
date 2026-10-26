@@ -1,0 +1,17 @@
+Experiment 3f pilot code provenance (written 2026-10-23 01:05 PDT by the laptop session)
+Laptop HEAD d2ca26383fdabdb837a1795a726afedb4ef242e2 plus the UNCOMMITTED 3f working tree (pre-freeze; the freeze commit must contain these exact files).
+diya's previous copies of planner.py, test_world.py, run_test_world.py were HEAD's (git blobs eff3bf69, e37d218f, d5d7448a).
+sha1 of the deployed files:
+29a3463d3e34ab63097f85b3d8862fed78735806  analyze_exp3f_pilot.py
+f6f85885c441b85ab73e0cc93e8478f3b03c89ef  analyze_experiment3f_test.py
+9715e751017a79652646f3b3e3a5584bb6ebdec9  analyze_experiment3f.py
+8519fb8eeb3031dd222b8da81662c2786f3df177  exp3f_common.sh
+917c2c67757c64e289d71b3a4fc8acc1a927a60f  jcm/mcb/planner_schedule_test.py
+3077437b5a10102131988d3d422c654c77fc1373  jcm/mcb/planner.py
+b228a63ab20a303c6b05e090e92eb57ef8fb6b0a  jcm/mcb/test_world.py
+977402cfbf4390ddd0531b1d864d40f1deb0a8c1  run_campaign_exp3f_eval.sh
+851661711bc58aa29ef16fb8c3e5f4266ae25806  run_campaign_exp3f_pilot.sh
+81a930cc795a46398de560d3516a480214e5a14b  run_test_world.py
+Note 2026-10-23 01:08 PDT: laptop HEAD later moved to 80ade71c, which only adds mcb_experiments_gpu/exp3e/ result files; the three tracked files above are unchanged there (same blobs), so these hashes still hold and the 3f freeze can be committed on 80ade71c.
+
+2026-10-26 11:56 PDT: run_campaign_exp3f_eval.sh changed after the pilot (the pilot did not use it). Its SMOKE=1 analysis now also gets the branch-0 training references, because the reused 3d smoke runs (/tmp/exp3d_smoke) are on ic10000 (branch 0); the first evaluation smoke (11:27) failed its analysis for that reason. The non-smoke path is unchanged. sha1 977402cfbf4390ddd0531b1d864d40f1deb0a8c1 -> 36a7e1e80850b57764bad82d6c19a0e029569061.

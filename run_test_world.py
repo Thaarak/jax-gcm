@@ -65,6 +65,7 @@ from jcm.mcb.planner import (
     OPTIMIZERS,
     PRESETS,
     REPRESENTATIONS,
+    SCHEDULES,
     SENSING,
     LearningPlanner,
     Planner,
@@ -225,6 +226,20 @@ def parse_args(argv=None):
                          "its own forecasts after that, or that weather "
                          "corrected toward the true weather before every "
                          "forecast (analysis; Experiment 3e).")
+    pl.add_argument("--schedule", choices=SCHEDULES, default=None,
+                    help="With a look-ahead longer than the segment "
+                         "(Experiment 3f): 'hold' keeps one setting for the "
+                         "whole look-ahead (the original objective, computed "
+                         "from segment-long blocks so the planner can also "
+                         "learn); 'linear' plans a level and trend per band "
+                         "over the blocks and applies the first block "
+                         "(model predictive control).")
+    pl.add_argument("--target-extension", default=None,
+                    help="A normal-climate references file that runs longer "
+                         "than --references (built with --no-warmed): the "
+                         "planner's target uses --references' days and then "
+                         "this file's later days. Scoring always uses "
+                         "--references.")
     pl.add_argument("--analysis-error", type=float, default=None,
                     help="With --sensing analysis: the share of its own "
                          "forecast's error the planner keeps after the "
@@ -262,9 +277,12 @@ def validate_learning(args, cfg):
     """Fail fast on a learning planner that could not learn."""
     if cfg.optimizer != "gauss_newton":
         raise SystemExit("--learn-strength needs --optimizer gauss_newton")
-    if cfg.lookahead_days != args.segment_days:
+    if cfg.schedule == "none" and cfg.lookahead_days != args.segment_days:
         raise SystemExit("--learn-strength needs the look-ahead to equal "
-                         "--segment-days")
+                         "--segment-days (or a block --schedule)")
+    if cfg.schedule != "none" and cfg.block_days != args.segment_days:
+        raise SystemExit("--learn-strength with a block --schedule needs "
+                         "blocks as long as --segment-days")
     if args.planner_efficacy is not None:
         raise SystemExit("--learn-strength starts from nominal strength; "
                          "drop --planner-efficacy")
@@ -623,13 +641,15 @@ def planner_config(args) -> PlannerConfig:
                  "lam": args.lam}
     for name in ("lookahead_days", "copies", "optimizer", "iterations",
                  "learning_rate", "representation", "sensing",
-                 "analysis_error"):
+                 "analysis_error", "schedule"):
         if getattr(args, name) is not None:
             overrides[name] = getattr(args, name)
     if (args.analysis_error is None) != (overrides.get("sensing")
                                          != "analysis"):
         raise SystemExit("--sensing analysis and --analysis-error go "
                          "together")
+    if overrides.get("schedule", "none") != "none":
+        overrides["block_days"] = args.segment_days
     if args.window_days is not None:
         overrides["window_days"] = (NO_TRUNCATION_DAYS if args.window_days == 0
                                     else args.window_days)
@@ -650,8 +670,14 @@ def stage_plan(args):
     n_days = args.segments * args.segment_days
     last_lookahead_end = (args.segments - 1) * args.segment_days \
         + cfg.lookahead_days
-    ref_path, ref_meta, refs = load_references(
-        args, max(n_days, last_lookahead_end))
+    if args.target_extension is None:
+        ref_path, ref_meta, refs = load_references(
+            args, max(n_days, last_lookahead_end))
+        target, extension = refs["normal_sst"], None
+    else:
+        ref_path, ref_meta, refs = load_references(args, n_days)
+        target, extension = extended_target(refs, args.target_extension,
+                                            last_lookahead_end)
     m = build_model()
     entry, carry, ics = load_ics_at(m, args, ref_path)
     background_entry, background = ((None, None) if cfg.sensing == "exact"
@@ -667,7 +693,7 @@ def stage_plan(args):
         # belief about the spraying strength is --planner-efficacy (the
         # true one by default: the oracle), or, with --learn-strength,
         # nominal at first and then learned from its forecast misses.
-        common = (m["step_fn"], m["patterns"], ocean_w, refs["normal_sst"],
+        common = (m["step_fn"], m["patterns"], ocean_w, target,
                   c["ocn"]["forcing"].q_flux, warming)
         # With ocean-only sensing it sees the true ocean only; its weather
         # is another branch's on day 0 and its own forecast's after that.
@@ -690,6 +716,7 @@ def stage_plan(args):
                "planner_efficacy": None if learning else belief.tolist(),
                "true_efficacy": strength_vector(args.efficacy).tolist(),
                "learner": learner, "ic": entry,
+               "target_extension": extension,
                "background_ic": (None if background_entry is None
                                  else background_entry["index"]),
                "members": len(seeds), "member_seeds": seeds,
@@ -702,6 +729,32 @@ def stage_plan(args):
                "seconds": round(time.time() - t0, 1)}
     write_summary(args, summary, mean_fields, schedules, profiles)
     write_innovations(args, planners)
+
+
+def extended_target(refs: dict, path: str, days_needed: int):
+    """Return the planner's daily normal-climate SST target and a record of it.
+
+    The first days are ``refs``' own normal climate, exactly what the scoring
+    uses; the rest come from ``path``, a longer normal-climate run of the
+    same state and member seeds. The record keeps the file, how many days
+    each part gives, and the mean absolute difference of the two files' SST
+    over their last 14 shared days (a check that they are the same climate).
+    """
+    ext = dict(np.load(path, allow_pickle=False))
+    own = np.asarray(refs["normal_sst"])
+    longer = np.asarray(ext["normal_sst"])
+    if longer.shape[0] < days_needed:
+        raise SystemExit(f"the target extension covers {longer.shape[0]} "
+                         f"days, the look-ahead needs {days_needed}")
+    if longer.shape[1:] != own.shape[1:]:
+        raise SystemExit("the target extension is on another grid")
+    n = own.shape[0]
+    target = np.concatenate([own, longer[n:days_needed]], axis=0)
+    gap = float(np.mean(np.abs(longer[n - 14:n].mean(axis=0)
+                               - own[n - 14:n].mean(axis=0))))
+    return target, {"file": str(path), "own_days": int(n),
+                    "extension_days": int(max(days_needed - n, 0)),
+                    "overlap_mean_abs_k": gap}
 
 
 def write_innovations(args, planners):

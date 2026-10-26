@@ -1,0 +1,30 @@
+{
+  "experiment": "3f",
+  "revision": "Amendment 9 revision 5",
+  "land_climatology": "monthly",
+  "members": 6,
+  "reference_members": 10,
+  "learner_mode": "bands",
+  "learner_noise_k": 0.00069104,
+  "learner_prior_sd": 1.0,
+  "arms": [
+    "learn14",
+    "learn112_mpc"
+  ],
+  "dropped_by_budget": [
+    "learn56_mpc",
+    "learn112_hold"
+  ],
+  "target_extension_days": 280,
+  "pilot": {
+    "speedup": 3.9122434261622105,
+    "projected_eval_h": {
+      "learn14": 5.300283684121714,
+      "learn112_mpc": 55.89256840999724,
+      "learn56_mpc": 28.54696257390709,
+      "learn112_hold": 31.20528386609777
+    },
+    "projected_total_h": 61.192852094118955,
+    "budget_h": 60.0
+  }
+}
