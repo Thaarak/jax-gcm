@@ -8,16 +8,22 @@
 
 ## The one-paragraph version
 
-> **Latest status (2026-10-19):** Experiment 3e (**Part 29**) is frozen as revision 4, posted on OSF
-> (https://osf.io/94euq/), and running on the GX10.
-> - *The question:* how well must the planner know the weather? It gets a realistic weather
->   "analysis": before each forecast, it corrects its own forecast toward the true weather and keeps a
->   share f of the error (f = 0 is 3d's perfect knowledge, f = 1 is 3c's none).
-> - *The pilot,* on training states, set the learner's noise levels: 0.0057 K at f = 0.1 (8 times
->   exact), 0.020 K at 0.3, and 0.047 K at 1, which matches 3c. With the strength known, a 10–30%
->   weather error costs the planner nothing.
-> - *Now:* the 192 evaluation runs started at 15:52 PDT (about 20 GPU-hours, so they should end
->   around midday on 2026-10-20). The registered analysis runs by itself at the end.
+> **Latest status (2026-10-26):** Experiment 3f (**Part 30**) is frozen as revision 5, posted on OSF
+> (https://osf.io/eum9h/), and running on the GX10.
+> - *The question (Duncan's Dubey comparison):* with the strength hidden and learned, does planning
+>   16 weeks ahead beat planning two weeks ahead, as Dubey et al. do? The long planner plans a whole
+>   schedule, but applies only its first two weeks before planning again (model predictive control).
+> - *The pilot,* on 4 training states, ran cleanly. Its budget rule kept the 16-week and two-week
+>   planners and dropped the 8-week and "hold one setting" planners, so one hypothesis is tested.
+> - *Now:* the evaluation started at 19:26 PDT. It takes about 62 hours, so it should end on Thursday
+>   morning, 2026-10-29. The registered analysis runs by itself at the end.
+>
+> *Earlier (2026-10-20):* Experiment 3e (**Part 29**, registered at https://osf.io/94euq/) finished;
+> its registered result is logged in `PREREGISTRATION.md`.
+> - With a realistic weather analysis (10% error), the learning planner beat the classical controller
+>   by **43.5%** (15 of 16 ocean states), about as well as with the exact weather (−2%, not
+>   significant).
+> - It learned the strength about twice as well by day 98 as with no weather knowledge.
 >
 > *Earlier (2026-10-12):* Experiments 3c and 3d (**Parts 28.6 and 28.7**, registered at
 > https://osf.io/fyt9r/) finished.
@@ -3483,3 +3489,127 @@ states, not predictions the analysis depends on. The registered interpretations 
   about 11%.
 - *H2 is uncertain,* as it was in 3d.
 
+---
+
+# Part 30 — Experiment 3f: does planning 16 weeks ahead help when the strength is hidden? (plan)
+
+*Added 2026-10-26, before any evaluation run of Experiment 3f. The registered version is Amendment 9
+revision 5, frozen and posted on OSF before any evaluation run, as revisions 1–4 were.*
+
+**In one sentence:** every winning planner so far looked two weeks ahead, as Dubey et al.'s does.
+3f asks whether looking 16 weeks ahead, with the snipped months-long gradient, does better when the
+strength must be learned.
+
+*Analogy:* driving at night.
+* The two-week planner sees two weeks of road in its headlights. It picks this fortnight's steering,
+  then looks again.
+* The 16-week planner sees four months of road, dimmer toward the end, because the snipped gradient
+  undercounts far-off effects. It plans a whole route: a starting setting and a steady trend.
+* It drives only the first fortnight of that route, then plans again from wherever it is. Planning
+  far but committing short is called model predictive control.
+
+## 30.1 Why this experiment
+
+- **Duncan's question (2026-10-20).** How does our planner compare with Dubey et al.'s receding
+  horizon, which plans 8–14 days ahead?
+- **What we already knew.**
+  * Our winning planner (3b–3e) also looks two weeks ahead.
+  * Only 3a tried longer look-aheads, and there the strength was known. There, 60 days scored like
+    14 days, while 120 days was 47% worse (not significant) and overcooled.
+- **Why 3a's long planner may have failed for a fixable reason.** It held one setting for all 120
+  days. Under steadily rising warming, one setting has to overcool now to make up for later. A
+  schedule (a level plus a trend) does not have to.
+- **The missing cell.** The strength is either known or hidden, and the look-ahead is either two
+  weeks or months. "Hidden, with months" was never tested. Dubey et al. list model predictive
+  control as future work.
+
+## 30.2 The design (revision 5)
+
+- **Everything is 3d's except what the planner plans over:**
+  * the same 48 held-out states (16 ocean states × 3 weather branches);
+  * the same hidden strengths and the same learner;
+  * 6 members, scored on days 98–182.
+- **The two arms that run:**
+  * `learn14`: 3d's learning planner, run again now, so that both arms use the same software and
+    GPU;
+  * `learn112_mpc`: plans 112 days (eight blocks of 14 days) as a level plus a trend for each band,
+    applies only the level, and plans again every two weeks. The atmosphere's part of the gradient
+    is cut every 30 days, the window Experiment 2's snip test chose.
+- **Planned but dropped by the budget rule:**
+  * `learn56_mpc`: 8 weeks ahead;
+  * `learn112_hold`: one setting held for 16 weeks, as in 3a.
+- **Seeing past the references.**
+  * The references end on day 200, but a re-plan on day 168 looks to day 280.
+  * So, before the runs, the GX10 extends each state's normal climate to day 280.
+  * Over the days they share, the extension must agree with the references to within 0.05 K. In the
+    pilot, they agreed exactly.
+- **The one test (H1):** `learn112_mpc` against `learn14` on the zonal score, with the same tests as
+  before.
+  * With 16 ocean states, only an effect of about 20% or more is likely to be detected.
+  * So an inconclusive result is reported as a range: "16-week planning changes the score by
+    between a% and b%".
+- **Written predictions:**
+  * inconclusive or worse is likelier than better;
+  * the long planner overcools more;
+  * it costs 10–15 times as much compute per re-plan.
+
+## 30.3 The pilot (2026-10-23)
+
+- **What ran.**
+  * All four planners ran on 4 training states (macro states 100, 108, 116 and 124), with 3 members
+    each, from 10:43 to 15:44 PDT, four at a time.
+  * Nothing failed, and every score was finite.
+  * The target extensions matched the references exactly.
+- **Cost per re-plan,** with four runs sharing the GPU: `learn14` 14 s, `learn112_mpc` 205 s,
+  `learn56_mpc` 103 s, `learn112_hold` 116 s.
+- **The budget rule,** fixed before the pilot.
+  * The rule: project the evaluation's length, then drop planners from the end of the list until it
+    fits in 60 hours. `learn14` and `learn112_mpc` are never dropped.
+  * The projection: `learn14` 5.3 h, `learn112_mpc` 55.9 h, `learn56_mpc` 28.5 h, `learn112_hold`
+    31.2 h.
+  * So only the first two run (61.2 h). H2 (8 weeks) and H3 (schedule against hold) are not tested.
+
+## 30.4 Steps and status
+
+| # | Step | Status (2026-10-26) |
+|---|---|---|
+| 1 | Block schedules and the target extension, with tests | Done (written 2026-10-22; committed in cfb77fd4) |
+| 2 | Registered analysis, pilot script and budget rule, evaluation script | Done (cfb77fd4) |
+| 3 | Pilot smoke test, then the pilot on 4 training states | Done 2026-10-23: 16 runs, 10:43–15:44 PDT, no problems |
+| 4 | Evaluation smoke test and memory probe (one training state) | Done 2026-10-26. The first smoke test stopped in its analysis because of a smoke-only setting; after the fix, the repeat passed. Probe: about 3.7 GB per run |
+| 5 | Log 3e's result; freeze revision 5; commit, push and post on OSF | Done: 3e's result in 95c1839d; frozen in fd4740bd; the user posted it as https://osf.io/eum9h/ at 19:26 PDT (recorded in daeadb07) |
+| 6 | Evaluation: 48 target extensions, then 96 runs, about 62 hours | Running since 19:26:30 PDT (tmux `exp3feval` on the GX10, four at a time) |
+| 7 | Results, report, memory and the paper's Dubey comparison | — |
+
+**Launch checks (2026-10-26, before the first evaluation run).** None of them read any of 3f's
+evaluation data.
+- **Files.** All 265 code and data files on the GX10 matched the frozen commit fd4740bd: every
+  tracked Python and shell file, the model's data files and the designs.
+- **Inputs.**
+  * Everything was present: the 48 starting states, 16 references per branch, and 3d's six reused
+    arms (48 runs each, with their fields).
+  * The analysis's run checks passed on the 288 reused runs.
+- **The target extension.**
+  * 3d's evaluation references were made with the same member seeds (93000) and the same 10
+    members as the extension.
+  * The one option that differs only decides whether each member's block means are saved.
+  * So the extension should repeat the references exactly, as the pilot's did.
+- **Memory and speed.**
+  * About 41 GB of memory was free, and one `learn112_mpc` run peaks at about 3.7 GB.
+  * Alone, a re-plan takes 47 s. With four runs sharing the GPU, each takes 205 s.
+  * So the GPU is the bottleneck: a fifth run at once would not be faster, and the pilot's four at a
+    time was kept.
+- **Update risk.** 88 updates are waiting on the GX10. Nobody should install updates or restart it
+  until the evaluation ends: 3d's run lost its GPU that way on 2026-10-12.
+- **The start.** The log shows the frozen commit, and the three target-extension builds (one per
+  branch) started at 19:26:33.
+
+**What the pilot hints, written before any evaluation data.** These are hints from 4 training
+states with 3 members, not predictions the analysis depends on.
+- **Score.** The 16-week planner scored 13% better than the two-week one there (0.00458 against
+  0.00527). But 4 states cannot tell 13% from noise, and the evaluation can only reliably detect
+  about 20%.
+- **Bias.** It overcooled more (−0.013 K against −0.003 K), as revision 5 predicted. So did every
+  long planner, and holding one setting overcooled most (−0.020 K).
+- **Cost.** The cost is real either way: 6.3 times as much per re-plan when run alone, and 14.8
+  times with four runs sharing the GPU.
