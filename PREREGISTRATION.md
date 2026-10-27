@@ -2794,7 +2794,7 @@ look-ahead can help or hurt. Members do not tighten it; only more macro states w
 * *Posting:* this revision is posted to OSF (project pqabf) before any evaluation run of 3f, and
   before any target extension of an evaluation state.
 
-**Amendment 9, revision 5 — Deviation D2 (logged 2026-10-26 23:30 PDT, before any `learn112_mpc`
+**Amendment 9, revision 5 — Deviation D2 (logged 2026-10-26 23:28 PDT, before any `learn112_mpc`
 run had started and before any score of Experiment 3f's evaluation had been read).** F4 has the
 analysis refuse a run whose target extension differs from its scoring references by more than 0.05 K:
 the mean absolute difference of the two files' SST, averaged over their last 14 shared days. That
@@ -2840,7 +2840,7 @@ at 22:10 PDT.
   `extensions_check.json`, and `rerun_10100.py` with `rerun_10100.json` (the commands, times and
   comparisons). The reruns' fields are on the GX10 (`~/workspace/exp3f_extdiag`).
 
-**Amendment 9, revision 5 — conduct note (logged 2026-10-26 23:30 PDT).** At 23:23:38 PDT the
+**Amendment 9, revision 5 — conduct note (logged 2026-10-26 23:28 PDT).** At 23:23:38 PDT the
 GX10's kernel stopped the evaluation campaign for lack of memory. The cause was a check made for
 Deviation D2 that loaded the analysis without restricting JAX to the CPU, so JAX claimed most of the
 machine's memory, which its GPU shares. Nine `learn14` runs had finished. The four that were running
