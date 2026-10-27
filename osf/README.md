@@ -82,3 +82,23 @@
 - `rev4_tools/`: the freeze helper, the draft it filled, and the posting script.
 - The posting was run by the user from the Claude Code prompt: the session's automatic permission
   check does not let the assistant upload to a public site itself.
+
+# OSF posting of Amendment 9 revision 5 (2026-10-26)
+
+- Files uploaded to https://osf.io/pqabf/ at 19:26 PDT; each upload's SHA-256 matches the local file.
+- Registration: https://osf.io/eum9h/ (registered 19:26 PDT; pending admin approval, which happens
+  automatically after 48 hours).
+- `REVISION5_OSF.md`: the posted document. A cover note gives the frozen commit fd4740bd and the
+  SHA-256 checksums of the text, the code, 3f's registered design and pilot summary, and the 3d files
+  that 3f reuses (its registered design and hidden-strength table). It is followed verbatim by
+  everything logged after revision 4's posting: the Experiment 3e result and revision 5
+  (Experiment 3f).
+- `PREREGISTRATION_at_fd4740bd.md`: the full pre-registration file at that commit.
+- Also uploaded: `analyze_experiment3f.py` (the registered analysis), `analyze_exp3f_pilot.py` (the
+  pilot's budget rule), and, under prefixed names, `exp3f_registered_design.json` and
+  `exp3f_pilot_summary.json`.
+- `rev5_tools/`: the freeze helper, the draft it filled, and the posting script.
+- The posting was run by the user from the Claude Code prompt: the session's automatic permission
+  check does not let the assistant upload to a public site itself.
+- Experiment 3f's evaluation was started on the GX10 at 19:26:30 PDT, after the registration
+  (19:26:06 PDT), with `REVISION5_COMMIT` = fd4740bd.
