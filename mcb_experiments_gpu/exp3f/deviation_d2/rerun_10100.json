@@ -1,0 +1,92 @@
+{
+ "members": {
+  "0": {
+   "note": "member 0 is the initial state itself (no perturbation)",
+   "stored_vs_T1_200d": {
+    "block0_days0-4": 0.0115966796875,
+    "block1_days5-9": 0.028167724609375,
+    "block2_days10-14": 0.046966552734375,
+    "block3_days15-19": 0.080474853515625,
+    "block5_days25-29": 0.36712646484375,
+    "block10_days50-54": 1.60760498046875,
+    "block20_days100-104": 3.064605712890625,
+    "block39_days195-199": 3.212371826171875
+   },
+   "stored_vs_T2_280d": {
+    "block0_days0-4": 0.01129150390625,
+    "block1_days5-9": 0.03448486328125,
+    "block2_days10-14": 0.10516357421875,
+    "block3_days15-19": 0.124359130859375,
+    "block5_days25-29": 0.596832275390625,
+    "block10_days50-54": 2.1807861328125,
+    "block20_days100-104": 3.573394775390625,
+    "block39_days195-199": 3.49920654296875
+   },
+   "T1_vs_T2": {
+    "block0_days0-4": 0.00970458984375,
+    "block1_days5-9": 0.032470703125,
+    "block2_days10-14": 0.090301513671875,
+    "block3_days15-19": 0.09326171875,
+    "block5_days25-29": 0.43212890625,
+    "block10_days50-54": 1.596221923828125,
+    "block20_days100-104": 2.77618408203125,
+    "block39_days195-199": 3.215423583984375
+   }
+  },
+  "1": {
+   "note": "member 1: seed 1072701, as in 3d",
+   "stored_vs_T1_200d": {
+    "block0_days0-4": 0.017669677734375,
+    "block1_days5-9": 0.0343017578125,
+    "block2_days10-14": 0.072021484375,
+    "block3_days15-19": 0.130767822265625,
+    "block5_days25-29": 0.56488037109375,
+    "block10_days50-54": 1.911712646484375,
+    "block20_days100-104": 2.349517822265625,
+    "block39_days195-199": 5.146820068359375
+   },
+   "stored_vs_T2_280d": {
+    "block0_days0-4": 0.015869140625,
+    "block1_days5-9": 0.029266357421875,
+    "block2_days10-14": 0.057952880859375,
+    "block3_days15-19": 0.098358154296875,
+    "block5_days25-29": 0.50372314453125,
+    "block10_days50-54": 2.243682861328125,
+    "block20_days100-104": 3.205810546875,
+    "block39_days195-199": 4.75531005859375
+   },
+   "T1_vs_T2": {
+    "block0_days0-4": 0.016754150390625,
+    "block1_days5-9": 0.033843994140625,
+    "block2_days10-14": 0.043609619140625,
+    "block3_days15-19": 0.08984375,
+    "block5_days25-29": 0.4561767578125,
+    "block10_days50-54": 1.592742919921875,
+    "block20_days100-104": 2.374359130859375,
+    "block39_days195-199": 3.0899200439453125
+   }
+  }
+ },
+ "runs": {
+  "T1_200d": {
+   "command": "run_test_world.py references --ic-dir mcb_experiments_gpu/ics_macro3d/exp3d_eval --branches 0 --max-ics 1 --members 2 --member-block-days 5 --member-seed0 93000 --no-warmed --warming-step-wm2 0.0 --warming-ramp-wm2-per-day 0.03296703296703297 --allow-eval-roles --days 200 --output-dir /tmp/exp3f_extdiag/T1_200d",
+   "started_utc": "2026-10-27T05:13:22.871363+00:00",
+   "finished_utc": "2026-10-27T05:16:47.785483+00:00",
+   "land_climatology": "monthly",
+   "member_seeds": [
+    null,
+    1072701
+   ]
+  },
+  "T2_280d": {
+   "command": "run_test_world.py references --ic-dir mcb_experiments_gpu/ics_macro3d/exp3d_eval --branches 0 --max-ics 1 --members 2 --member-block-days 5 --member-seed0 93000 --no-warmed --warming-step-wm2 0.0 --warming-ramp-wm2-per-day 0.03296703296703297 --allow-eval-roles --days 280 --output-dir /tmp/exp3f_extdiag/T2_280d",
+   "started_utc": "2026-10-27T05:13:23.657290+00:00",
+   "finished_utc": "2026-10-27T05:17:50.794072+00:00",
+   "land_climatology": "monthly",
+   "member_seeds": [
+    null,
+    1072701
+   ]
+  }
+ }
+}
