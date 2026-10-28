@@ -102,3 +102,24 @@
   check does not let the assistant upload to a public site itself.
 - Experiment 3f's evaluation was started on the GX10 at 19:26:30 PDT, after the registration
   (19:26:06 PDT), with `REVISION5_COMMIT` = fd4740bd.
+
+# OSF posting of Deviation D2 of Amendment 9 revision 5 (2026-10-27)
+
+- Files uploaded to https://osf.io/pqabf/ at 18:33 PDT; each upload's SHA-256 matches the local file.
+- Registration: https://osf.io/jybn4/ (registered 18:34 PDT; pending admin approval, which happens
+  automatically after 48 hours).
+- `DEVIATION_D2_OSF.md`: the posted document. A cover note gives the commit 02243afa, a timeline,
+  and the SHA-256 checksums of the text, of the deviation's code and evidence, and of the registered
+  files it leaves unchanged. It is followed verbatim by Deviation D2 and the conduct note logged with
+  it (logged in 8e38f5dc; 02243afa only gives the logged time as the commit's, 23:28 PDT).
+- `PREREGISTRATION_at_02243afa.md`: the full pre-registration file at that commit.
+- Also uploaded: `analyze_experiment3f_d2.py` (the registered analysis with the deviation applied)
+  and, under prefixed names, the evidence: `exp3f_d2_check_extensions.py`,
+  `exp3f_d2_extensions_check.json`, `exp3f_d2_rerun_10100.py` and `exp3f_d2_rerun_10100.json`.
+- `rev5_tools/osf_post_d2.py`: the posting script.
+- The posting was run by the user from the Claude Code prompt: the session's automatic permission
+  check does not let the assistant upload to a public site itself.
+- Timing. The deviation was pushed to the public repository on 2026-10-26 at 23:28 PDT (8e38f5dc,
+  then 02243afa), before the first `learn112_mpc` run started (03:13 PDT on 2026-10-27). This
+  posting came later, while the evaluation was running: 12 of the 48 `learn112_mpc` runs had
+  finished, and none of the evaluation's scores had been read.
